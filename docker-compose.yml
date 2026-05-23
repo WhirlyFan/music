@@ -1,3 +1,7 @@
+# Pin the compose project name so containers/volumes stay namespaced as
+# `react-django-template_*` regardless of which directory the file lives in.
+name: react-django-template
+
 services:
   db:
     image: postgres:16-alpine
