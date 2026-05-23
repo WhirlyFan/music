@@ -1,0 +1,44 @@
+# Secrets / env
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Node / pnpm
+node_modules/
+.pnpm-store/
+dist/
+.vite/
+
+# Django
+staticfiles/
+media/
+*.sqlite3
+
+# Editor / OS
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.swp
+
+# Docker volumes (shouldn't be committed, just in case)
+postgres_data/
+
+# Hatchet local
+hatchet-credentials/

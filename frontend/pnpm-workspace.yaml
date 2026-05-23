@@ -1,0 +1,9 @@
+# pnpm 11+ reads settings from this file (not .npmrc or package.json's pnpm field).
+# Single-package projects can still have a pnpm-workspace.yaml — it's used purely
+# for config.
+#
+# `minimumReleaseAge` defaults to 1440 (1 day) and blocks packages published
+# within that window. We disable it because we're pulling bleeding-edge TanStack
+# / React releases during initial development. Re-enable (e.g. `1440` or
+# `10080` for a week) once the dep set stabilizes.
+minimumReleaseAge: 0

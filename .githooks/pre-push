@@ -1,0 +1,118 @@
+#!/bin/sh
+#
+# Pre-push hook: auto-fixes lint/format issues on changed files, then re-checks.
+# Errors block the push. Warnings (non-auto-fixable) are printed but don't block.
+#
+# Adapted from ~/usul-policy-research-app/.githooks/pre-push.
+# Backend lives at `backend/` (not `usul-background-jobs/`).
+#
+
+set -e
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+LINTED_FILES_LIST=""
+cleanup() { [ -n "$LINTED_FILES_LIST" ] && rm -f "$LINTED_FILES_LIST"; }
+trap cleanup EXIT
+
+# --- Skip files ---
+# Set LINT_SKIP to a grep-compatible regex pattern to exclude files from linting.
+#   LINT_SKIP="ActiveInboxContent|somefile\.ts" git push
+# To skip all linting, use: git push --no-verify
+if [ -n "$LINT_SKIP" ]; then
+  _lint_skip_rc=0
+  echo "" | grep -E "$LINT_SKIP" > /dev/null 2>&1 || _lint_skip_rc=$?
+  if [ "$_lint_skip_rc" -eq 2 ]; then
+    echo "❌ LINT_SKIP contains an invalid regex: $LINT_SKIP" >&2
+    exit 1
+  fi
+fi
+
+apply_skip_filter() {
+  if [ -z "$LINT_SKIP" ]; then
+    cat
+  else
+    grep -v -E "$LINT_SKIP" || true
+  fi
+}
+
+# Compare to origin/main so we only lint files unique to this branch.
+git fetch origin main --quiet 2>/dev/null || true
+MERGE_BASE=$(git merge-base HEAD origin/main 2>/dev/null || echo "HEAD~1")
+
+HAS_ERRORS=0
+
+# --- Frontend ---
+FRONTEND_FILES=$(git diff --name-only --diff-filter=d "$MERGE_BASE" HEAD -- frontend/ | grep -E '\.(ts|tsx|js|jsx)$' | apply_skip_filter || true)
+
+if [ -n "$FRONTEND_FILES" ]; then
+  FILE_COUNT=$(echo "$FRONTEND_FILES" | wc -l | tr -d ' ')
+  cd "$REPO_ROOT/frontend"
+  FILES_FOR_ESLINT=$(echo "$FRONTEND_FILES" | sed 's|^frontend/||')
+
+  echo "🔧 Auto-fixing frontend lint issues ($FILE_COUNT files)..."
+  echo "$FILES_FOR_ESLINT" | xargs pnpm eslint --fix --no-error-on-unmatched-pattern 2>/dev/null || true
+  echo "$FILES_FOR_ESLINT" | xargs pnpm prettier --write 2>/dev/null || true
+
+  if ! echo "$FILES_FOR_ESLINT" | xargs pnpm eslint --no-error-on-unmatched-pattern; then
+    echo ""
+    echo "❌ Frontend lint has errors ($FILE_COUNT files). Fix and push again."
+    echo ""
+    HAS_ERRORS=1
+  fi
+
+  echo "🔍 Running TypeScript check..."
+  if ! pnpm tsc --noEmit; then
+    echo ""
+    echo "❌ TypeScript type errors found. Fix and push again."
+    echo ""
+    HAS_ERRORS=1
+  fi
+fi
+
+# --- Python ---
+PYTHON_FILES=$(git diff --name-only --diff-filter=d "$MERGE_BASE" HEAD -- backend/ | grep -E '\.py$' | apply_skip_filter || true)
+
+if [ -n "$PYTHON_FILES" ]; then
+  FILE_COUNT=$(echo "$PYTHON_FILES" | wc -l | tr -d ' ')
+  cd "$REPO_ROOT/backend"
+  FILES_FOR_RUFF=$(echo "$PYTHON_FILES" | sed 's|^backend/||')
+
+  echo "🔧 Auto-fixing Python lint issues ($FILE_COUNT files)..."
+  echo "$FILES_FOR_RUFF" | xargs uv run ruff check --fix 2>/dev/null || true
+  echo "$FILES_FOR_RUFF" | xargs uv run ruff format 2>/dev/null || true
+
+  RUFF_FAILED=0
+  if ! echo "$FILES_FOR_RUFF" | xargs uv run ruff check; then
+    RUFF_FAILED=1
+  fi
+  if ! echo "$FILES_FOR_RUFF" | xargs uv run ruff format --check; then
+    RUFF_FAILED=1
+  fi
+
+  if [ "$RUFF_FAILED" -ne 0 ]; then
+    echo ""
+    echo "❌ Python lint has unfixable errors ($FILE_COUNT files)."
+    echo "   Review the errors above and fix manually."
+    echo ""
+    HAS_ERRORS=1
+  fi
+fi
+
+# Check if auto-fix produced uncommitted changes (only in linted files).
+cd "$REPO_ROOT"
+LINTED_FILES_LIST="$(mktemp)"
+[ -n "$FRONTEND_FILES" ] && printf '%s\n' "$FRONTEND_FILES" >> "$LINTED_FILES_LIST"
+[ -n "$PYTHON_FILES" ]   && printf '%s\n' "$PYTHON_FILES" >> "$LINTED_FILES_LIST"
+
+if [ -s "$LINTED_FILES_LIST" ] && ! xargs git diff --quiet -- < "$LINTED_FILES_LIST"; then
+  echo ""
+  echo "⚠️  Auto-fix applied changes. Review, commit, and push again:"
+  echo ""
+  xargs git diff --stat -- < "$LINTED_FILES_LIST"
+  echo ""
+  HAS_ERRORS=1
+fi
+if [ "$HAS_ERRORS" -ne 0 ]; then
+  echo "Push blocked. Fix any remaining issues, commit, and push again."
+  exit 1
+fi
