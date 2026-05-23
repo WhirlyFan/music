@@ -20,7 +20,7 @@ function AlertDialogOverlay({
       ref={ref}
       data-slot="alert-dialog-overlay"
       className={cn(
-        'fixed inset-0 z-50 bg-foreground/20 duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
+        'bg-foreground/20 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
         'focus:outline-hidden',
         className,
       )}
@@ -41,8 +41,8 @@ function AlertDialogContent({
         ref={ref}
         data-slot="alert-dialog-content"
         className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-4 shadow-lg sm:rounded-lg',
-          'duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
+          'bg-background fixed top-[50%] left-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border p-4 shadow-lg sm:rounded-lg',
+          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
           'focus:outline-hidden',
           className,
         )}
@@ -74,7 +74,7 @@ function AlertDialogTitle({
     <AlertDialogPrimitive.Title
       ref={ref}
       data-slot="alert-dialog-title"
-      className={cn('text-lg font-semibold leading-none tracking-tight text-foreground', className)}
+      className={cn('text-foreground text-lg leading-none font-semibold tracking-tight', className)}
       {...props}
     />
   )
@@ -89,7 +89,7 @@ function AlertDialogDescription({
     <AlertDialogPrimitive.Description
       ref={ref}
       data-slot="alert-dialog-description"
-      className={cn('text-sm text-muted-foreground', className)}
+      className={cn('text-muted-foreground text-sm', className)}
       {...props}
     />
   )

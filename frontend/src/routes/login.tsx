@@ -78,7 +78,7 @@ function LoginPage() {
         </Button>
 
         {login.isError && (
-          <p className="text-sm text-destructive">
+          <p className="text-destructive text-sm">
             {String((login.error as Error).message ?? 'Login failed')}
           </p>
         )}

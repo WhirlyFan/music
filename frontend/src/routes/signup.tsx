@@ -78,7 +78,7 @@ function SignupPage() {
         </Button>
 
         {signup.isError && (
-          <p className="text-sm text-destructive">
+          <p className="text-destructive text-sm">
             {String((signup.error as Error).message ?? 'Signup failed')}
           </p>
         )}
