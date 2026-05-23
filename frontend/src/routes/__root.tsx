@@ -19,7 +19,7 @@ function RootLayout() {
       <header className="border-border border-b">
         <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-4">
           <Link to="/" className="font-semibold tracking-tight">
-            3d
+            react-django-template
           </Link>
           <Link
             to="/notes"

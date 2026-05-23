@@ -161,8 +161,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "3d API",
-    "DESCRIPTION": "Backend API for the 3d project.",
+    "TITLE": "react-django-template API",
+    "DESCRIPTION": "Backend API for the react-django-template project.",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
 }

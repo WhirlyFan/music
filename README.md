@@ -1,4 +1,4 @@
-# 3d
+# react-django-template
 
 Full-stack starter: Django + DRF + Postgres + RLS + Hatchet on the backend,
 React + Vite + TanStack + shadcn on the frontend. Self-hosted equivalent of
@@ -24,7 +24,7 @@ time it needs it.
 
 ```bash
 # 1. Clone
-git clone <repo-url> 3d && cd 3d
+git clone <repo-url> react-django-template && cd react-django-template
 
 # 2. Env file (defaults are fine for local dev)
 cp .env.example .env
@@ -51,7 +51,7 @@ open http://localhost                     # routed through nginx → frontend + 
 
 ```bash
 # On any docker-capable host:
-git clone <repo> && cd 3d
+git clone <repo> && cd react-django-template
 cp .env.production.example .env
 $EDITOR .env                              # fill in real secrets — see comments in the file
 

@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Django backend for 3d project"
+description = "Django backend for react-django-template project"
 requires-python = ">=3.13"
 dependencies = [
     "django>=5.1,<6.0",

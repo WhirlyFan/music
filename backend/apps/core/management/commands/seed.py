@@ -37,7 +37,7 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         # Deterministic faker output across runs.
-        factory.random.reseed_random("3d-dev")
+        factory.random.reseed_random("react-django-template-dev")
 
         if options["flush"]:
             Note.objects.all().delete()

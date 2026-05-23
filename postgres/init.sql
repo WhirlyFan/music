@@ -1,4 +1,4 @@
--- Initial Postgres setup for the 3d project.
+-- Initial Postgres setup for the react-django-template project.
 -- Runs on first container start (when postgres_data volume is empty).
 --
 -- Creates two roles:
