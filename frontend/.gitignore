@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# In-app docs viewer staging directory. Populated by:
+#   - docker compose dev: bind mount (`./docs:/app/_docs:ro` in docker-compose.yml)
+#   - Render build: `cp -r ../docs ./_docs` in render.yaml buildCommand
+# Never commit a snapshot — `docs/` at the repo root is the source of truth.
+_docs/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

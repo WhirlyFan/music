@@ -34,7 +34,16 @@ services:
     # pnpm version pinned EXACTLY (matches packageManager field in
     # frontend/package.json + the version action-setup uses in CI). Bump in
     # one place; supply-chain attack surface narrows to that one version.
-    buildCommand: npx --yes pnpm@11.3.0 install --frozen-lockfile && npx --yes pnpm@11.3.0 build
+    #
+    # `cp -r ../docs ./_docs` makes the repo-root `docs/` directory visible
+    # inside the frontend build context so the in-app docs viewer's Vite
+    # glob (`import.meta.glob('/_docs/**/*.md')`) finds the markdown files.
+    # In docker compose dev that's handled by a `./docs:/app/_docs:ro` bind
+    # mount; on Render the build runs without that mount, so we copy.
+    buildCommand: >-
+      rm -rf ./_docs && cp -r ../docs ./_docs &&
+      npx --yes pnpm@11.3.0 install --frozen-lockfile &&
+      npx --yes pnpm@11.3.0 build
     staticPublishPath: ./dist
     envVars:
       # NODE_VERSION pins Render's build-env Node to match our Dockerfile + CI.
