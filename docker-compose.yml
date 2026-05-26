@@ -37,6 +37,18 @@ services:
       start_period: 30s
     logging: *default-logging
 
+  # Local SMTP catch-all + web UI for dev — captures every outgoing email
+  # without delivering anywhere. Backend's EMAIL_HOST points here in dev.py.
+  # Web UI: http://localhost:8025. No auth (only reachable via docker network
+  # + locally-bound ports). Pinned by image digest tag for supply-chain hygiene.
+  mailpit:
+    image: axllent/mailpit:v1.20.7
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # web UI
+      - "1025:1025"   # SMTP listener
+    logging: *default-logging
+
   hatchet:
     image: ghcr.io/hatchet-dev/hatchet/hatchet-lite:v0.86.29
     restart: unless-stopped
@@ -70,6 +82,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     environment:
       DATABASE_URL: ${DATABASE_URL}
       DATABASE_URL_ADMIN: ${DATABASE_URL_ADMIN}

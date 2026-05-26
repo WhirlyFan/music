@@ -172,10 +172,19 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_PRESERVE_USERNAME_CASING = False
 
 HEADLESS_ONLY = True
+
+# The user-facing frontend origin. allauth uses this to construct URLs in
+# transactional emails (password reset link, signup confirmation). MUST be
+# overridden in any non-localhost deploy — otherwise reset emails contain
+# `http://localhost/...` links that go nowhere when clicked.
+#
+# Set FRONTEND_ORIGIN in Render / k8s / GCP env to your real domain, e.g.
+#     FRONTEND_ORIGIN=https://app.yourdomain.com
+FRONTEND_ORIGIN = env("FRONTEND_ORIGIN", default="http://localhost")
 HEADLESS_FRONTEND_URLS = {
-    "account_confirm_email": "http://localhost/account/verify-email/{key}",
-    "account_reset_password_from_key": "http://localhost/account/password/reset/key/{key}",
-    "account_signup": "http://localhost/signup",
+    "account_confirm_email": f"{FRONTEND_ORIGIN}/account/verify-email/{{key}}",
+    "account_reset_password_from_key": (f"{FRONTEND_ORIGIN}/account/password/reset/key/{{key}}"),
+    "account_signup": f"{FRONTEND_ORIGIN}/signup",
 }
 
 # --- allauth MFA ---

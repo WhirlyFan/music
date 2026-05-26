@@ -104,7 +104,93 @@ but is overkill for solo dev.
 | Vite dev server | 5173 | http://localhost/ | Through nginx in dev (HMR via WS upgrade) |
 | Postgres | 5432 | — | Two roles: `app_user` (runtime, RLS-enforced), `app_admin` (migrations/seed) |
 | Hatchet Lite | 7077 (gRPC), 8888 (UI) | http://localhost:8888 | Workflow engine |
+| Mailpit | 1025 (SMTP), 8025 (UI) | http://localhost:8025 | Captures outgoing email locally — see [docs/ops/email.md](docs/ops/email.md) |
 | Worker | — | — | Runs `manage.py hatchet_worker` against Hatchet |
+
+---
+
+## Using this as a template
+
+When you clone this repo for a real project, here's what you need to change.
+Skip the rename if you're just kicking the tires.
+
+### 1. Rebrand (one-time find-and-replace)
+
+The string `react-django-template` appears in 44 places — service names,
+package metadata, route titles, the TOTP issuer label, the docker-compose
+project name, etc. They're all real labels you want to update.
+
+```bash
+# Pick your new name and run from the repo root:
+NEW=my-app
+grep -rl "react-django-template" . \
+  --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.venv \
+  --exclude-dir=dist --exclude=pnpm-lock.yaml --exclude=uv.lock \
+  | xargs sed -i '' "s/react-django-template/${NEW}/g"   # macOS
+
+# On Linux: sed -i (no '') instead of -i ''
+```
+
+Then verify and commit:
+
+```bash
+grep -r "react-django-template" . --exclude-dir=node_modules --exclude-dir=.git
+# Should print zero matches.
+```
+
+Files that **don't** get renamed by this:
+- `pnpm-lock.yaml`, `uv.lock` — regenerated automatically by next install
+- `dist/`, `node_modules/`, `.venv/` — build artifacts; gitignored
+- Per-repo git config (`user.email`, `user.name`) if you want a project-specific identity — set via `git config user.email ...`
+
+### 2. Required env vars for production
+
+Before deploying, set these in your deploy target's env (Render dashboard / k8s secret / etc.):
+
+| Variable | What to set | Notes |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | random 50+ chars | Render's `generateValue: true` auto-creates |
+| `DJANGO_ALLOWED_HOSTS` | comma-separated backend hostnames | e.g. `api.yourdomain.com` |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | full URLs incl. `https://` | e.g. `https://app.yourdomain.com` |
+| `DJANGO_CORS_ALLOWED_ORIGINS` | full URLs incl. `https://` | Same shape as CSRF |
+| `FRONTEND_ORIGIN` | the user-facing frontend URL | Drives reset/verify email links |
+| `DATABASE_URL` | Postgres connection | Render auto-wires from linked DB |
+| `DATABASE_URL_ADMIN` | same DB, optionally an admin role | For migrations + seed |
+
+`render.yaml` already wires these for the Render deploy — see [docs/ops/deploy-render.md](docs/ops/deploy-render.md). For other targets, the env-var contract is the same.
+
+### 3. Optional integrations (wire when ready)
+
+| Integration | How | Cost | Why |
+|---|---|---|---|
+| **Email delivery** (password reset, signup verification) | [docs/ops/email.md](docs/ops/email.md) — Mailpit in dev, Resend in prod | Free tier covers small apps | Without this, reset links are sent to nowhere in prod |
+| **Sentry error monitoring** | Set `SENTRY_DSN` env var | Free tier generous | Backend + frontend both auto-report |
+| **Social login** (Google etc.) | Add provider to `INSTALLED_APPS` + config — see [docs/auth.md](docs/auth.md) | Free | `allauth.socialaccount` is already installed |
+| **Custom domain** | Render dashboard or your DNS provider | Free on Render | Replace `*.onrender.com` URLs throughout |
+| **Hatchet for workflows** | Already wired in dev; deferred for Render Phase A — see [docs/jobs.md](docs/jobs.md) | $0 free self-hosted; +$14/mo on Render | Background DAG engine |
+
+### 4. Dev-only credentials baked into the seed (DO NOT touch unless you understand why)
+
+The seed command creates two known accounts for local dev:
+
+- `dev@example.com` / `password1234`
+- `admin@example.com` / `adminpassword123` (with a fixed TOTP secret `JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP`)
+
+These exist so `make seed` reproduces the same login state every time
+— useful for testing flows in development. The seed command **refuses
+to run when `DJANGO_DEBUG=False`** so these credentials can never end
+up in production. See [docs/ops.md](docs/ops.md) for details.
+
+If you want to remove them entirely (e.g. you don't want them visible in
+your repo), edit `KNOWN_ACCOUNTS` in `backend/apps/core/management/commands/seed.py`.
+
+### 5. GitHub repo settings (manual, post-fork)
+
+These don't transfer when you fork — you have to set them up on the new repo:
+
+- **Branch protection ruleset** — see the existing one for reference. Required rules: `pull_request`, `required_linear_history`, `required_status_checks` (after CI runs at least once). Configured in repo Settings → Rules → Rulesets.
+- **GitHub Actions secrets** — none required for CI itself, but any deploy step you add later will need its own secrets (Render API key, AWS keys, etc.).
+- **CODEOWNERS** — optional, if you want PR reviews routed.
 
 ---
 

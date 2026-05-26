@@ -116,6 +116,13 @@ services:
       - key: DJANGO_CORS_ALLOWED_ORIGINS
         value: https://react-django-template-frontend.onrender.com
 
+      # FRONTEND_ORIGIN is consumed by HEADLESS_FRONTEND_URLS so password-reset
+      # / email-verification links in transactional emails point at the
+      # actual deployed frontend (not localhost). Change ONE value here and
+      # both link generation + email content adapt.
+      - key: FRONTEND_ORIGIN
+        value: https://react-django-template-frontend.onrender.com
+
       # ── Database ────────────────────────────────────────────────────────
       # Render auto-injects the connection string when the service is linked
       # to the database below. The two-role split (app_user / app_admin) we
