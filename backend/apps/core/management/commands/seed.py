@@ -1,18 +1,23 @@
 """Seed the database with reproducible fake data for local development.
 
-Connects via DATABASE_URL — should be the admin (BYPASSRLS) role so
-inserts work across owners. The Makefile wires this up automatically.
+Connects via DATABASE_URL — should be the admin (BYPASSRLS) role so inserts
+work across owners. The Makefile wires this up automatically.
 
-Always creates two known accounts (idempotent — passwords get reset to the
-documented values on every run so README + reality stay in sync):
-  * dev@example.com / username 'dev' / password 'password1234'  (regular user)
-  * admin@example.com / username 'admin' / password 'adminpassword123'
-    (is_staff + is_superuser — can sign into /admin/)
+Two known accounts are always created with the documented credentials
+(idempotent — passwords get reset on every run):
 
-Pass --flush to wipe Notes + non-superuser Users first.
+  * dev   → dev@example.com   / 'dev'   / password1234
+  * admin → admin@example.com / 'admin' / adminpassword123  (superuser → /admin/)
+
+Each known account gets a configurable batch of fake notes. To add filler
+data for future models, declare a new factory and append a call to the
+per-account loop below — see `apps/<app>/tests/factories.py` for the
+pattern (e.g. `NoteFactory`).
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass, field
 
 import factory.random
 from django.core.management.base import BaseCommand
@@ -24,86 +29,98 @@ from apps.users.tests.factories import UserFactory
 
 User = UserFactory._meta.model
 
-# Regular dev user.
-DEV_EMAIL = "dev@example.com"
-DEV_USERNAME = "dev"
-# 12+ chars to match the password policy. Still easy to type.
-DEV_PASSWORD = "password1234"
 
-# Superuser for /admin/.
-ADMIN_EMAIL = "admin@example.com"
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "adminpassword123"
+@dataclass(frozen=True)
+class AccountSpec:
+    email: str
+    username: str
+    password: str
+    first_name: str = ""
+    last_name: str = ""
+    is_superuser: bool = False
+    # Extra attributes future models might want to override per account.
+    extra: dict = field(default_factory=dict)
+
+
+# Single source of truth for known accounts. Add new ones here — the runner
+# below upserts them all + their fake data.
+KNOWN_ACCOUNTS: tuple[AccountSpec, ...] = (
+    AccountSpec(
+        email="dev@example.com",
+        username="dev",
+        password="password1234",
+        first_name="Dev",
+        last_name="User",
+    ),
+    AccountSpec(
+        email="admin@example.com",
+        username="admin",
+        password="adminpassword123",
+        first_name="Admin",
+        last_name="User",
+        is_superuser=True,
+    ),
+)
+
+
+def upsert_account(spec: AccountSpec):
+    """Create or refresh a known user. Always resets the password + flags
+    so the docs stay in sync if someone tweaks the account in /admin/."""
+    user, created = User.objects.get_or_create(
+        email=spec.email,
+        defaults={
+            "username": spec.username,
+            "first_name": spec.first_name,
+            "last_name": spec.last_name,
+        },
+    )
+    user.is_staff = spec.is_superuser  # superuser implies staff for /admin/
+    user.is_superuser = spec.is_superuser
+    user.set_password(spec.password)
+    user.save()
+    return user, created
 
 
 class Command(BaseCommand):
     help = "Populate the database with reproducible fake data."
 
     def add_arguments(self, parser):
-        parser.add_argument("--users", type=int, default=5, help="Number of users to create.")
-        parser.add_argument("--notes", type=int, default=10, help="Notes per user.")
+        parser.add_argument(
+            "--notes",
+            type=int,
+            default=10,
+            help="Fake notes per known account (default: 10).",
+        )
         parser.add_argument(
             "--flush",
             action="store_true",
-            help="Delete existing notes + non-superuser users before seeding.",
+            help="Delete all notes + non-superuser users (and any non-known accounts) before seeding.",
         )
 
     @transaction.atomic
     def handle(self, *args, **options):
-        # Deterministic faker output across runs.
+        # Deterministic Faker output across runs.
         factory.random.reseed_random("react-django-template-dev")
 
         if options["flush"]:
             Note.objects.all().delete()
-            # Deliberately keep superusers — wiping them would lock you out of
-            # /admin/ until the next seed. The admin block below resets the
-            # admin user's password regardless, so credentials stay current.
+            # Wipe everyone except superusers — protects whoever's currently
+            # logged into /admin/. The admin block below also force-creates
+            # the documented admin account so credentials stay current.
             User.objects.filter(is_superuser=False).delete()
             self.stdout.write(self.style.WARNING("Flushed notes + non-superuser users."))
 
-        # --- Dev user --------------------------------------------------------
-        dev_user, dev_created = User.objects.get_or_create(
-            email=DEV_EMAIL,
-            defaults={
-                "username": DEV_USERNAME,
-                "first_name": "Dev",
-                "last_name": "User",
-            },
-        )
-        dev_user.set_password(DEV_PASSWORD)
-        dev_user.save()
-        if dev_created:
-            self.stdout.write(self.style.SUCCESS(f"Created dev user: {DEV_EMAIL}"))
+        # Upsert known accounts + their filler data.
+        for spec in KNOWN_ACCOUNTS:
+            user, created = upsert_account(spec)
+            if created:
+                self.stdout.write(self.style.SUCCESS(f"Created account: {spec.email}"))
+            # Per-account fake data. Add new model batches here as you build them:
+            #   ProjectFactory.create_batch(3, owner=user)
+            #   TaskFactory.create_batch(10, project=...)
+            NoteFactory.create_batch(options["notes"], owner=user)
 
-        # --- Admin superuser -------------------------------------------------
-        admin_user, admin_created = User.objects.get_or_create(
-            email=ADMIN_EMAIL,
-            defaults={
-                "username": ADMIN_USERNAME,
-                "first_name": "Admin",
-                "last_name": "User",
-            },
-        )
-        # Force the flags every time — protects against someone accidentally
-        # demoting the admin via /admin/ and then forgetting how to fix it.
-        admin_user.is_staff = True
-        admin_user.is_superuser = True
-        admin_user.set_password(ADMIN_PASSWORD)
-        admin_user.save()
-        if admin_created:
-            self.stdout.write(self.style.SUCCESS(f"Created admin superuser: {ADMIN_EMAIL}"))
-
-        # --- Notes for the dev user -----------------------------------------
-        for _ in range(options["notes"]):
-            NoteFactory(owner=dev_user)
-
-        # --- Additional fake users + notes ----------------------------------
-        for _ in range(options["users"]):
-            user = UserFactory()
-            for _ in range(options["notes"]):
-                NoteFactory(owner=user)
-
-        # --- Summary ---------------------------------------------------------
+        # Summary.
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded: {User.objects.count()} users, {Note.objects.count()} notes."
@@ -111,10 +128,9 @@ class Command(BaseCommand):
         )
         self.stdout.write("")
         self.stdout.write("Login credentials:")
-        self.stdout.write(
-            f"  dev    → email '{DEV_EMAIL}'  or username '{DEV_USERNAME}'  / {DEV_PASSWORD}"
-        )
-        self.stdout.write(
-            f"  admin  → email '{ADMIN_EMAIL}' or username '{ADMIN_USERNAME}' / "
-            f"{ADMIN_PASSWORD}  (superuser, /admin/)"
-        )
+        for spec in KNOWN_ACCOUNTS:
+            role = " (superuser, /admin/)" if spec.is_superuser else ""
+            self.stdout.write(
+                f"  {spec.username:<6}→ email '{spec.email}' or username '{spec.username}' "
+                f"/ {spec.password}{role}"
+            )
