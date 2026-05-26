@@ -45,7 +45,15 @@ make up
 open http://localhost                     # routed through nginx → frontend + backend
 ```
 
-**Default dev login:** `dev@example.com` (or username `dev`) / `password1234` (seeded automatically).
+**Default accounts** (seeded automatically by `make seed` / `make bootstrap`):
+
+| Account | Email | Username | Password | Notes |
+|---|---|---|---|---|
+| Dev user | `dev@example.com` | `dev` | `password1234` | Regular user — log in via `/login` |
+| Admin | `admin@example.com` | `admin` | `adminpassword123` | Superuser — log in via `/admin/` |
+
+Passwords are reset to these values on every `make seed`, so it's safe to
+change them in `/admin/` for local testing — `make seed` brings them back.
 
 ### Deploying to production
 

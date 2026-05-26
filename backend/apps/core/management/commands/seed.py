@@ -3,7 +3,12 @@
 Connects via DATABASE_URL — should be the admin (BYPASSRLS) role so
 inserts work across owners. The Makefile wires this up automatically.
 
-Idempotent on default options (always (re)creates dev@example.com).
+Always creates two known accounts (idempotent — passwords get reset to the
+documented values on every run so README + reality stay in sync):
+  * dev@example.com / username 'dev' / password 'password1234'  (regular user)
+  * admin@example.com / username 'admin' / password 'adminpassword123'
+    (is_staff + is_superuser — can sign into /admin/)
+
 Pass --flush to wipe Notes + non-superuser Users first.
 """
 from __future__ import annotations
@@ -18,10 +23,16 @@ from apps.users.tests.factories import UserFactory
 
 User = UserFactory._meta.model
 
+# Regular dev user.
 DEV_EMAIL = "dev@example.com"
 DEV_USERNAME = "dev"
-# 12+ chars to match the new password policy. Still easy to type.
+# 12+ chars to match the password policy. Still easy to type.
 DEV_PASSWORD = "password1234"
+
+# Superuser for /admin/.
+ADMIN_EMAIL = "admin@example.com"
+ADMIN_USERNAME = "admin"
+ADMIN_PASSWORD = "adminpassword123"
 
 
 class Command(BaseCommand):
@@ -43,13 +54,14 @@ class Command(BaseCommand):
 
         if options["flush"]:
             Note.objects.all().delete()
+            # Deliberately keep superusers — wiping them would lock you out of
+            # /admin/ until the next seed. The admin block below resets the
+            # admin user's password regardless, so credentials stay current.
             User.objects.filter(is_superuser=False).delete()
             self.stdout.write(self.style.WARNING("Flushed notes + non-superuser users."))
 
-        # Always ensure the known dev login exists with the documented
-        # credentials. Idempotent — re-running seed resets the password to
-        # the published value so README and reality stay in sync.
-        dev_user, created = User.objects.get_or_create(
+        # --- Dev user --------------------------------------------------------
+        dev_user, dev_created = User.objects.get_or_create(
             email=DEV_EMAIL,
             defaults={
                 "username": DEV_USERNAME,
@@ -59,26 +71,49 @@ class Command(BaseCommand):
         )
         dev_user.set_password(DEV_PASSWORD)
         dev_user.save()
-        if created:
-            self.stdout.write(
-                f"Created dev user: {DEV_EMAIL} (username: {DEV_USERNAME}) / {DEV_PASSWORD}"
-            )
+        if dev_created:
+            self.stdout.write(self.style.SUCCESS(f"Created dev user: {DEV_EMAIL}"))
 
-        # Make sure the dev user has some notes too.
+        # --- Admin superuser -------------------------------------------------
+        admin_user, admin_created = User.objects.get_or_create(
+            email=ADMIN_EMAIL,
+            defaults={
+                "username": ADMIN_USERNAME,
+                "first_name": "Admin",
+                "last_name": "User",
+            },
+        )
+        # Force the flags every time — protects against someone accidentally
+        # demoting the admin via /admin/ and then forgetting how to fix it.
+        admin_user.is_staff = True
+        admin_user.is_superuser = True
+        admin_user.set_password(ADMIN_PASSWORD)
+        admin_user.save()
+        if admin_created:
+            self.stdout.write(self.style.SUCCESS(f"Created admin superuser: {ADMIN_EMAIL}"))
+
+        # --- Notes for the dev user -----------------------------------------
         for _ in range(options["notes"]):
             NoteFactory(owner=dev_user)
 
-        # Create additional fake users + notes.
+        # --- Additional fake users + notes ----------------------------------
         for _ in range(options["users"]):
             user = UserFactory()
             for _ in range(options["notes"]):
                 NoteFactory(owner=user)
 
+        # --- Summary ---------------------------------------------------------
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded: {User.objects.count()} users, {Note.objects.count()} notes."
             )
         )
+        self.stdout.write("")
+        self.stdout.write("Login credentials:")
         self.stdout.write(
-            f"Dev login → email '{DEV_EMAIL}' or username '{DEV_USERNAME}' / {DEV_PASSWORD}"
+            f"  dev    → email '{DEV_EMAIL}'  or username '{DEV_USERNAME}'  / {DEV_PASSWORD}"
+        )
+        self.stdout.write(
+            f"  admin  → email '{ADMIN_EMAIL}' or username '{ADMIN_USERNAME}' / "
+            f"{ADMIN_PASSWORD}  (superuser, /admin/)"
         )
