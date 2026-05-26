@@ -9,6 +9,7 @@ Keep this scoped to /admin/ only — we don't want API endpoints to bypass
 RLS even for staff users, otherwise admin users' /api/notes/ requests
 would return everyone's notes (different from what other users see).
 """
+
 from __future__ import annotations
 
 

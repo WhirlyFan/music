@@ -16,6 +16,7 @@ Test mechanics:
   inside a transaction. Inside that block, RLS applies normally.
 - `as_app_user(user_id)` also sets `rls.user_id` to match the policy.
 """
+
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -70,17 +71,13 @@ def test_rls_policy_is_present_on_table():
     """Sanity check: the migration enabled RLS + the owner_isolation policy."""
     with connection.cursor() as cur:
         cur.execute(
-            "SELECT relrowsecurity, relforcerowsecurity "
-            "FROM pg_class WHERE relname = 'notes_note'"
+            "SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = 'notes_note'"
         )
         rowsec, forcerls = cur.fetchone()
         assert rowsec is True, "RLS not enabled on notes_note"
         assert forcerls is True, "FORCE RLS not enabled on notes_note"
 
-        cur.execute(
-            "SELECT polname FROM pg_policy "
-            "WHERE polrelid = 'notes_note'::regclass"
-        )
+        cur.execute("SELECT polname FROM pg_policy WHERE polrelid = 'notes_note'::regclass")
         names = {row[0] for row in cur.fetchall()}
         assert "owner_isolation" in names
 

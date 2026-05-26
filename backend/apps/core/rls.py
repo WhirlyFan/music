@@ -5,12 +5,15 @@ Django admin views. Future RLSModel subclasses should call
 `owner_scoped_policy("owner")` instead of building a UserPolicy directly
 — that way the bypass clause stays in one place.
 """
+
 from __future__ import annotations
 
 from django_rls.policies import CustomPolicy
 
 
-def owner_scoped_policy(user_field: str = "owner", *, name: str = "owner_isolation") -> CustomPolicy:
+def owner_scoped_policy(
+    user_field: str = "owner", *, name: str = "owner_isolation"
+) -> CustomPolicy:
     """RLS policy: row is visible if you own it OR `rls.bypass = 'true'`.
 
     The bypass flag is set by `apps.core.rls_context.set_admin_bypass`

@@ -11,6 +11,7 @@ a small `WorkflowRun` row per kickoff so we can:
 The Hatchet workflow code is the source of truth for *what happened*;
 this table is the source of truth for *who triggered it*.
 """
+
 from django.conf import settings
 from django.db import models
 from django_rls import RLSModel

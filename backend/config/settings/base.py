@@ -1,4 +1,5 @@
 """Shared Django settings. Read from env via django-environ."""
+
 from pathlib import Path
 
 import environ
