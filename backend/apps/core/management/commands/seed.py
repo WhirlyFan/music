@@ -19,7 +19,9 @@ from apps.users.tests.factories import UserFactory
 User = UserFactory._meta.model
 
 DEV_EMAIL = "dev@example.com"
-DEV_PASSWORD = "password"
+DEV_USERNAME = "dev"
+# 12+ chars to match the new password policy. Still easy to type.
+DEV_PASSWORD = "password1234"
 
 
 class Command(BaseCommand):
@@ -44,16 +46,22 @@ class Command(BaseCommand):
             User.objects.filter(is_superuser=False).delete()
             self.stdout.write(self.style.WARNING("Flushed notes + non-superuser users."))
 
-        # Always ensure the known dev login exists.
+        # Always ensure the known dev login exists with the documented
+        # credentials. Idempotent — re-running seed resets the password to
+        # the published value so README and reality stay in sync.
         dev_user, created = User.objects.get_or_create(
             email=DEV_EMAIL,
-            defaults={"first_name": "Dev", "last_name": "User"},
+            defaults={
+                "username": DEV_USERNAME,
+                "first_name": "Dev",
+                "last_name": "User",
+            },
         )
+        dev_user.set_password(DEV_PASSWORD)
+        dev_user.save()
         if created:
-            dev_user.set_password(DEV_PASSWORD)
-            dev_user.save()
             self.stdout.write(
-                f"Created dev user: {DEV_EMAIL} / {DEV_PASSWORD}"
+                f"Created dev user: {DEV_EMAIL} (username: {DEV_USERNAME}) / {DEV_PASSWORD}"
             )
 
         # Make sure the dev user has some notes too.
@@ -71,4 +79,6 @@ class Command(BaseCommand):
                 f"Seeded: {User.objects.count()} users, {Note.objects.count()} notes."
             )
         )
-        self.stdout.write(f"Dev login → {DEV_EMAIL} / {DEV_PASSWORD}")
+        self.stdout.write(
+            f"Dev login → email '{DEV_EMAIL}' or username '{DEV_USERNAME}' / {DEV_PASSWORD}"
+        )
