@@ -159,4 +159,9 @@ databases:
   - name: react-django-template-db
     plan: free
     region: oregon                 # MUST match the backend service region
-    postgresMajorVersion: "16"
+    # NOTE: Render does NOT auto-upgrade major versions of an existing DB.
+    # To move from 16 → 17 on Render, you must delete the existing database
+    # in the dashboard so the blueprint re-provisions a fresh one at the
+    # version below. Acceptable here because the dev/free DB is throwaway;
+    # in a real prod migration you'd pg_dump + restore against a new DB.
+    postgresMajorVersion: "17"
