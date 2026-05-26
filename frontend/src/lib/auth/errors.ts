@@ -50,6 +50,30 @@ export function friendlyAuthError(parsed: ParsedErrors, fallback = 'Login failed
 }
 
 /**
+ * Banner-only message: returns a string ONLY if the failure isn't already
+ * being shown inline under a specific field. Prevents duplication where the
+ * inline error AND the top-of-form banner display the same text.
+ *
+ * Logic:
+ *  - If allauth returned form-level errors (no `param`) → show those
+ *  - Else if the response failed AND has zero parsed errors at all (e.g.
+ *    network failure, 500 with no JSON body) → show the fallback
+ *  - Else (field-level errors only) → return null — the inline UI is enough
+ */
+export function bannerError(
+  res: { status: number; errors?: AllAuthErrorItem[] } | undefined,
+  fallback: string,
+): string | null {
+  if (!res || res.status === 200) return null
+  const parsed = parseAllAuthErrors(res)
+  if (parsed.formMessages.length) return parsed.formMessages.join(' ')
+  if (parsed.formMessages.length === 0 && Object.keys(parsed.byField).length === 0) {
+    return fallback
+  }
+  return null
+}
+
+/**
  * Extract a displayable string from a TanStack Form field-level error.
  *
  * TanStack Form's `field.state.meta.errors[i]` is whatever the validator

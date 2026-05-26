@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
-import { friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
+import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
 import { useRequestPasswordReset } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/account/password/forgot')({
@@ -24,6 +24,7 @@ function ForgotPasswordPage() {
   const form = useForm({
     defaultValues: { email: '' },
     onSubmit: async ({ value }) => {
+      if (request.isPending) return
       await request.mutateAsync(value.email)
     },
     // Submit-time validation only — errors on every keystroke is hostile UX.
@@ -55,10 +56,7 @@ function ForgotPasswordPage() {
   }
 
   const parsed = parseAllAuthErrors(request.data)
-  const showError = request.data && request.data.status !== 200
-  const summary = showError
-    ? friendlyAuthError(parsed, 'Could not send reset email. Try again.')
-    : null
+  const summary = bannerError(request.data, 'Could not send reset email. Try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -117,9 +115,9 @@ function ForgotPasswordPage() {
 
         <Button
           type="submit"
+          disabled={request.isPending}
           aria-busy={request.isPending || undefined}
-          aria-disabled={request.isPending || undefined}
-          className={`w-full ${request.isPending ? 'pointer-events-none opacity-60' : ''}`}
+          className="w-full"
         >
           {request.isPending ? (
             <>

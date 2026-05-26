@@ -99,22 +99,30 @@ function TwoFactorOverview() {
             </Link>
           }
         />
-        <MethodRow
-          name="Recovery codes"
-          enrolled={hasRecoveryCodes}
-          description="Single-use backup codes. Generated when you enroll TOTP."
-          enrollLink={
-            <Link
-              to="/account/2fa/recovery-codes"
-              className={buttonVariants({
-                variant: hasRecoveryCodes ? 'outline' : 'default',
-                size: 'sm',
-              })}
-            >
-              {hasRecoveryCodes ? 'View' : 'Generate'}
-            </Link>
-          }
-        />
+        {/* Recovery codes are intrinsically tied to TOTP — allauth refuses
+            to mint them until an authenticator factor is enrolled. Hide
+            the row entirely until that's true, so users don't see a
+            "Generate" button that's guaranteed to fail. Once TOTP is
+            enrolled, recovery codes auto-exist and the action becomes
+            "View" / regenerate. */}
+        {hasTotp ? (
+          <MethodRow
+            name="Recovery codes"
+            enrolled={hasRecoveryCodes}
+            description="Single-use backup codes. Use one if you lose your authenticator."
+            enrollLink={
+              <Link
+                to="/account/2fa/recovery-codes"
+                className={buttonVariants({
+                  variant: hasRecoveryCodes ? 'outline' : 'default',
+                  size: 'sm',
+                })}
+              >
+                {hasRecoveryCodes ? 'View' : 'Generate'}
+              </Link>
+            }
+          />
+        ) : null}
       </ul>
     </div>
   )

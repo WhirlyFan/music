@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
-import { friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
+import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
 import { isMfaChallenge, useLogin, useMfaAuthenticate } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/login')({
@@ -34,6 +34,8 @@ function LoginPage() {
   const form = useForm({
     defaultValues: { identifier: '', password: '' },
     onSubmit: async ({ value }) => {
+      // Idempotency guard — pairs with `disabled` on the submit button.
+      if (login.isPending) return
       const result = await login.mutateAsync(value)
       if (result.status === 200) {
         navigate({ to: '/notes' })
@@ -52,11 +54,11 @@ function LoginPage() {
   // Parse allauth's structured error response so we can show actionable copy
   // instead of "400 Bad Request". The shape is { status, errors:[{message,param}] }.
   const parsed = parseAllAuthErrors(login.data)
-  // A 401 with mfa_authenticate is NOT a failed login — suppress the error banner.
-  const showError = login.data && login.data.status !== 200 && !isMfaChallenge(login.data)
-  const summary = showError
-    ? friendlyAuthError(parsed, 'Login failed — check your credentials and try again.')
-    : null
+  // Banner only for form-level errors (no specific field). The MFA challenge
+  // 401 has its own UI path, not an error banner.
+  const summary = isMfaChallenge(login.data)
+    ? null
+    : bannerError(login.data, 'Login failed — check your credentials and try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -152,9 +154,9 @@ function LoginPage() {
 
         <Button
           type="submit"
+          disabled={login.isPending}
           aria-busy={login.isPending || undefined}
-          aria-disabled={login.isPending || undefined}
-          className={`w-full ${login.isPending ? 'pointer-events-none opacity-60' : ''}`}
+          className="w-full"
         >
           {login.isPending ? (
             <>
@@ -188,15 +190,13 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
   const codeForm = useForm({
     defaultValues: { code: '' },
     onSubmit: async ({ value }) => {
+      if (mfa.isPending) return
       const result = await mfa.mutateAsync(value.code.trim())
       if (result.status === 200) navigate({ to: '/notes' })
     },
   })
   const parsedMfa = parseAllAuthErrors(mfa.data)
-  const mfaError =
-    mfa.data && mfa.data.status !== 200
-      ? friendlyAuthError(parsedMfa, 'Invalid code — try again.')
-      : null
+  const mfaError = bannerError(mfa.data, 'Invalid code — try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -244,9 +244,9 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
 
         <Button
           type="submit"
+          disabled={mfa.isPending}
           aria-busy={mfa.isPending || undefined}
-          aria-disabled={mfa.isPending || undefined}
-          className={`w-full ${mfa.isPending ? 'pointer-events-none opacity-60' : ''}`}
+          className="w-full"
         >
           {mfa.isPending ? (
             <>

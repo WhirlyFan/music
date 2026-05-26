@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
-import { fieldErrorMessage, friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
+import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
 import { useSignup } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/signup')({
@@ -35,6 +35,9 @@ function SignupPage() {
   const form = useForm({
     defaultValues: { email: '', username: '', password: '' },
     onSubmit: async ({ value }) => {
+      // Idempotency guard: if a request is already in-flight, ignore the
+      // submission. Belt-and-suspenders with the `disabled` button below.
+      if (signup.isPending) return
       const result = await signup.mutateAsync(value)
       if (result.status === 200) navigate({ to: '/notes' })
     },
@@ -46,12 +49,25 @@ function SignupPage() {
   })
 
   const parsed = parseAllAuthErrors(signup.data)
-  const showError = signup.data && signup.data.status !== 200
-  const summary = showError ? friendlyAuthError(parsed, 'Could not create account.') : null
+  // Banner shows ONLY form-level errors (no field). When errors are
+  // bound to specific fields, the inline FormError below each input
+  // is the single source of truth — no duplicate banner.
+  const summary = bannerError(signup.data, 'Could not create account.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
+
+      {summary ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
+          id="signup-form-error"
+        >
+          {summary}
+        </div>
+      ) : null}
 
       <form
         onSubmit={(e) => {
@@ -153,14 +169,12 @@ function SignupPage() {
 
         <Button
           type="submit"
+          disabled={signup.isPending}
           aria-busy={signup.isPending || undefined}
-          aria-disabled={signup.isPending || undefined}
-          className={`w-full ${signup.isPending ? 'pointer-events-none opacity-60' : ''}`}
+          className="w-full"
         >
           {signup.isPending ? 'Creating…' : 'Create account'}
         </Button>
-
-        <FormError id="signup-form-error" message={summary} />
       </form>
     </div>
   )
