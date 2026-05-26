@@ -204,6 +204,14 @@ HEADLESS_FRONTEND_URLS = {
 # authenticated. The reason MFA stays opt-in globally: when SAML/SSO lands
 # later, the customer's IdP enforces their org's MFA policy and your app
 # trusts the assertion — re-prompting in-app is the textbook SSO anti-pattern.
+# Key for transparently encrypting sensitive MFA fields at rest.
+# `apps.core.mfa_encryption` uses this to encrypt Authenticator.data["secret"]
+# (TOTP secrets, etc.) before persisting to Postgres. Generate with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Empty default fails LOUDLY on first MFA save/load — never silently store
+# plaintext if the operator forgot to set it.
+MFA_FIELD_ENCRYPTION_KEY = env("MFA_FIELD_ENCRYPTION_KEY", default="")
+
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes", "webauthn"]
 MFA_REQUIRED = False
 MFA_TOTP_ISSUER = "react-django-template"

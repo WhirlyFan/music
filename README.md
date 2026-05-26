@@ -156,8 +156,13 @@ Before deploying, set these in your deploy target's env (Render dashboard / k8s 
 | `FRONTEND_ORIGIN` | the user-facing frontend URL | Drives reset/verify email links |
 | `DATABASE_URL` | Postgres connection | Render auto-wires from linked DB |
 | `DATABASE_URL_ADMIN` | same DB, optionally an admin role | For migrations + seed |
+| `MFA_FIELD_ENCRYPTION_KEY` | Fernet key | Encrypts TOTP secrets at rest. Generate fresh per environment: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. **Never reuse** the dev key from `.env.example` in prod. |
+| `RESEND_API_KEY` | Resend API token (optional) | Without it, password-reset + verification emails silently fail. See [docs/ops/email.md](docs/ops/email.md). |
+| `DEFAULT_FROM_EMAIL` | From: address for outgoing email | Defaults to `onboarding@resend.dev` in prod; override once your domain is DKIM-verified |
 
 `render.yaml` already wires these for the Render deploy — see [docs/ops/deploy-render.md](docs/ops/deploy-render.md). For other targets, the env-var contract is the same.
+
+> ⚠️ **`MFA_FIELD_ENCRYPTION_KEY` is irrecoverable.** If you lose the key on a deploy with existing TOTP enrollments, every user must re-enroll. Treat it like `DJANGO_SECRET_KEY` — back it up in a secrets manager, don't rotate without a migration plan. The committed dev key (`eNu83iHsGyg...` in `.env.example`) is *intentionally* in the repo because it only ever protects local dev data; do not reuse it in prod.
 
 ### 3. Optional integrations (wire when ready)
 

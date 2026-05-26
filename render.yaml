@@ -99,6 +99,15 @@ services:
       - key: DJANGO_SECRET_KEY
         generateValue: true        # Render generates a strong secret + stores it in encrypted env
 
+      # Fernet key for app-layer encryption of MFA secrets (TOTP) at rest.
+      # Must be a valid 32-byte base64-url-encoded Fernet key. Generate with:
+      #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      # Paste into Render dashboard. `sync: false` so it never lands in the
+      # repo. If lost, existing TOTP rows can't be decrypted — users must
+      # re-enroll. Don't rotate without a migration plan.
+      - key: MFA_FIELD_ENCRYPTION_KEY
+        sync: false
+
       # ── Host / origin allow-lists ───────────────────────────────────────
       # Django checks the Host header against ALLOWED_HOSTS. With our
       # same-origin Render rewrites, requests arrive at the backend with the

@@ -96,6 +96,7 @@ services:
       HATCHET_CLIENT_HOST_PORT: hatchet:7077
       HATCHET_CLIENT_TLS_STRATEGY: none
       SENTRY_DSN: ${SENTRY_DSN:-}
+      MFA_FIELD_ENCRYPTION_KEY: ${MFA_FIELD_ENCRYPTION_KEY}
     volumes:
       - ./backend:/app
       # Anonymous volume to preserve the Linux .venv built into the image.
@@ -124,6 +125,7 @@ services:
       HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
       HATCHET_CLIENT_HOST_PORT: hatchet:7077
       HATCHET_CLIENT_TLS_STRATEGY: none
+      MFA_FIELD_ENCRYPTION_KEY: ${MFA_FIELD_ENCRYPTION_KEY}
     volumes:
       - ./backend:/app
       - /app/.venv

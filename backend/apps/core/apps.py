@@ -8,4 +8,9 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         # Wires up the post_migrate signal that enables RLS on every RLSModel.
-        from . import signals  # noqa: F401
+        # Transparent encryption of sensitive allauth.mfa.Authenticator.data
+        # keys (TOTP secrets etc.) via post_init / pre_save signals.
+        from . import (
+            mfa_encryption,  # noqa: F401
+            signals,  # noqa: F401
+        )

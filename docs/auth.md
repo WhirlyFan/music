@@ -159,6 +159,52 @@ The seed command enrolls `admin@example.com` with a fixed TOTP secret
 `make seed`. Guarded: the seed command refuses to run when
 `DJANGO_DEBUG=False`. Production admins enroll their own TOTP via the UI.
 
+### At-rest encryption of TOTP secrets
+
+allauth stores `Authenticator.data["secret"]` as JSON in the
+`mfa_authenticator` table. By default that's plaintext — if a DB dump
+leaks, every TOTP is compromised.
+
+We wrap this with **app-layer Fernet encryption**, transparent to
+allauth's code:
+
+- `apps/core/encryption.py` — `encrypt()` / `decrypt()` keyed by
+  `settings.MFA_FIELD_ENCRYPTION_KEY` (env-driven, never in repo)
+- `apps/core/mfa_encryption.py` — `post_init` decrypts on load,
+  `pre_save` encrypts on write, all keyed off the Authenticator model
+- `apps/core/migrations/0001_encrypt_mfa_secrets.py` — one-time data
+  migration that re-encrypts pre-existing plaintext rows
+
+Round-trip:
+
+```
+allauth code:   authenticator.data["secret"]  →  "JBSWY3DPEHPK3PXP..." (plaintext)
+                                                       ↑ post_init decrypted on load
+                                                       ↓ pre_save will encrypt on next write
+Postgres:       mfa_authenticator.data          →  '{"secret": "enc:gAAAAAB..."}'
+```
+
+`MFA_FIELD_ENCRYPTION_KEY` is a Fernet key (32-byte base64url-encoded).
+Generate with:
+
+```python
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Stored as `sync: false` in `render.yaml` — operator pastes per deploy.
+Loss of key = users must re-enroll TOTP (the only failure mode).
+
+What this protects against:
+- DB dumps / backups leaking to attackers
+- SQL injection that exfiltrates the JSON column
+- Operators with read-only DB access seeing live secrets
+
+What this does NOT protect against:
+- Attacker with full app access (they can read the env var)
+- Compromised Render account (they can read the dashboard)
+- For higher-tier protection, swap Fernet for KMS-backed encryption
+  (out of scope for this template)
+
 ## Brute-force protection (django-axes)
 
 ```python

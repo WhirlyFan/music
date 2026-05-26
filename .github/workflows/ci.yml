@@ -63,6 +63,9 @@ jobs:
       DATABASE_URL_ADMIN: postgres://app_admin:app_admin@localhost:5432/appdb
       DJANGO_DEBUG: "True"
       DJANGO_SECRET_KEY: ci-test-secret-key-not-for-production
+      # Fernet key for MFA field encryption. Test-only — never reuse in prod.
+      # Matches the dev key in .env.example so tests behave the same as local.
+      MFA_FIELD_ENCRYPTION_KEY: eNu83iHsGygVnWNzG97IFWzeLCLaLA4P9WKwcaw8VrA=
 
     steps:
       - uses: actions/checkout@v6.0.2
