@@ -60,6 +60,14 @@ open http://localhost                     # routed through nginx → frontend + 
 Passwords are reset to these values on every `make seed`, so it's safe to
 change them in `/admin/` for local testing — `make seed` brings them back.
 
+**Seeded users skip email verification** — they're created with a verified
+`EmailAddress` row, so `dev` and `admin` log in straight to home. A
+freshly-signed-up user from `/signup` lands on `/account/verify-email`
+(the holding page) and stays there until they click the link in their
+email. In dev, that email lands in Mailpit (`http://localhost:8025`).
+See [docs/auth.md](docs/auth.md) and [ADR 0008](docs/decisions/0008-email-verification-optional-plus-gate.md)
+for the full flow.
+
 ### Deploying to production
 
 ```bash

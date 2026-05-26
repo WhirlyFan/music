@@ -1,14 +1,16 @@
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, Loader2, ShieldCheck } from 'lucide-react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Loader2, ShieldCheck } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
 import { useActivateTotp, useDeactivateTotp, useTotpSetup } from '@/lib/auth/mfa'
+import { confirm } from '@/lib/overlay'
 
 export const Route = createFileRoute('/account/mfa/totp')({
   component: TotpEnrollPage,
@@ -34,15 +36,14 @@ function TotpEnrollPage() {
   const otpUrl = setupMeta?.totp_url
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <Link
-        to="/account/mfa"
-        className={buttonVariants({ variant: 'ghost', size: 'sm' }) + ' -ml-3'}
-      >
-        <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
-        Back to two-factor settings
-      </Link>
-
+    <SettingsPageShell
+      breadcrumbs={[
+        { label: 'Settings', to: '/settings' },
+        { label: 'Multi-factor authentication', to: '/account/mfa' },
+        { label: 'Authenticator app' },
+      ]}
+      title="Authenticator app"
+    >
       {setup.isLoading || !setup.data ? (
         <div className="flex items-center gap-2 text-sm" aria-live="polite">
           <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" aria-hidden="true" />
@@ -54,6 +55,16 @@ function TotpEnrollPage() {
           lastUsedAt={existing?.last_used_at}
           onRemove={async () => {
             if (deactivate.isPending) return
+            // Destructive + auth-weakening — confirm explicitly. Same
+            // overlay pattern as the /account/mfa overview row.
+            const ok = await confirm({
+              title: 'Remove authenticator app?',
+              description:
+                "You'll lose your second factor. Recovery codes will also be invalidated. You can always re-enroll later.",
+              confirmLabel: 'Remove',
+              destructive: true,
+            })
+            if (!ok) return
             const res = await deactivate.mutateAsync()
             if (res.status === 200) {
               toast.success('Authenticator removed.')
@@ -77,7 +88,7 @@ function TotpEnrollPage() {
           Couldn’t start enrollment. Refresh the page and try again.
         </p>
       )}
-    </div>
+    </SettingsPageShell>
   )
 }
 

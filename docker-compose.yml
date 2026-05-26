@@ -143,6 +143,12 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      # Mount the repo-root `docs/` inside the frontend's project root at
+      # `/app/_docs` so Vite's `import.meta.glob('/_docs/**/*.md')` can
+      # resolve it as a project-root-relative path. Read-only — the SPA
+      # only reads. (The `_docs` name avoids collision with any future
+      # `frontend/docs/` directory.)
+      - ./docs:/app/_docs:ro
     ports:
       - "5173:5173"
     command: pnpm dev --host

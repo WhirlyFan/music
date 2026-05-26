@@ -1,5 +1,6 @@
 """Shared Django settings. Read from env via django-environ."""
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -71,6 +72,10 @@ MIDDLEWARE = [
     # AuthenticationMiddleware (needs request.user) and before RLSContextMiddleware
     # so a redirect short-circuits RLS session-var setup we don't need.
     "apps.core.middleware.RequireMfaForStaffMiddleware",
+    # Authenticated users must verify their email before reaching /api/*.
+    # Same ordering rationale as the MFA gate — after auth (needs request.user),
+    # before RLS (a 403 short-circuits the per-request DB session-var setup).
+    "apps.core.middleware.RequireVerifiedEmailMiddleware",
     "django_rls.middleware.RLSContextMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -162,24 +167,31 @@ AUTH_PASSWORD_VALIDATORS = [
 # whether the input looks like an email; both flows hit the same endpoint.
 # REQUIRES django-allauth >= 65.16 (April 2026) — earlier versions had a
 # 400 invalid_login bug when both methods were enabled in headless mode.
-# `mandatory` blocks login until the user clicks the verification link. The
-# alternative ("optional") lets unverified users in but downstream allauth
-# preconditions (e.g. TOTP enrollment) still gate on verification — so the
-# UX is broken either way unless we pick one and commit. Mandatory is the
-# safer default for a template: filters typos / throwaway emails at signup,
-# guarantees we can actually reach users via email, and is one settings
-# flip away from "optional" if a downstream project wants to relax it.
+# "optional" + middleware gate, NOT "mandatory".
+#
+# Why: with "mandatory" allauth refuses to create a real authenticated
+# session until verification — instead it returns 401 + a `verify_email`
+# flow tied to an in-flight signup session. Close the tab and that session
+# is gone, the resend endpoint stops working, and the user is locked out
+# until they click the (possibly already-stale) email link.
+#
+# With "optional" the user gets a normal authenticated session at signup;
+# `apps.core.middleware.RequireVerifiedEmailMiddleware` blocks /api/* until
+# the email is verified, and the frontend's root route guard redirects them
+# to /account/verify-email. Resend works any time post-signup. The pattern
+# mirrors `RequireMfaForStaffMiddleware` (staff /admin/ gate).
 #
 # The seed command bakes admin@example.com + dev@example.com with verified
 # email rows so local /admin/ access + dev login keep working out-of-box.
-ACCOUNT_EMAIL_VERIFICATION = "mandatory"
-# Auto-authenticate the user when they click the verification link from the
-# same browser they signed up with. Without this, even same-session
-# verification returns 401 — user is verified but has to log in separately,
-# which feels broken from the user's perspective ("I clicked the link, why
-# am I not logged in?"). Cross-browser clicks (different session) still
-# require a normal login afterward — there's no way to auto-login someone
-# whose session we don't have.
+ACCOUNT_EMAIL_VERIFICATION = "optional"
+# Historically this would auto-login a user on email confirmation. As of
+# django-allauth 65.x (2024) it is effectively a no-op — verifying via link
+# NEVER mints a session, even with this set to True. The change closed an
+# account-claim vector where an attacker could pre-register a victim's
+# email, then re-direct the victim into the attacker's session on click.
+# We keep the value set in case allauth re-introduces a same-session
+# variant of the behavior, but the frontend assumes no auto-login: clicks
+# from a fresh browser land on a "verified, please log in" screen.
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 ACCOUNT_LOGIN_METHODS = {"email", "username"}
 # Signup collects username + email + password (+ confirm). The `*` suffix
@@ -223,6 +235,17 @@ MFA_FIELD_ENCRYPTION_KEY = env("MFA_FIELD_ENCRYPTION_KEY", default="")
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes", "webauthn"]
 MFA_REQUIRED = False
 MFA_TOTP_ISSUER = "react-django-template"
+# Allow the previous and next 30-second TOTP windows in addition to the
+# current one. Closes the common "I typed the last digit just as it rolled
+# over" footgun without meaningfully weakening security (still ~90s of
+# guess surface vs ~30s, well under the post-trust 30-day cookie window).
+MFA_TOTP_TOLERANCE = 1
+# "Remember this browser" — after the user passes MFA once, allauth sets a
+# signed cookie that skips the MFA challenge for 30 days on this device.
+# The cookie ride-alongs with the standard session cookie (Secure, HttpOnly,
+# SameSite=Lax in prod via the inherited SESSION_COOKIE_* settings).
+MFA_TRUST_ENABLED = True
+MFA_TRUST_COOKIE_AGE = timedelta(days=30)
 # Allow signing in with a passkey only (no password roundtrip). Modern UX win;
 # safe to enable because allauth still requires a password at signup unless
 # explicitly configured otherwise.
@@ -266,9 +289,21 @@ SPECTACULAR_SETTINGS = {
 }
 
 # --- django-axes ---
+# axes' out-of-box defaults are harsh (3 attempts, lock forever, IP-only —
+# one user can lock out a shared NAT). Override with the standard
+# "5 attempts, 1 hour, locked by (user + IP), forgive on good login" combo
+# that most production apps run.
 AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = 1  # hours
+# Lockout cooloff. Set to 5 minutes for development convenience — when
+# you're iterating on auth UX you'll lock yourself out often, and waiting
+# an hour to retry breaks flow. **Production default is 1 hour**: bump
+# back to `timedelta(hours=1)` before shipping, or override per-env via
+# `config/settings/prod.py`.
+AXES_COOLOFF_TIME = timedelta(minutes=5)
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+# Reset the failure counter when the user logs in successfully — so a
+# typo-then-correct sequence doesn't bleed into the next session's budget.
+AXES_RESET_ON_SUCCESS = True
 
 # --- django-guid ---
 DJANGO_GUID = {

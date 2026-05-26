@@ -9,9 +9,10 @@ transparent.
 | Layer | Choice | Why |
 |---|---|---|
 | Build | **Vite 8** | Fast HMR, native TS/JSX, modern ESM |
+| Compiler | **React Compiler 1.0** | Auto-memoizes pure components/hooks — no manual `useMemo`/`useCallback`/`memo`. Wired via `@vitejs/plugin-react` v6 + `@rolldown/plugin-babel` + `reactCompilerPreset()` |
 | Package manager | **pnpm 11** | Disk-efficient, fast, strict |
 | Language | **TypeScript ~6** | `tsc --noEmit` on every push via hook |
-| Routing | **TanStack Router** (file-based) | Typed `Link`, `useParams`, search params ([decision 0004](decisions/0004-tanstack-router.md)) |
+| Routing | **TanStack Router** (file-based) | Typed `Link`, `useParams`, search params ([decision 0004](decisions/0004-tanstack-router.md)). Route `loader`s preferred over `useEffect` for "fetch on arrival" |
 | Data | **TanStack Query** | Caching, refetching, optimistic updates |
 | Forms | **TanStack Form + Zod** | Type-safe, schema-driven, integrates with Query |
 | Tables | **TanStack Table** | Headless primitives; pairs with shadcn DataTable patterns |
@@ -19,9 +20,10 @@ transparent.
 | URL state | **(future) nuqs** | When we have shareable query params |
 | UI components | **shadcn/ui + Tailwind v4** | Copy-paste, source-owned, themable |
 | Icons | **lucide-react** | Tree-shakeable, MIT |
+| WebAuthn helper | **`@github/webauthn-json/browser-ponyfill`** | base64url ↔ ArrayBuffer for `navigator.credentials.create/get` |
 | API client | **openapi-typescript** | Reads OpenAPI → TS types; no runtime client |
 | Telemetry | **@sentry/react** | DSN-driven; opt-in via env |
-| Lint/format | **ESLint + Prettier** | Flat config; `prettier-plugin-tailwindcss` for class sorting |
+| Lint/format | **ESLint + Prettier** | Flat config — typescript-eslint strict, react-hooks v7, react-compiler, react-refresh, @tanstack/query, simple-import-sort, sonarjs + unicorn (cherry-picked bug rules). Mirrors the ruleset from `~/usul-policy-research-app/frontend/eslint.config.mjs` |
 
 ## Layout
 
@@ -38,30 +40,36 @@ frontend/src/
 │   ├── settings.tsx      # security section links to /account/mfa
 │   ├── notes.tsx         # day-1 vertical slice
 │   └── account/
-│       ├── 2fa.tsx       # MFA overview
-│       └── 2fa/
+│       ├── mfa.tsx       # MFA overview
+│       └── mfa/
+│           ├── index.tsx
 │           ├── totp.tsx
 │           ├── recovery-codes.tsx
-│           └── webauthn.tsx       # placeholder
+│           └── webauthn.tsx
 ├── components/
-│   ├── ui/               # shadcn primitives (Button, Avatar, Dialog, …)
+│   ├── ui/               # shadcn primitives + small primitives (Button, Breadcrumbs, FormError, Sonner, …)
+│   ├── auth/
+│   │   └── reauthenticate-step.tsx   # shared "re-enter your password" card + requiresReauth() detector
 │   └── layout/
 │       ├── app-header.tsx
 │       ├── user-menu.tsx
 │       ├── theme-toggle.tsx
-│       └── root-error-boundary.tsx
+│       ├── root-error-boundary.tsx
+│       ├── page-header.tsx           # breadcrumbs + title + description + actions slot
+│       └── settings-page-shell.tsx   # max-w-2xl container + PageHeader, for the /settings tree
 └── lib/
     ├── api/
-    │   ├── client.ts     # fetch wrapper, CSRF, credentials
+    │   ├── client.ts     # fetch wrapper, CSRF, credentials, 403 email_verification_required handler
     │   └── types.ts      # GENERATED — do not edit
     ├── auth/
     │   ├── api.ts        # /_allauth/browser/v1/* wrappers
-    │   ├── hooks.ts      # useSession, useLogin, useLogout, useMfaAuthenticate
-    │   ├── mfa.ts        # authenticator + TOTP + recovery code hooks
+    │   ├── hooks.ts      # useSession, useLogin, useLogout, useMfaAuthenticate, useMfaTrust, useEmails, …
+    │   ├── mfa.ts        # authenticator + TOTP + recovery code + webauthn hooks
+    │   ├── passkey-signal.ts # WebAuthn Signal API helper (device-side cleanup)
     │   ├── avatar.ts     # DiceBear URL + initials fallback
-    │   └── errors.ts     # parseAllAuthErrors + friendlyAuthError
+    │   └── errors.ts     # parseAllAuthErrors, bannerError, axesLockoutMessage, fieldErrorMessage
     ├── query/
-    │   └── keys.ts       # centralized TanStack Query keys
+    │   └── keys.ts       # centralized TanStack Query keys (sessionKeys / noteKeys / mfaKeys / emailKeys)
     └── theme/
         └── store.ts      # Zustand theme store w/ persist; applies before React mounts
 ```
@@ -82,17 +90,30 @@ export const Route = createFileRoute('/notes')({
 ## Data fetching
 
 Centralized query keys in [`lib/query/keys.ts`](../frontend/src/lib/query/keys.ts).
-Per-concern hooks in `lib/auth/`, future `lib/notes/`, etc.
+One namespace per domain (`sessionKeys`, `noteKeys`, `mfaKeys`, `emailKeys`),
+each with `all()` for broad invalidation + specific entries below. Every
+entry is a function (uniform call shape):
 
 ```ts
-export function useNotes() {
-  return useQuery({
-    queryKey: qk.notes(),
-    queryFn: () => api.notes.list(),
-    staleTime: 30_000,
-  })
+export const noteKeys = {
+  all: () => ['notes'] as const,
+  list: () => ['notes', 'list'] as const,
+  detail: (id: number) => ['notes', 'detail', id] as const,
 }
+
+useQuery({
+  queryKey: noteKeys.list(),
+  queryFn: () => api<PaginatedNoteList>('/notes/'),
+})
+
+// Surgical invalidation:
+qc.invalidateQueries({ queryKey: noteKeys.detail(id) })
+// Or namespace-wide:
+qc.invalidateQueries({ queryKey: noteKeys.all() })
 ```
+
+This pattern mirrors the reference repo
+(`~/usul-policy-research-app/frontend/lib/hooks/queries/query-keys.ts`).
 
 Optimistic create/delete with rollback on error is the pattern for the
 day-1 Notes slice. See `routes/notes.tsx`.
@@ -195,13 +216,29 @@ changes → the push is blocked with a "review + commit" message.
   goes in Zustand).
 - **No prop-drilling of server data.** Children call the hook directly;
   React Query deduplicates by query key.
+- **Use route `loader`s, not `useEffect`, for "fetch on arrival."** The
+  `/account/verify-email/$key` route is the canonical example —
+  `useEffect`-driven mutation-on-mount has strict-mode race conditions
+  and complicates the success-redirect path. The loader pattern: do
+  work, populate the cache, `throw redirect()` on success, return outcome
+  data for the failure renderer.
 
 See `.claude/skills/state-management` for the full doctrine.
+
+## Page layout
+
+Routes under `/settings` and `/account/*` use the shared
+[`SettingsPageShell`](../frontend/src/components/layout/settings-page-shell.tsx)
++ [`PageHeader`](../frontend/src/components/layout/page-header.tsx)
++ [`Breadcrumbs`](../frontend/src/components/ui/breadcrumbs.tsx) trio.
+Pass `breadcrumbs`, `title`, optional `description`, optional `actions`;
+the shell handles `max-w-2xl` + spacing + the breadcrumb nav. Top-level
+pages (e.g. `/settings` itself) omit `breadcrumbs` — single-item trails
+are confusing per NN/g UX guidance.
 
 ## Future
 
 - **nuqs** for URL-state when we have shareable filters/tabs
-- **WebAuthn enrollment UI** (currently a stub)
 - **Social login button** when a provider is added
 - **Realtime via WebSocket** when Channels lands — swap TanStack Query
   polling for push without changing components

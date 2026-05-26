@@ -1,14 +1,66 @@
-import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { QueryClient } from '@tanstack/react-query'
+import { createRootRouteWithContext, Outlet, redirect } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import { AppHeader } from '@/components/layout/app-header'
 import { Toaster } from '@/components/ui/sonner'
+import { auth } from '@/lib/auth/api'
+import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/hooks'
+import { emailKeys, sessionKeys } from '@/lib/query/keys'
 
-export const Route = createRootRoute({
+// Paths the verified-email guard MUST let through, even when the session is
+// authenticated-but-unverified. Mirrors the backend's
+// _VERIFIED_EMAIL_EXEMPT_PREFIXES in apps/core/middleware.py — keep them in
+// sync. Without these, a freshly-signed-up user would be redirect-looped
+// on the very page they need to reach to fix the situation.
+const VERIFY_EXEMPT_PREFIXES = [
+  '/account/verify-email',
+  '/account/logout',
+  '/login',
+  '/signup',
+  // Public, even for unverified users — they should be able to read docs
+  // without having to clear the verification gate first.
+  '/docs',
+]
+
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootLayout,
   // Default <title> when a child route doesn't override. Per-route overrides
   // happen via `head: () => ({ meta: [{ title: '...' }] })` in each file route.
   head: () => ({ meta: [{ title: 'react-django-template' }] }),
+  // Verified-email gate. Runs before every navigation; checks the session
+  // (cheap, cached) for authentication, then the email list for verification.
+  // allauth's session response doesn't expose `has_verified_email`, so we
+  // fall back to the email list endpoint — same source of truth as the
+  // backend's RequireVerifiedEmailMiddleware
+  // (`EmailAddress.objects.filter(user=user, verified=True).exists()`).
+  //
+  // Both queries use 5min staleTime + are reset by login/signup/logout/verify
+  // mutations, so a navigation usually pays zero network cost.
+  beforeLoad: async ({ context, location }) => {
+    const path = location.pathname
+    if (VERIFY_EXEMPT_PREFIXES.some((p) => path.startsWith(p))) return
+
+    const session = await context.queryClient.fetchQuery({
+      queryKey: sessionKeys.all(),
+      queryFn: () => auth.session(),
+      staleTime: 5 * 60 * 1000,
+    })
+
+    // Not logged in → not this gate's concern; let the route render and
+    // any IsAuthenticated/redirect-to-login handling happens downstream.
+    if (!isSessionAuthenticated(session)) return
+
+    const emails = await context.queryClient.fetchQuery({
+      queryKey: emailKeys.list(),
+      queryFn: () => auth.listEmails(),
+      staleTime: 5 * 60 * 1000,
+    })
+
+    if (!hasVerifiedPrimaryEmail(emails)) {
+      throw redirect({ to: '/account/verify-email' })
+    }
+  },
 })
 
 function RootLayout() {

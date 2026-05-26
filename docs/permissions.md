@@ -130,4 +130,3 @@ Until then: `IsAuthenticated` + RLS owner isolation is the full story.
 
 - [rls.md](rls.md) — DB-layer enforcement
 - [auth.md](auth.md) — MFA staff gate
-- Notion plan, "Object-Level Permissions (Deferred)" section

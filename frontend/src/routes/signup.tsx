@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { isEmailVerificationPending, useSignup } from '@/lib/auth/hooks'
+import { useSignup } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/signup')({
   component: SignupPage,
@@ -52,12 +52,11 @@ function SignupPage() {
         username: value.username,
         password: value.password,
       })
-      // With ACCOUNT_EMAIL_VERIFICATION=mandatory, signup returns a
-      // `verify_email` flow instead of an authenticated session. Send the
-      // user to the "check your email" holding page until they click the link.
-      if (isEmailVerificationPending(result)) {
-        navigate({ to: '/account/verify-email' })
-      } else if (result.status === 200) {
+      // With ACCOUNT_EMAIL_VERIFICATION="optional", signup creates a real
+      // authenticated session. Send to home; the root-route guard bounces
+      // unverified users to /account/verify-email (one source of truth for
+      // the gate, mirrors backend's RequireVerifiedEmailMiddleware).
+      if (result.status === 200) {
         navigate({ to: '/' })
       } else {
         // Form-level errors (rate limit, server error, etc.) — field-bound

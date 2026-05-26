@@ -19,12 +19,13 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { qk } from '@/lib/query/keys'
+import { mfaKeys } from '@/lib/query/keys'
+
 import { auth } from './api'
 
 export function useAuthenticators() {
   return useQuery({
-    queryKey: qk.authenticators,
+    queryKey: mfaKeys.authenticators(),
     queryFn: () => auth.listAuthenticators(),
     staleTime: 60 * 1000,
   })
@@ -32,7 +33,7 @@ export function useAuthenticators() {
 
 export function useTotpSetup() {
   return useQuery({
-    queryKey: qk.totpSetup,
+    queryKey: mfaKeys.totpSetup(),
     queryFn: () => auth.getTotpSetup(),
     // Setup data is one-shot per enrollment — never cache stale secrets.
     staleTime: 0,
@@ -45,12 +46,9 @@ export function useActivateTotp() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (code: string) => auth.activateTotp(code),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.authenticators })
-      qc.invalidateQueries({ queryKey: qk.totpSetup })
-      // Activating TOTP usually mints recovery codes server-side.
-      qc.invalidateQueries({ queryKey: qk.recoveryCodes })
-    },
+    // Activating TOTP also mints recovery codes server-side, so invalidate
+    // the whole MFA namespace in one call instead of three sibling keys.
+    onSuccess: () => qc.invalidateQueries({ queryKey: mfaKeys.all() }),
   })
 }
 
@@ -58,16 +56,14 @@ export function useDeactivateTotp() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => auth.deactivateTotp(),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.authenticators })
-      qc.invalidateQueries({ queryKey: qk.recoveryCodes })
-    },
+    // Removing TOTP invalidates recovery codes too — namespace-wide flush.
+    onSuccess: () => qc.invalidateQueries({ queryKey: mfaKeys.all() }),
   })
 }
 
 export function useRecoveryCodes() {
   return useQuery({
-    queryKey: qk.recoveryCodes,
+    queryKey: mfaKeys.recoveryCodes(),
     queryFn: () => auth.listRecoveryCodes(),
     staleTime: 60 * 1000,
     retry: false,
@@ -78,6 +74,42 @@ export function useGenerateRecoveryCodes() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => auth.generateRecoveryCodes(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.recoveryCodes }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: mfaKeys.recoveryCodes() }),
+  })
+}
+
+/**
+ * Reauthenticate the current user with their password. Required by allauth
+ * before sensitive operations (adding a passkey). On success the session is
+ * marked "fresh" for ~5 minutes; subsequent sensitive endpoints stop
+ * returning the `reauthenticate` flow.
+ */
+export function useReauthenticate() {
+  return useMutation({
+    mutationFn: (password: string) => auth.reauthenticate(password),
+  })
+}
+
+/**
+ * Add a passkey / WebAuthn credential. The mutation takes the fully-formed
+ * payload — caller is responsible for the browser dance (fetch options,
+ * call navigator.credentials.create(), serialize the credential).
+ */
+export function useAddWebAuthn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (params: { name: string; credential: unknown; passwordless?: boolean }) =>
+      auth.addWebAuthn(params),
+    // Adding a webauthn may mint recovery codes — flush the whole namespace.
+    onSuccess: () => qc.invalidateQueries({ queryKey: mfaKeys.all() }),
+  })
+}
+
+/** Remove one or more enrolled passkeys by authenticator id. */
+export function useDeleteWebAuthn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ids: number[]) => auth.deleteWebAuthn(ids),
+    onSuccess: () => qc.invalidateQueries({ queryKey: mfaKeys.all() }),
   })
 }

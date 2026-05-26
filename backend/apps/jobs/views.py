@@ -46,11 +46,21 @@ class WorkflowRunViewSet(viewsets.ReadOnlyModelViewSet):
         # Only attempt to enqueue if Hatchet credentials are present.
         # This keeps `make test` and CI green when Hatchet isn't running.
         if os.getenv("HATCHET_CLIENT_TOKEN"):
-            from apps.jobs.workflows import hatchet
+            from apps.jobs.workflows import WORKFLOWS
 
-            ref = hatchet.client.admin.run_workflow(
-                workflow_name,
+            workflow = WORKFLOWS.get(workflow_name)
+            if workflow is None:
+                return Response(
+                    {"detail": f"Unknown workflow: {workflow_name}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            # `wait_for_result=False` → returns a WorkflowRunRef immediately
+            # so the API stays fast. The worker picks up + executes async;
+            # the client polls /api/jobs/<id>/ for status.
+            ref = workflow.run(
                 {**workflow_input, "_workflow_run_id": str(run.id)},
+                wait_for_result=False,
             )
             run.hatchet_run_id = ref.workflow_run_id
             run.status = WorkflowRun.Status.RUNNING

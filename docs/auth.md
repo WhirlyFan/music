@@ -1,6 +1,6 @@
 # Authentication
 
-How users sign in, how the SPA stays authenticated, how 2FA works, and how
+How users sign in, how the SPA stays authenticated, how MFA works, and how
 brute-force is blocked.
 
 ## Stack
@@ -9,8 +9,8 @@ brute-force is blocked.
 |---|---|---|
 | Identity + flows | `django-allauth` (headless mode) | login, signup, email verification, password reset, social, MFA — all in one |
 | API session | DRF `SessionAuthentication` | Same cookie as `/admin/` and allauth — one source of truth |
-| 2FA | `allauth.mfa` (`[mfa]` + `fido2`) | TOTP, recovery codes, WebAuthn passkeys |
-| Brute-force | `django-axes` | Lockout per (username + IP) after 5 fails / hour |
+| MFA | `allauth.mfa` (`[mfa]` + `fido2`) | TOTP, recovery codes, WebAuthn passkeys |
+| Brute-force | `django-axes` | Lockout per (username + IP); cooloff configurable per env |
 | Rate limit | `django-ratelimit` | Per-IP / per-user; apply per-view |
 | Password screening | `pwned-passwords-django` | k-anonymity HIBP lookup at signup + change |
 
@@ -28,12 +28,24 @@ POST   /_allauth/browser/v1/auth/login            email/username + password
 POST   /_allauth/browser/v1/auth/signup           email + username + password
 DELETE /_allauth/browser/v1/auth/session          logout
 GET    /_allauth/browser/v1/auth/session          current session info
+POST   /_allauth/browser/v1/auth/reauthenticate   re-enter password for sensitive ops
 POST   /_allauth/browser/v1/auth/2fa/authenticate post-password MFA code
+POST   /_allauth/browser/v1/auth/2fa/trust        complete the "remember this browser" stage
+POST   /_allauth/browser/v1/auth/email/verify     consume the verification key
+GET    /_allauth/browser/v1/account/email         list user's emails (verification status)
+PUT    /_allauth/browser/v1/account/email         resend verification email (body: { email })
 GET    /_allauth/browser/v1/account/authenticators              list enrolled methods
 GET    /_allauth/browser/v1/account/authenticators/totp         start TOTP enrollment
 POST   /_allauth/browser/v1/account/authenticators/totp         confirm TOTP enrollment
-GET    /_allauth/browser/v1/account/authenticators/recovery-codes
-POST   /_allauth/browser/v1/account/authenticators/recovery-codes  regenerate (requires recent reauth)
+DELETE /_allauth/browser/v1/account/authenticators/totp         remove TOTP
+GET    /_allauth/browser/v1/account/authenticators/webauthn     creation options for passkey
+POST   /_allauth/browser/v1/account/authenticators/webauthn     register passkey ({name, credential})
+DELETE /_allauth/browser/v1/account/authenticators/webauthn     remove passkeys ({authenticators: [...]})
+GET    /_allauth/browser/v1/account/authenticators/recovery-codes  view (reauth required)
+POST   /_allauth/browser/v1/account/authenticators/recovery-codes  regenerate (reauth required)
+
+GET    /api/v1/users/passkey-credential-ids/      our endpoint — maps authenticator pk → credential id
+                                                  (used for the WebAuthn Signal API on delete)
 ```
 
 Frontend wrapper: [`frontend/src/lib/auth/api.ts`](../frontend/src/lib/auth/api.ts).
@@ -52,45 +64,76 @@ The frontend's `useLogin` wrapper detects `@` in the identifier and submits
 > ⚠️ Requires `django-allauth >= 65.16`. Earlier versions had a 400 bug when
 > both methods were enabled in headless mode.
 
-## Email verification (mandatory)
+## Email verification — `optional` mode + middleware gate
 
-`ACCOUNT_EMAIL_VERIFICATION = "mandatory"` in `config/settings/base.py` —
-new signups MUST verify their email before they can log in.
+`ACCOUNT_EMAIL_VERIFICATION = "optional"` in `config/settings/base.py`.
+Signup creates a real authenticated session; access to anything past the
+holding page is gated by middleware (backend) + a root-route guard
+(frontend) until `EmailAddress.verified = True`.
+
+Full rationale + alternatives in [ADR 0008](decisions/0008-email-verification-optional-plus-gate.md).
 
 ### Flow
 
-1. User submits signup form → `POST /_allauth/browser/v1/auth/signup`
-2. allauth creates the user (unverified), sends a verification email, returns:
-   ```json
-   { "status": 401, "data": { "flows": [..., { "id": "verify_email", "is_pending": true }] } }
-   ```
-3. Frontend detects `isEmailVerificationPending(response)` → navigates to `/account/verify-email`
-4. Waiting page shows "Check your email" + "Resend verification email" button
-5. User clicks the link in the email → lands at `/account/verify-email/{key}` (URL pattern from `HEADLESS_FRONTEND_URLS.account_confirm_email`)
-6. Route auto-POSTs the key to `/_allauth/browser/v1/auth/email/verify`
-7. allauth marks the email verified; with `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True` (set in `base.py`), a same-session click ALSO completes the auth — the response carries `is_authenticated: true`. Cross-browser clicks (email opened in a different browser than signup) only verify the email at the data layer; the user must then log in normally.
-8. Frontend toasts "Email verified" and redirects to `/`
+1. User submits signup → `POST /_allauth/browser/v1/auth/signup`
+2. allauth creates the user (unverified email), sends the verification
+   email, returns `{ status: 200, meta: { is_authenticated: true }, data: { user: { ... } } }`. **allauth's session response does NOT expose verification status** — the source of truth is the email-list endpoint below
+3. Frontend navigates to `/`. Root `beforeLoad` checks
+   `isSessionAuthenticated(session)` then fetches `GET /_allauth/browser/v1/account/email`
+   and checks `hasVerifiedPrimaryEmail` — same query as the backend
+   (`EmailAddress.objects.filter(user=user, verified=True).exists()`).
+   Unverified → `throw redirect({ to: '/account/verify-email' })`
+4. Holding page shows "Check your email" + a "Resend verification email" button (POSTs `PUT /account/email` with `{ email }`)
+5. User clicks the link → lands at `/account/verify-email/$key`. The route
+   `loader` (not a `useEffect`) POSTs the key, force-refetches the email
+   list, and either `throw redirect({ to: '/' })` on success or renders the
+   right error UI
 
-### Why mandatory
+### Three real outcomes from the email-link click
 
-- Filters typos and throwaway emails at signup
-- Guarantees the app can actually reach users via email (resets, MFA recovery)
-- Forces downstream forks to think about email deliverability (Mailpit dev + Resend prod is wired)
-- One-line relaxation: flip to `"optional"` if a fork wants lower friction
+| Outcome | When | UI |
+|---|---|---|
+| Verified + logged in here | Same browser as signup | Toast "Email verified" → redirect home |
+| Verified, but **not** logged in | Different browser / incognito | "Email verified — log in to continue" card with a Login CTA. allauth no longer auto-logs in on verify click (their [2024 security change](https://docs.allauth.org/en/dev/release-notes/2024.html)) |
+| Invalid / expired / wrong-account | Bad or already-consumed link | "Link no longer works" card with a "Get a new link" CTA |
+
+The frontend reads the **email-list endpoint** rather than the verify-POST
+response to decide which outcome. This insulates us from Strict-Mode
+double-mounts, browser pre-fetchers, and double-clicks, all of which can
+cause the second POST to 400 even though the first one succeeded.
+
+### Three enforcement layers
+
+| Layer | File | What it does |
+|---|---|---|
+| Backend middleware | `backend/apps/core/middleware.py::RequireVerifiedEmailMiddleware` | Returns `403 {"detail": "email_verification_required"}` on `/api/*` when authenticated user has no verified email. The contract for cURL / mobile / any client |
+| Frontend root guard | `frontend/src/routes/__root.tsx` `beforeLoad` | Redirects authenticated+unverified users to `/account/verify-email`, except on exempt routes (verify-email, logout, login, signup) |
+| Frontend fetch fallback | `frontend/src/lib/api/client.ts` | On `403 email_verification_required` from any API call, hard-redirects to the holding page. Catches the edge where a session was verified at load but unverified mid-session |
+
+**Keep exempt paths in sync** between `VERIFY_EXEMPT_PREFIXES` (frontend
+guard) and `_VERIFIED_EMAIL_EXEMPT_PREFIXES` (backend middleware). Drift
+shows up as a redirect loop on signup.
+
+### URL-encoded key gotcha
+
+Django's URL utilities URL-encode the verification key when constructing
+the email link (`MTk:1wRoSB:...` → `MTk%3A1wRoSB%3A...`). The route
+`params` give us the raw URL segment, so we `decodeURIComponent` before
+POSTing — otherwise allauth compares the encoded string against the DB's
+literal-colon key and rejects it as "invalid or expired."
 
 ### Side-effects on TOTP enrollment
 
-allauth refuses to mint TOTP authenticators for unverified emails — returns
-409 with `unverified_email`. Verification is a hard precondition for MFA
-regardless of the global verification policy; mandatory mode makes the
-flow consistent (by the time the user reaches `/account/mfa/totp`, they're
-already verified).
+allauth refuses to mint TOTP authenticators for unverified emails (returns
+409 `unverified_email`). The root guard funnels unverified users to
+`/account/verify-email` before they can reach `/account/mfa/totp`, so by
+the time enrollment runs the precondition holds.
 
 ### Local dev: seeded accounts skip verification
 
-The seed bakes an `EmailAddress` row with `verified=True` for every seeded
-user (known accounts + fake users via UserFactory). Without this, every
-fresh `make seed` would lock out `dev@example.com` and `admin@example.com`.
+The seed bakes an `EmailAddress(verified=True)` row for every seeded user
+(known accounts + fake users via UserFactory). Without this, every fresh
+`make seed` would lock out `dev@example.com` and `admin@example.com`.
 
 ## Session cookies — why not JWT
 
@@ -119,18 +162,22 @@ For the SPA, the frontend wrapper:
 See [`frontend/src/lib/auth/api.ts`](../frontend/src/lib/auth/api.ts) —
 `ensureCsrfCookie()` + `getCsrfCookie()`.
 
-## 2FA / MFA
+## MFA
 
 ### Design
 
 | Rule | Why |
 |---|---|
-| **Optional for all users** (`MFA_REQUIRED = False`) | Most users won't enable it; nagging them on signup is hostile UX |
+| **Optional for all users** (`MFA_REQUIRED = False`) | Most users won't enable it; nagging on signup is hostile UX |
 | **Required for `is_staff` users hitting `/admin/`** | Admin actions are higher-blast-radius. Enforced by `RequireMfaForStaffMiddleware` |
-| Three methods supported: TOTP, recovery codes, WebAuthn | TOTP covers most users; recovery codes are the backup; passkeys are modern |
+| Three methods: TOTP, recovery codes, WebAuthn (passkeys) | TOTP covers most users; recovery codes are the backup; passkeys are modern |
 | When SAML/SSO lands, the IdP's MFA policy applies — app-level stays opt-in | Re-prompting in-app after IdP-MFA is the textbook SSO anti-pattern |
 
 ADR: [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional-staff-required.md).
+
+UI naming: user-facing copy uses "Multi-factor authentication" / "MFA"
+consistently (no "2FA" in user-visible strings). The `/auth/2fa/*` URL
+paths in the API are allauth's literal endpoint URLs — those stay.
 
 ### Staff `/admin/` gate
 
@@ -138,19 +185,105 @@ ADR: [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional
 intercepts `/admin/*` requests. If the user is authenticated, `is_staff`,
 and has zero `Authenticator` rows, redirects to
 `/account/mfa?required=true&next=<path>`. Exempt prefixes: `/account/mfa`,
-`/_allauth/`, `/account/logout` (so the user can actually enroll without
-hitting a redirect loop).
+`/_allauth/`, `/account/logout`.
 
 Tests: [`apps/core/tests/test_staff_mfa_middleware.py`](../backend/apps/core/tests/test_staff_mfa_middleware.py).
 
-### Recovery codes — gotchas
+### TOTP code tolerance
 
-- **Require TOTP first.** allauth refuses to mint recovery codes for a
-  user with no other MFA method. They're a *backup*, not a primary factor.
-- **Regenerating requires recent re-auth.** allauth returns
-  `flow: reauthenticate` on POST to the regen endpoint if the user logged
-  in more than ~5 minutes ago. The frontend should prompt for the password
-  again. (Not yet wired up — flagged in the README.)
+```python
+MFA_TOTP_TOLERANCE = 1
+```
+
+Allows the previous and next 30-second windows in addition to the current
+one. Closes the common "I typed the last digit right as it rolled over"
+footgun without meaningfully weakening security.
+
+### "Remember this browser for 30 days"
+
+```python
+MFA_TRUST_ENABLED = True
+MFA_TRUST_COOKIE_AGE = timedelta(days=30)
+```
+
+After a successful MFA code submit allauth advances to a `mfa_trust`
+stage; the frontend's MFA challenge form has an opt-in checkbox that
+POSTs `/auth/2fa/trust` with the user's choice. Trust = `True` mints a
+signed cookie that skips the MFA challenge on subsequent logins from this
+browser. Trust = `False` is still required (the trust stage blocks the
+final 200 until *some* answer is given).
+
+**Reading the code-submit response.** With trust enabled, an accepted
+6-digit code returns `401 + mfa_trust: is_pending: true` instead of 200 —
+allauth holds the login until the trust stage completes. The frontend
+check `isMfaTrustPending(result)` runs *before* the "invalid code" branch
+so a valid code doesn't read as a rejection.
+
+### Reauthentication ("sensitive actions")
+
+allauth's `Authenticator.AccessLevel.SENSITIVE` actions return
+`401 + reauthenticate` flow when the session isn't "fresh." We use this
+gate for:
+
+- Adding a passkey (`POST /account/authenticators/webauthn`)
+- Removing a passkey (`DELETE /account/authenticators/webauthn`)
+- Viewing recovery codes (`GET /account/authenticators/recovery-codes`)
+- Regenerating recovery codes
+
+Shared frontend component:
+[`components/auth/reauthenticate-step.tsx`](../frontend/src/components/auth/reauthenticate-step.tsx).
+Exports `<ReauthenticateStep />` (password prompt card) and `requiresReauth(res)`
+(detector). Pages that perform a sensitive action either gate on
+`requiresReauth(initialQuery.data)` before rendering, or fall through to a
+reauth retry after a 401.
+
+### Recovery codes
+
+- **Require an authenticator factor first.** allauth refuses to mint
+  recovery codes for a user with no other MFA method. They're a *backup*,
+  not a primary factor — the overview page hides the "Generate" row until
+  TOTP is enrolled.
+- **Viewing + regenerating require reauth.** The recovery-codes page
+  detects `requiresReauth` on its GET response and renders the password
+  prompt instead of the codes.
+
+### WebAuthn / passkeys
+
+Full enrollment + delete UI at `/account/mfa/webauthn`. Three-step flow:
+
+1. **Reauthenticate** with password (shared `ReauthenticateStep`)
+2. **Fetch creation options.** `GET /account/authenticators/webauthn` →
+   `{ creation_options: { publicKey: {...} } }`. The frontend uses
+   `@github/webauthn-json/browser-ponyfill`'s `parseCreationOptionsFromJSON()`
+   to base64url-decode `challenge` / `user.id` into `ArrayBuffer`s before
+   handing them to `navigator.credentials.create()`. The returned
+   credential's `.toJSON()` re-encodes to base64url for the POST body.
+3. **POST the attestation** with `{ name, credential }`. Toast + return to
+   overview.
+
+Removal does the same reauth dance: attempt DELETE, if 401 with
+`reauthenticate` pending → prompt for password → retry. No `confirm()`
+modal — the password challenge IS the deliberate-action gate.
+
+#### Signal API — device-side cleanup
+
+Server-side delete revokes the public key from our database, but the
+credential **still lives on the user's device** (Touch ID Keychain,
+Windows Hello vault, hardware-key memory, password-manager passkey store).
+After a successful delete the frontend fires
+`PublicKeyCredential.signalUnknownCredential({ rpId, credentialId })` so
+modern browsers prune the local copy. Best-effort: silent on unsupported
+browsers (older Firefox, Safari < 18), spec-mandated silent on success.
+
+The credential ID isn't exposed by allauth's authenticator list (security
+default — don't leak credential bytes), so we expose it via
+`GET /api/v1/users/passkey-credential-ids/` — a small DRF endpoint scoped
+to the calling user. See [`apps/users/views.py`](../backend/apps/users/views.py).
+
+> ℹ️ The Signal API only exists for WebAuthn. TOTP authenticator apps have
+> no equivalent — RFC 6238 is one-way by design, so deleting a TOTP factor
+> server-side leaves the entry orphaned in the user's authenticator app
+> until they remove it manually.
 
 ### Local dev convenience
 
@@ -209,8 +342,9 @@ What this does NOT protect against:
 
 ```python
 AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = 1  # hours
+AXES_COOLOFF_TIME = timedelta(minutes=5)   # dev. Prod default = timedelta(hours=1)
 AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True               # forgive typos after a good login
 AUTHENTICATION_BACKENDS = [
     "axes.backends.AxesStandaloneBackend",  # MUST be first
     "django.contrib.auth.backends.ModelBackend",
@@ -219,8 +353,22 @@ AUTHENTICATION_BACKENDS = [
 ```
 
 `AxesMiddleware` must be the **last** entry in `MIDDLEWARE` so it can
-observe failures from auth backends above. We verify this in
-[`config/settings/base.py`](../backend/config/settings/base.py).
+observe failures from auth backends above.
+
+The lockout response is `403` with a body axes generates directly:
+
+```json
+{ "failure_limit": 5, "username": "...", "cooloff_time": "PT5M", "cooloff_timedelta": "P0DT00H05M00S" }
+```
+
+The frontend `bannerError()` helper detects this shape and surfaces
+"Too many failed attempts. Try again in 5 minutes." via toast — no
+duplication with field-level "Incorrect password" errors. Helpers in
+[`frontend/src/lib/auth/errors.ts`](../frontend/src/lib/auth/errors.ts):
+`isAxesLockout`, `axesLockoutMessage`, `formatAxesCooloff` (ISO-8601
+duration → human string).
+
+**Resetting a dev lockout:** `docker compose exec backend python manage.py axes_reset_username dev@example.com` (or `axes_reset` for all).
 
 ## Future: social login
 
@@ -255,8 +403,12 @@ SAML adds cleanly later:
 | `403 CSRF verification failed` on first POST | No `csrftoken` cookie yet | `ensureCsrfCookie()` runs a GET to `/_allauth/auth/session` first |
 | Login returns 200, but DRF says unauthenticated on next request | Using `app/v1` instead of `browser/v1` | Switch the frontend wrapper to `browser/v1` |
 | MFA-enrolled user "can't log in" | Frontend not handling the 401-with-`mfa_authenticate` flow | `isMfaChallenge(response)` + MFA challenge form |
-| Staff user redirected to `/account/mfa` and back | Enrollment route was gated by mistake | Verify `_EXEMPT_PREFIXES` in `apps/core/middleware.py` |
-| `axes` locks out a real user during dev | Hit 5 failed logins | `python manage.py axes_reset` |
+| Valid TOTP code reads as "Invalid code — try again" | Frontend checks `status !== 200` before `isMfaTrustPending(result)` | With `MFA_TRUST_ENABLED`, an accepted code returns `401 + mfa_trust: is_pending: true`. Check trust pending FIRST |
+| Staff user redirected to `/account/mfa` and back | Enrollment route was gated by mistake | Verify `_MFA_EXEMPT_PREFIXES` in `apps/core/middleware.py` |
+| Verify-email link clicked → "Link no longer works" but verification did succeed | Strict-Mode double-mount → 2nd POST gets 400, frontend reads response status | Frontend reads the email-list endpoint, not the POST response — that's the fix already in place. If it regresses, check `$key.tsx`'s loader |
+| Resend verification button does nothing | POSTing to `PUT /auth/email/verify` (wrong endpoint for `optional` mode) | Use `PUT /account/email` with `{email}` — see `auth.ts::resendEmailVerification` |
+| `axes` locks out a real user during dev | Hit 5 failed logins | `make axes-reset` (or `python manage.py axes_reset`) |
+| Recovery codes endpoint returns 401 + `reauthenticate` flow | Session isn't fresh for sensitive read | Render the `<ReauthenticateStep />`; invalidate the recovery-codes query on confirm |
 
 ## Password reset
 
@@ -274,5 +426,6 @@ Frontend routes: `routes/account/password/forgot.tsx`, `routes/account/password/
 - [ops/email.md](ops/email.md) — wiring a transactional email provider (Resend / Postmark / SES)
 - [decisions/0003-allauth-headless.md](decisions/0003-allauth-headless.md) — why allauth over djoser
 - [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional-staff-required.md) — the MFA policy choice
+- [decisions/0008-email-verification-optional-plus-gate.md](decisions/0008-email-verification-optional-plus-gate.md) — email verification pattern
 - [permissions.md](permissions.md) — is_staff vs is_superuser
 - [rls.md](rls.md) — how `request.user.id` flows into the DB

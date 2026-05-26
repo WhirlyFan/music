@@ -16,25 +16,23 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--name", default="django-worker")
-        parser.add_argument("--max-runs", type=int, default=10)
+        # `slots` (formerly `max_runs` in pre-1.x SDK) caps how many task runs
+        # this worker handles concurrently. Tune based on container CPU/mem.
+        parser.add_argument("--slots", type=int, default=10)
 
     def handle(self, *args, **options):
-        # Import inside handle() so settings are configured first.
-        from apps.jobs.workflows import (
-            HelloWorkflow,
-            ParallelLLMWorkflow,
-            hatchet,
-        )
+        # Import inside handle() so Django settings are configured first.
+        from apps.jobs.workflows import hatchet, hello_workflow, parallel_llm_workflow
 
         worker = hatchet.worker(
             name=options["name"],
-            max_runs=options["max_runs"],
-            workflows=[HelloWorkflow(), ParallelLLMWorkflow()],
+            slots=options["slots"],
+            workflows=[hello_workflow, parallel_llm_workflow],
         )
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Starting Hatchet worker '{options['name']}' (max_runs={options['max_runs']})"
+                f"Starting Hatchet worker '{options['name']}' (slots={options['slots']})"
             )
         )
         worker.start()

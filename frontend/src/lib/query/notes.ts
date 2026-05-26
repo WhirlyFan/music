@@ -2,14 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/types'
-import { qk } from '@/lib/query/keys'
+import { noteKeys } from '@/lib/query/keys'
 
 export type Note = components['schemas']['Note']
 export type PaginatedNoteList = components['schemas']['PaginatedNoteList']
 
 export function useNotes() {
   return useQuery({
-    queryKey: qk.notes(),
+    queryKey: noteKeys.list(),
     queryFn: () => api<PaginatedNoteList>('/notes/'),
   })
 }
@@ -24,8 +24,8 @@ export function useCreateNote() {
     // Per the state-management skill: synchronous setQueryData in onMutate,
     // snapshot the previous cache, restore it in onError. No setTimeout.
     onMutate: async (input) => {
-      await qc.cancelQueries({ queryKey: qk.notes() })
-      const previous = qc.getQueryData<PaginatedNoteList>(qk.notes())
+      await qc.cancelQueries({ queryKey: noteKeys.list() })
+      const previous = qc.getQueryData<PaginatedNoteList>(noteKeys.list())
 
       const optimistic: Note = {
         id: -Date.now(), // negative so it can't collide with a real id
@@ -35,7 +35,7 @@ export function useCreateNote() {
         updated_at: new Date().toISOString(),
       }
 
-      qc.setQueryData<PaginatedNoteList>(qk.notes(), (old) =>
+      qc.setQueryData<PaginatedNoteList>(noteKeys.list(), (old) =>
         old
           ? { ...old, count: old.count + 1, results: [optimistic, ...old.results] }
           : { count: 1, next: null, previous: null, results: [optimistic] },
@@ -46,25 +46,26 @@ export function useCreateNote() {
 
     onError: (_err, _input, context) => {
       if (context?.previous) {
-        qc.setQueryData(qk.notes(), context.previous)
+        qc.setQueryData(noteKeys.list(), context.previous)
       }
     },
 
     // Always sync with the server's truth — server fills in id/created_at.
-    onSettled: () => qc.invalidateQueries({ queryKey: qk.notes() }),
+    onSettled: () => qc.invalidateQueries({ queryKey: noteKeys.all() }),
   })
 }
 
 export function useDeleteNote() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) => api<void>(`/notes/${id}/`, { method: 'DELETE' }),
+    // No-body response (204) → swallow the unknown return.
+    mutationFn: (id: number) => api(`/notes/${id}/`, { method: 'DELETE' }),
 
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: qk.notes() })
-      const previous = qc.getQueryData<PaginatedNoteList>(qk.notes())
+      await qc.cancelQueries({ queryKey: noteKeys.list() })
+      const previous = qc.getQueryData<PaginatedNoteList>(noteKeys.list())
 
-      qc.setQueryData<PaginatedNoteList>(qk.notes(), (old) =>
+      qc.setQueryData<PaginatedNoteList>(noteKeys.list(), (old) =>
         old
           ? {
               ...old,
@@ -79,10 +80,10 @@ export function useDeleteNote() {
 
     onError: (_err, _id, context) => {
       if (context?.previous) {
-        qc.setQueryData(qk.notes(), context.previous)
+        qc.setQueryData(noteKeys.list(), context.previous)
       }
     },
 
-    onSettled: () => qc.invalidateQueries({ queryKey: qk.notes() }),
+    onSettled: () => qc.invalidateQueries({ queryKey: noteKeys.all() }),
   })
 }

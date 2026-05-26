@@ -23,7 +23,9 @@ export class RootErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, info: ErrorInfo) {
     // Log the error so Sentry / browser console / log shipper picks it up.
     // Sentry's React integration patches console.error too, so this suffices
-    // without a direct Sentry import in the boundary.
+    // without a direct Sentry import in the boundary. The no-console rule
+    // is enforced elsewhere; error boundaries are the canonical exception.
+    // eslint-disable-next-line no-console
     console.error('[RootErrorBoundary]', error, info)
   }
 

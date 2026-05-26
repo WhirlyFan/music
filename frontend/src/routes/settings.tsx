@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ShieldCheck } from 'lucide-react'
 
+import { SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { buttonVariants } from '@/components/ui/button'
 import { useAuthenticators } from '@/lib/auth/mfa'
 
@@ -18,22 +19,21 @@ function SettingsPage() {
   const mfaEnrolled = types.has('totp') || types.has('webauthn')
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Manage your account, security, and preferences.
-        </p>
-      </div>
-
+    // No breadcrumbs on the top-level settings page — a single-item trail
+    // is redundant with the page title and confuses users who click it and
+    // get sent to themselves. Breadcrumbs are intentional UI, not chrome.
+    <SettingsPageShell
+      title="Settings"
+      description="Manage your account, security, and preferences."
+    >
       <Section title="Security" description="How you sign in to your account.">
         <SettingsRow
           icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
-          title="Two-factor authentication"
+          title="Multi-factor authentication"
           description={
             mfaEnrolled
-              ? 'Enrolled. Codes are required every time you log in.'
-              : 'Add a second factor (authenticator app or passkey).'
+              ? 'Enrolled. A code or passkey is required every time you log in.'
+              : 'Add an authenticator app, passkey, or hardware key.'
           }
           status={mfaEnrolled ? 'on' : 'off'}
           action={
@@ -49,7 +49,7 @@ function SettingsPage() {
           }
         />
       </Section>
-    </div>
+    </SettingsPageShell>
   )
 }
 
@@ -87,9 +87,9 @@ function SettingsRow({
   action: React.ReactNode
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 p-4">
-      <div className="flex items-start gap-3">
-        <div className="text-muted-foreground mt-0.5">{icon}</div>
+    <div className="flex items-center justify-between gap-4 p-4">
+      <div className="flex items-center gap-3">
+        <div className="text-muted-foreground shrink-0">{icon}</div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{title}</p>

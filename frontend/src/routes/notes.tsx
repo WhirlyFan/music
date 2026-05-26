@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { fieldErrorMessage } from '@/lib/auth/errors'
 import { confirm } from '@/lib/overlay'
 import { useCreateNote, useDeleteNote, useNotes } from '@/lib/query/notes'
 
@@ -30,7 +31,10 @@ function NotesPage() {
       await create.mutateAsync(value)
       formApi.reset()
     },
-    validators: { onChange: noteSchema },
+    // Submit-time validation only. Showing errors on every keystroke is
+    // hostile UX — the user is mid-thought. Same convention as the auth
+    // forms (signup, login, MFA enroll).
+    validators: { onSubmit: noteSchema },
   })
 
   return (
@@ -56,7 +60,10 @@ function NotesPage() {
 
         <form.Field name="title">
           {(field) => {
-            const errorMsg = field.state.meta.errors[0]
+            // TanStack Form's `meta.errors` holds Zod issue objects, not
+            // strings — `String(issue)` would render "[object Object]".
+            // `fieldErrorMessage` unwraps the `.message`.
+            const errorMsg = fieldErrorMessage(field.state.meta.errors[0])
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">
@@ -74,30 +81,33 @@ function NotesPage() {
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
-                <FormError
-                  id={`${field.name}-error`}
-                  message={errorMsg ? String(errorMsg) : null}
-                />
+                <FormError id={`${field.name}-error`} message={errorMsg} />
               </div>
             )
           }}
         </form.Field>
 
         <form.Field name="body">
-          {(field) => (
-            <div className="space-y-1">
-              <label htmlFor={field.name} className="text-sm font-medium">
-                Body
-              </label>
-              <Textarea
-                id={field.name}
-                placeholder="Optional — write a note…"
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                onChange={(e) => field.handleChange(e.target.value)}
-              />
-            </div>
-          )}
+          {(field) => {
+            const errorMsg = fieldErrorMessage(field.state.meta.errors[0])
+            return (
+              <div className="space-y-1">
+                <label htmlFor={field.name} className="text-sm font-medium">
+                  Body
+                </label>
+                <Textarea
+                  id={field.name}
+                  placeholder="Optional — write a note…"
+                  aria-invalid={errorMsg ? true : undefined}
+                  aria-errormessage={errorMsg ? `${field.name}-error` : undefined}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <FormError id={`${field.name}-error`} message={errorMsg} />
+              </div>
+            )
+          }}
         </form.Field>
 
         <Button

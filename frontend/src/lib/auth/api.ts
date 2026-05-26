@@ -10,6 +10,7 @@
  * sees you as authenticated.
  */
 const ALLAUTH = '/_allauth/browser/v1'
+const API = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 
 type AllAuthResponse<T = unknown> = { status: number; data: T; meta?: unknown }
 
@@ -89,11 +90,16 @@ export const auth = {
   verifyEmail: (key: string) => call('POST', '/auth/email/verify', { key }),
 
   /**
-   * Resend the verification email to the in-progress signup user. Only
-   * works during an unverified session — allauth uses the session's
-   * pending-email-verification flow.
+   * Resend the verification email for an authenticated user's unverified
+   * address. Endpoint is the email-management surface
+   * (`PUT /account/email`), NOT `/auth/email/verify` — the latter is for
+   * the mid-signup flow with `ACCOUNT_EMAIL_VERIFICATION = "mandatory"`,
+   * which we don't use. With our `"optional"` mode the user is properly
+   * authenticated, so we use the authenticated email-management endpoint.
+   * Body: `{ email }` — required, identifies which of the user's emails
+   * to resend (we only ever have one).
    */
-  resendEmailVerification: () => call('PUT', '/auth/email/verify'),
+  resendEmailVerification: (email: string) => call('PUT', '/account/email', { email }),
 
   // --- Password reset (two-step) ---
   /**
@@ -121,6 +127,81 @@ export const auth = {
   // --- MFA challenge step (post-password) ---
   /** Submit a TOTP/recovery code mid-login to finish authenticating. */
   mfaAuthenticate: (code: string) => call('POST', '/auth/2fa/authenticate', { code }),
+
+  /**
+   * Complete the "remember this browser" stage. After mfaAuthenticate
+   * succeeds with MFA_TRUST_ENABLED on the backend, the session enters a
+   * `mfa_trust` stage; the user must POST `{trust}` to advance. Setting
+   * `trust: true` mints a signed cookie (`MFA_TRUST_COOKIE_AGE`, 30d) that
+   * skips the MFA challenge on subsequent logins from this device.
+   */
+  mfaTrust: (trust: boolean) => call('POST', '/auth/2fa/trust', { trust }),
+
+  /**
+   * Re-confirm the user's password to "freshen" the session for sensitive
+   * operations (adding a passkey, changing primary email, etc.). allauth
+   * returns 401 + a `reauthenticate` flow on those endpoints when the
+   * session is stale; this completes that flow.
+   */
+  reauthenticate: (password: string) => call('POST', '/auth/reauthenticate', { password }),
+
+  // --- WebAuthn / passkey enrollment ---
+  /**
+   * Fetch the PublicKeyCredentialCreationOptions for a new passkey. The
+   * response (under `data.creation_options`) is the JSON-encoded options
+   * payload — pass it through `parseCreationOptionsFromJSON` (or
+   * @github/webauthn-json's create()) before handing to navigator.credentials.
+   *
+   * 401 + `reauthenticate` flow when the session isn't fresh — call
+   * `reauthenticate` first, then retry this GET.
+   */
+  getWebAuthnCreationOptions: () => call('GET', '/account/authenticators/webauthn'),
+
+  /**
+   * Finalize passkey enrollment. `credential` is the JSON-serialized result
+   * of navigator.credentials.create() (use credential.toJSON() or webauthn-json).
+   * `passwordless` enables sign-in with just the passkey (no password); leave
+   * false to use the passkey only as a 2nd factor.
+   */
+  addWebAuthn: (params: { name: string; credential: unknown; passwordless?: boolean }) =>
+    call('POST', '/account/authenticators/webauthn', params),
+
+  /**
+   * Remove one or more enrolled passkeys. allauth deletes the underlying
+   * Authenticator rows; invalidates recovery codes if this was the last
+   * factor. `ids` are the integer authenticator IDs from listAuthenticators().
+   *
+   * After this call succeeds the frontend should ALSO fire the WebAuthn
+   * Signal API to tell the device's authenticator (Touch ID Keychain,
+   * Windows Hello, etc.) to garbage-collect its local credential. See
+   * `signalDeletedPasskey` in `lib/auth/passkey-signal.ts`.
+   */
+  deleteWebAuthn: (ids: number[]) =>
+    call('DELETE', '/account/authenticators/webauthn', { authenticators: ids }),
+
+  /**
+   * Map of `{ [authenticator_pk]: base64url credentialId }` for the
+   * current user's passkeys. Used by the Signal API path — allauth's own
+   * authenticator list doesn't expose credential bytes, so we have a
+   * tiny DRF endpoint that does.
+   */
+  passkeyCredentialIds: async (): Promise<Record<string, string>> => {
+    const res = await fetch(`${API}/users/passkey-credential-ids/`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+    if (!res.ok) return {}
+    return (await res.json()) as Record<string, string>
+  },
+
+  // --- Email management ---
+  /**
+   * List the user's email addresses with `{ email, verified, primary }`.
+   * The verified flag is the source of truth for the frontend's
+   * verified-email gate — allauth's session response doesn't expose it.
+   */
+  listEmails: () => call('GET', '/account/email'),
 
   // --- Authenticator management (post-login) ---
   /** List enrolled authenticators (TOTP, recovery codes, WebAuthn). */

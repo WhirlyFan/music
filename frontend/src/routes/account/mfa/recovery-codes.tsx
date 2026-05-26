@@ -1,8 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { createFileRoute } from '@tanstack/react-router'
+import { RefreshCw } from 'lucide-react'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { ReauthenticateStep, requiresReauth } from '@/components/auth/reauthenticate-step'
+import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { Button } from '@/components/ui/button'
 import { useGenerateRecoveryCodes, useRecoveryCodes } from '@/lib/auth/mfa'
+import { mfaKeys } from '@/lib/query/keys'
 
 export const Route = createFileRoute('/account/mfa/recovery-codes')({
   component: RecoveryCodesPage,
@@ -16,30 +20,44 @@ type RecoveryCodeData = {
 }
 
 function RecoveryCodesPage() {
+  const qc = useQueryClient()
   const list = useRecoveryCodes()
   const regenerate = useGenerateRecoveryCodes()
+
+  const breadcrumbs = [
+    { label: 'Settings', to: '/settings' },
+    { label: 'Multi-factor authentication', to: '/account/mfa' },
+    { label: 'Recovery codes' },
+  ]
+
+  // allauth gates the recovery-codes read as a sensitive operation: when
+  // the session isn't fresh it returns 401 + a `reauthenticate` flow. Same
+  // pattern as the passkey enrollment surface — surface the reauth card,
+  // then invalidate the recovery-codes query to retry on success.
+  if (requiresReauth(list.data)) {
+    return (
+      <SettingsPageShell
+        breadcrumbs={breadcrumbs}
+        title="Recovery codes"
+        description="Single-use backup codes for when you don’t have your authenticator. Each works exactly once. Store them somewhere safe."
+      >
+        <ReauthenticateStep
+          description="Viewing recovery codes is a sensitive change — re-enter your password to continue."
+          onConfirmed={() => qc.invalidateQueries({ queryKey: mfaKeys.recoveryCodes() })}
+        />
+      </SettingsPageShell>
+    )
+  }
 
   const codesData = (list.data?.data as RecoveryCodeData | undefined) ?? {}
   const unused = codesData.unused_codes ?? []
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
-      <Link
-        to="/account/mfa"
-        className={buttonVariants({ variant: 'ghost', size: 'sm' }) + ' -ml-3'}
-      >
-        <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
-        Back to two-factor settings
-      </Link>
-
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Recovery codes</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Single-use backup codes for when you don’t have your authenticator. Each works exactly
-          once. Store them somewhere safe.
-        </p>
-      </div>
-
+    <SettingsPageShell
+      breadcrumbs={breadcrumbs}
+      title="Recovery codes"
+      description="Single-use backup codes for when you don’t have your authenticator. Each works exactly once. Store them somewhere safe."
+    >
       {list.isLoading ? (
         <p className="text-muted-foreground text-sm" aria-live="polite">
           Loading…
@@ -78,6 +96,6 @@ function RecoveryCodesPage() {
           </div>
         </>
       )}
-    </div>
+    </SettingsPageShell>
   )
 }

@@ -1,10 +1,7 @@
 # Docs
 
-Living documentation for this template. Lives next to code, reviewed in PRs,
-versioned with git. The Notion plan ([link][notion]) is the *original-intent
-snapshot*; everything in this folder is the *current truth*.
-
-[notion]: https://www.notion.so/Greenfield-Full-Stack-Project-Setup-Django-React-3698d76871dc8036a909de8ddda47d58
+Living documentation for this template. Lives next to code, reviewed in
+PRs, versioned with git. These pages are the source of truth.
 
 ## When to update what
 
@@ -51,6 +48,7 @@ a **new** ADR that *supersedes* the old one — never edit accepted ADRs.
 | [0005](decisions/0005-render-first-deploy.md) | Deploy to Render first; GCP/k8s when the project justifies it |
 | [0006](decisions/0006-mfa-optional-staff-required.md) | 2FA optional for users, mandatory for `/admin/` access |
 | [0007](decisions/0007-dev-branch-staging.md) | `dev` branch as integration target; `main` as deploy line |
+| [0008](decisions/0008-email-verification-optional-plus-gate.md) | Email verification: `optional` allauth mode + middleware/route gate |
 
 ## House rules
 

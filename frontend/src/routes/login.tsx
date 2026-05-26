@@ -10,10 +10,11 @@ import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
 import {
-  isEmailVerificationPending,
   isMfaChallenge,
+  isMfaTrustPending,
   useLogin,
   useMfaAuthenticate,
+  useMfaTrust,
 } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/login')({
@@ -44,13 +45,12 @@ function LoginPage() {
       if (login.isPending) return
       const result = await login.mutateAsync(value)
       if (result.status === 200) {
+        // Always send to home. The root-route guard handles the
+        // authenticated-but-unverified case by bouncing to the holding
+        // page — one source of truth for the verification gate.
         navigate({ to: '/' })
       } else if (isMfaChallenge(result)) {
         setMfaRequired(true)
-      } else if (isEmailVerificationPending(result)) {
-        // Unverified user attempted to log in. Send them to the waiting
-        // page where they can resend the verification email.
-        navigate({ to: '/account/verify-email' })
       } else {
         // Form-level failure (wrong credentials, account locked by axes, etc.)
         // Field-bound errors stay inline; this toast catches the rest.
@@ -179,30 +179,57 @@ function LoginPage() {
 /**
  * Second step of login: prompt for the TOTP or recovery code. allauth has
  * already accepted the password on the server side; this finalizes the
- * session by hitting /_allauth/browser/v1/auth/2fa/authenticate.
+ * session by hitting the headless MFA-authenticate endpoint.
+ *
+ * If MFA_TRUST_ENABLED on the backend, a successful code submit advances to
+ * the `mfa_trust` stage — we surface that inline with a "Remember this
+ * browser for 30 days" choice and complete the stage in the same submit.
  */
 function MfaChallenge({ onCancel }: { onCancel: () => void }) {
   const navigate = useNavigate()
   const mfa = useMfaAuthenticate()
+  const trust = useMfaTrust()
+  // Opt-in (unchecked by default). When checked, after the code is accepted
+  // we silently POST trust:true so allauth mints the 30-day cookie.
+  // Unchecked → we still post {trust: false} because allauth's trust stage
+  // blocks the login until *some* answer is given.
+  const [trustChoice, setTrustChoice] = useState(false)
+
   const codeForm = useForm({
     defaultValues: { code: '' },
     onSubmit: async ({ value }) => {
-      if (mfa.isPending) return
+      if (mfa.isPending || trust.isPending) return
       const result = await mfa.mutateAsync(value.code.trim())
-      if (result.status === 200) {
+      // With MFA_TRUST_ENABLED, an accepted code advances allauth to the
+      // trust stage — the response is 401 + `mfa_trust: is_pending: true`,
+      // NOT 200. Check trust-pending FIRST. Only then treat non-200 as a
+      // genuine code rejection.
+      if (isMfaTrustPending(result)) {
+        const trustRes = await trust.mutateAsync(trustChoice)
+        if (trustRes.status !== 200) {
+          const msg = bannerError(trustRes, 'Could not finish login. Try again.')
+          if (msg) toast.error(msg)
+          return
+        }
         navigate({ to: '/' })
-      } else {
-        const msg = bannerError(result, 'Invalid code — try again.')
-        if (msg) toast.error(msg)
+        return
       }
+      if (result.status === 200) {
+        // Trust not enabled (or already trusted) — code accepted, fully in.
+        navigate({ to: '/' })
+        return
+      }
+      const msg = bannerError(result, 'Invalid code — try again.')
+      if (msg) toast.error(msg)
     },
   })
   const parsedMfa = parseAllAuthErrors(mfa.data)
+  const busy = mfa.isPending || trust.isPending
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Two-factor code</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Multi-factor code</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Enter the 6-digit code from your authenticator app, or one of your recovery codes.
         </p>
@@ -242,13 +269,19 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
           }}
         </codeForm.Field>
 
-        <Button
-          type="submit"
-          disabled={mfa.isPending}
-          aria-busy={mfa.isPending || undefined}
-          className="w-full"
-        >
-          {mfa.isPending ? (
+        <label className="text-muted-foreground flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4"
+            checked={trustChoice}
+            onChange={(e) => setTrustChoice(e.target.checked)}
+            disabled={busy}
+          />
+          <span>Remember this browser for 30 days</span>
+        </label>
+
+        <Button type="submit" disabled={busy} aria-busy={busy || undefined} className="w-full">
+          {busy ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               Verifying…
@@ -258,13 +291,7 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
           )}
         </Button>
 
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onCancel}
-          className="w-full"
-          disabled={mfa.isPending}
-        >
+        <Button type="button" variant="ghost" onClick={onCancel} className="w-full" disabled={busy}>
           Cancel
         </Button>
       </form>

@@ -77,8 +77,8 @@ a superuser manually via the Render dashboard → Backend service → Shell:
 python manage.py createsuperuser
 ```
 
-Then log in at `/login`, click avatar → Settings → Two-factor auth →
-Set up, and enroll TOTP via your authenticator app.
+Then log in at `/login`, click avatar → Settings → Multi-factor
+authentication → Enroll, and enroll TOTP via your authenticator app.
 
 ## What to validate after first deploy
 

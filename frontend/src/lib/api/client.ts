@@ -55,6 +55,19 @@ export async function api<T = unknown>(
     } catch {
       detail = await res.text()
     }
+    // Belt-and-suspenders for the email-verification gate. The root-route
+    // guard catches the 99% case (unverified session detected on load). This
+    // handles the edge: a previously-verified session that the backend has
+    // since unverified (e.g. admin action). Hard redirect — the SPA's
+    // entire visible-state assumption (verified user) is invalid.
+    if (
+      res.status === 403 &&
+      typeof detail === 'object' &&
+      detail !== null &&
+      (detail as { detail?: string }).detail === 'email_verification_required'
+    ) {
+      window.location.assign('/account/verify-email')
+    }
     throw new ApiError(res.status, res.statusText, detail)
   }
 

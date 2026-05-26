@@ -53,8 +53,8 @@ multi-tenant model inherits `RLSModel` and declares
 
 ## Notes / future work
 - See [rls.md](../rls.md) for the runtime mechanics.
-- Sharing features (decision deferred — see Object-Level Permissions
-  section of the Notion plan) will extend the policy with an EXISTS
-  subquery against a `shares` table.
+- Sharing features (deferred — see [permissions.md](../permissions.md)
+  for the object-level permissions discussion) will extend the policy
+  with an EXISTS subquery against a `shares` table.
 - Multi-tenancy via Organizations will add `org_id` alongside `user_id`
   in the session vars + policy expression.

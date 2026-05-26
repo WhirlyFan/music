@@ -13,9 +13,14 @@ import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DocsIndexRouteImport } from './routes/docs/index'
+import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
 import { Route as AccountMfaRouteImport } from './routes/account/mfa'
+import { Route as AccountVerifyEmailIndexRouteImport } from './routes/account/verify-email/index'
+import { Route as AccountMfaIndexRouteImport } from './routes/account/mfa/index'
 import { Route as AccountVerifyEmailKeyRouteImport } from './routes/account/verify-email/$key'
 import { Route as AccountPasswordForgotRouteImport } from './routes/account/password/forgot'
 import { Route as AccountMfaWebauthnRouteImport } from './routes/account/mfa/webauthn'
@@ -43,10 +48,25 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsRoute = DocsRouteImport.update({
+  id: '/docs',
+  path: '/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DocsRoute,
+} as any)
+const DocsSplatRoute = DocsSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => DocsRoute,
 } as any)
 const AccountVerifyEmailRoute = AccountVerifyEmailRouteImport.update({
   id: '/account/verify-email',
@@ -57,6 +77,16 @@ const AccountMfaRoute = AccountMfaRouteImport.update({
   id: '/account/mfa',
   path: '/account/mfa',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AccountVerifyEmailIndexRoute = AccountVerifyEmailIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountVerifyEmailRoute,
+} as any)
+const AccountMfaIndexRoute = AccountMfaIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountMfaRoute,
 } as any)
 const AccountVerifyEmailKeyRoute = AccountVerifyEmailKeyRouteImport.update({
   id: '/$key',
@@ -92,17 +122,22 @@ const AccountPasswordResetKeyKeyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/docs': typeof DocsRouteWithChildren
   '/login': typeof LoginRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
+  '/docs/$': typeof DocsSplatRoute
+  '/docs/': typeof DocsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
   '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
+  '/account/mfa/': typeof AccountMfaIndexRoute
+  '/account/verify-email/': typeof AccountVerifyEmailIndexRoute
   '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRoutesByTo {
@@ -111,46 +146,58 @@ export interface FileRoutesByTo {
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
-  '/account/mfa': typeof AccountMfaRouteWithChildren
-  '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
+  '/docs/$': typeof DocsSplatRoute
+  '/docs': typeof DocsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
   '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
+  '/account/mfa': typeof AccountMfaIndexRoute
+  '/account/verify-email': typeof AccountVerifyEmailIndexRoute
   '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/docs': typeof DocsRouteWithChildren
   '/login': typeof LoginRoute
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
+  '/docs/$': typeof DocsSplatRoute
+  '/docs/': typeof DocsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
   '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
+  '/account/mfa/': typeof AccountMfaIndexRoute
+  '/account/verify-email/': typeof AccountVerifyEmailIndexRoute
   '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/docs'
     | '/login'
     | '/notes'
     | '/settings'
     | '/signup'
     | '/account/mfa'
     | '/account/verify-email'
+    | '/docs/$'
+    | '/docs/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
     | '/account/password/forgot'
     | '/account/verify-email/$key'
+    | '/account/mfa/'
+    | '/account/verify-email/'
     | '/account/password/reset/key/$key'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -159,33 +206,41 @@ export interface FileRouteTypes {
     | '/notes'
     | '/settings'
     | '/signup'
-    | '/account/mfa'
-    | '/account/verify-email'
+    | '/docs/$'
+    | '/docs'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
     | '/account/password/forgot'
     | '/account/verify-email/$key'
+    | '/account/mfa'
+    | '/account/verify-email'
     | '/account/password/reset/key/$key'
   id:
     | '__root__'
     | '/'
+    | '/docs'
     | '/login'
     | '/notes'
     | '/settings'
     | '/signup'
     | '/account/mfa'
     | '/account/verify-email'
+    | '/docs/$'
+    | '/docs/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
     | '/account/password/forgot'
     | '/account/verify-email/$key'
+    | '/account/mfa/'
+    | '/account/verify-email/'
     | '/account/password/reset/key/$key'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DocsRoute: typeof DocsRouteWithChildren
   LoginRoute: typeof LoginRoute
   NotesRoute: typeof NotesRoute
   SettingsRoute: typeof SettingsRoute
@@ -226,12 +281,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs': {
+      id: '/docs'
+      path: '/docs'
+      fullPath: '/docs'
+      preLoaderRoute: typeof DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/docs/': {
+      id: '/docs/'
+      path: '/'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof DocsRoute
+    }
+    '/docs/$': {
+      id: '/docs/$'
+      path: '/$'
+      fullPath: '/docs/$'
+      preLoaderRoute: typeof DocsSplatRouteImport
+      parentRoute: typeof DocsRoute
     }
     '/account/verify-email': {
       id: '/account/verify-email'
@@ -246,6 +322,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/account/mfa'
       preLoaderRoute: typeof AccountMfaRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/account/verify-email/': {
+      id: '/account/verify-email/'
+      path: '/'
+      fullPath: '/account/verify-email/'
+      preLoaderRoute: typeof AccountVerifyEmailIndexRouteImport
+      parentRoute: typeof AccountVerifyEmailRoute
+    }
+    '/account/mfa/': {
+      id: '/account/mfa/'
+      path: '/'
+      fullPath: '/account/mfa/'
+      preLoaderRoute: typeof AccountMfaIndexRouteImport
+      parentRoute: typeof AccountMfaRoute
     }
     '/account/verify-email/$key': {
       id: '/account/verify-email/$key'
@@ -292,16 +382,30 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface DocsRouteChildren {
+  DocsSplatRoute: typeof DocsSplatRoute
+  DocsIndexRoute: typeof DocsIndexRoute
+}
+
+const DocsRouteChildren: DocsRouteChildren = {
+  DocsSplatRoute: DocsSplatRoute,
+  DocsIndexRoute: DocsIndexRoute,
+}
+
+const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
+
 interface AccountMfaRouteChildren {
   AccountMfaRecoveryCodesRoute: typeof AccountMfaRecoveryCodesRoute
   AccountMfaTotpRoute: typeof AccountMfaTotpRoute
   AccountMfaWebauthnRoute: typeof AccountMfaWebauthnRoute
+  AccountMfaIndexRoute: typeof AccountMfaIndexRoute
 }
 
 const AccountMfaRouteChildren: AccountMfaRouteChildren = {
   AccountMfaRecoveryCodesRoute: AccountMfaRecoveryCodesRoute,
   AccountMfaTotpRoute: AccountMfaTotpRoute,
   AccountMfaWebauthnRoute: AccountMfaWebauthnRoute,
+  AccountMfaIndexRoute: AccountMfaIndexRoute,
 }
 
 const AccountMfaRouteWithChildren = AccountMfaRoute._addFileChildren(
@@ -310,10 +414,12 @@ const AccountMfaRouteWithChildren = AccountMfaRoute._addFileChildren(
 
 interface AccountVerifyEmailRouteChildren {
   AccountVerifyEmailKeyRoute: typeof AccountVerifyEmailKeyRoute
+  AccountVerifyEmailIndexRoute: typeof AccountVerifyEmailIndexRoute
 }
 
 const AccountVerifyEmailRouteChildren: AccountVerifyEmailRouteChildren = {
   AccountVerifyEmailKeyRoute: AccountVerifyEmailKeyRoute,
+  AccountVerifyEmailIndexRoute: AccountVerifyEmailIndexRoute,
 }
 
 const AccountVerifyEmailRouteWithChildren =
@@ -321,6 +427,7 @@ const AccountVerifyEmailRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DocsRoute: DocsRouteWithChildren,
   LoginRoute: LoginRoute,
   NotesRoute: NotesRoute,
   SettingsRoute: SettingsRoute,
