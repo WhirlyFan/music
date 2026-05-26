@@ -19,8 +19,12 @@ function AlertDialogOverlay({
     <AlertDialogPrimitive.Overlay
       ref={ref}
       data-slot="alert-dialog-overlay"
+      // Scrim is always dark (bg-black/40, not bg-foreground/X) so it dims
+      // the page in both light + dark modes — using --foreground would
+      // invert and brighten the page in dark mode. backdrop-blur-sm adds
+      // a soft macOS-style blur to the content behind the dialog.
       className={cn(
-        'bg-foreground/20 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+        'fixed inset-0 z-50 bg-black/40 backdrop-blur-sm duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0',
         'focus:outline-hidden',
         className,
       )}

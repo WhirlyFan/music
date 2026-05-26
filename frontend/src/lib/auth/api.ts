@@ -57,7 +57,22 @@ async function call<T = unknown>(
 
 export const auth = {
   session: () => call('GET', '/auth/session'),
-  login: (email: string, password: string) => call('POST', '/auth/login', { email, password }),
-  signup: (email: string, password: string) => call('POST', '/auth/signup', { email, password }),
+
+  /**
+   * Login by EITHER email or username. We detect which by the '@' in the
+   * identifier and submit the right field name; allauth (with both login
+   * methods enabled) accepts either.
+   */
+  login: (identifier: string, password: string) => {
+    const looksLikeEmail = identifier.includes('@')
+    const payload = looksLikeEmail
+      ? { email: identifier, password }
+      : { username: identifier, password }
+    return call('POST', '/auth/login', payload)
+  },
+
+  signup: (params: { email: string; username: string; password: string }) =>
+    call('POST', '/auth/signup', params),
+
   logout: () => call('DELETE', '/auth/session'),
 }

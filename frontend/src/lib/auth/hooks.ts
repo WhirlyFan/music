@@ -18,8 +18,8 @@ export function useSession() {
 export function useLogin() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      auth.login(email, password),
+    mutationFn: ({ identifier, password }: { identifier: string; password: string }) =>
+      auth.login(identifier, password),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.session }),
   })
 }
@@ -27,8 +27,8 @@ export function useLogin() {
 export function useSignup() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password: string }) =>
-      auth.signup(email, password),
+    mutationFn: (params: { email: string; username: string; password: string }) =>
+      auth.signup(params),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.session }),
   })
 }

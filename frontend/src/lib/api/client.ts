@@ -5,7 +5,7 @@
  * Request bodies and responses are typed from `./types.ts`, which is generated
  * from the backend's OpenAPI schema by `pnpm gen:api`.
  */
-const BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api'
+const BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 
 type FetchOptions = Omit<RequestInit, 'body'> & { body?: unknown }
 

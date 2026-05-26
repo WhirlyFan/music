@@ -4,7 +4,7 @@
  */
 
 export interface paths {
-    "/api/jobs/": {
+    "/api/v1/jobs/": {
         parameters: {
             query?: never;
             header?: never;
@@ -12,7 +12,7 @@ export interface paths {
             cookie?: never;
         };
         /** @description List + retrieve workflow runs the current user has triggered. */
-        get: operations["jobs_list"];
+        get: operations["v1_jobs_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,7 +21,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/{id}/": {
+    "/api/v1/jobs/{id}/": {
         parameters: {
             query?: never;
             header?: never;
@@ -29,7 +29,7 @@ export interface paths {
             cookie?: never;
         };
         /** @description List + retrieve workflow runs the current user has triggered. */
-        get: operations["jobs_retrieve"];
+        get: operations["v1_jobs_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38,7 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/jobs/trigger/": {
+    "/api/v1/jobs/trigger/": {
         parameters: {
             query?: never;
             header?: never;
@@ -48,14 +48,14 @@ export interface paths {
         get?: never;
         put?: never;
         /** @description List + retrieve workflow runs the current user has triggered. */
-        post: operations["jobs_trigger_create"];
+        post: operations["v1_jobs_trigger_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notes/": {
+    "/api/v1/notes/": {
         parameters: {
             query?: never;
             header?: never;
@@ -70,7 +70,7 @@ export interface paths {
          *     isolation at the database. Tests in `tests/test_rls.py` prove that
          *     forgetting the app-layer filter does not leak rows.
          */
-        get: operations["notes_list"];
+        get: operations["v1_notes_list"];
         put?: never;
         /**
          * @description CRUD viewset for Notes.
@@ -80,14 +80,14 @@ export interface paths {
          *     isolation at the database. Tests in `tests/test_rls.py` prove that
          *     forgetting the app-layer filter does not leak rows.
          */
-        post: operations["notes_create"];
+        post: operations["v1_notes_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/notes/{id}/": {
+    "/api/v1/notes/{id}/": {
         parameters: {
             query?: never;
             header?: never;
@@ -102,7 +102,7 @@ export interface paths {
          *     isolation at the database. Tests in `tests/test_rls.py` prove that
          *     forgetting the app-layer filter does not leak rows.
          */
-        get: operations["notes_retrieve"];
+        get: operations["v1_notes_retrieve"];
         /**
          * @description CRUD viewset for Notes.
          *
@@ -111,7 +111,7 @@ export interface paths {
          *     isolation at the database. Tests in `tests/test_rls.py` prove that
          *     forgetting the app-layer filter does not leak rows.
          */
-        put: operations["notes_update"];
+        put: operations["v1_notes_update"];
         post?: never;
         /**
          * @description CRUD viewset for Notes.
@@ -121,7 +121,7 @@ export interface paths {
          *     isolation at the database. Tests in `tests/test_rls.py` prove that
          *     forgetting the app-layer filter does not leak rows.
          */
-        delete: operations["notes_destroy"];
+        delete: operations["v1_notes_destroy"];
         options?: never;
         head?: never;
         /**
@@ -132,7 +132,7 @@ export interface paths {
          *     isolation at the database. Tests in `tests/test_rls.py` prove that
          *     forgetting the app-layer filter does not leak rows.
          */
-        patch: operations["notes_partial_update"];
+        patch: operations["v1_notes_partial_update"];
         trace?: never;
     };
 }
@@ -218,7 +218,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    jobs_list: {
+    v1_jobs_list: {
         parameters: {
             query?: {
                 /** @description A page number within the paginated result set. */
@@ -240,7 +240,7 @@ export interface operations {
             };
         };
     };
-    jobs_retrieve: {
+    v1_jobs_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -262,7 +262,7 @@ export interface operations {
             };
         };
     };
-    jobs_trigger_create: {
+    v1_jobs_trigger_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -287,7 +287,7 @@ export interface operations {
             };
         };
     };
-    notes_list: {
+    v1_notes_list: {
         parameters: {
             query?: {
                 /** @description A page number within the paginated result set. */
@@ -309,7 +309,7 @@ export interface operations {
             };
         };
     };
-    notes_create: {
+    v1_notes_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -334,7 +334,7 @@ export interface operations {
             };
         };
     };
-    notes_retrieve: {
+    v1_notes_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -356,7 +356,7 @@ export interface operations {
             };
         };
     };
-    notes_update: {
+    v1_notes_update: {
         parameters: {
             query?: never;
             header?: never;
@@ -384,7 +384,7 @@ export interface operations {
             };
         };
     };
-    notes_destroy: {
+    v1_notes_destroy: {
         parameters: {
             query?: never;
             header?: never;
@@ -405,7 +405,7 @@ export interface operations {
             };
         };
     };
-    notes_partial_update: {
+    v1_notes_partial_update: {
         parameters: {
             query?: never;
             header?: never;
