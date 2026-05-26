@@ -42,7 +42,7 @@ THIRD_PARTY_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.headless",
-    # "allauth.mfa",  # add `django-allauth[mfa]` extra + fido2 to enable
+    "allauth.mfa",
     "django_rls",
 ]
 
@@ -67,6 +67,10 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # Staff users must enroll MFA before reaching /admin/. Lives after
+    # AuthenticationMiddleware (needs request.user) and before RLSContextMiddleware
+    # so a redirect short-circuits RLS session-var setup we don't need.
+    "apps.core.middleware.RequireMfaForStaffMiddleware",
     "django_rls.middleware.RLSContextMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -173,6 +177,22 @@ HEADLESS_FRONTEND_URLS = {
     "account_reset_password_from_key": "http://localhost/account/password/reset/key/{key}",
     "account_signup": "http://localhost/signup",
 }
+
+# --- allauth MFA ---
+# 2FA is opt-in for all users (MFA_REQUIRED = False). A separate policy
+# in apps.core.middleware.RequireMfaForStaffMiddleware makes it mandatory
+# specifically for is_staff users hitting /admin/, regardless of how they
+# authenticated. The reason MFA stays opt-in globally: when SAML/SSO lands
+# later, the customer's IdP enforces their org's MFA policy and your app
+# trusts the assertion — re-prompting in-app is the textbook SSO anti-pattern.
+MFA_SUPPORTED_TYPES = ["totp", "recovery_codes", "webauthn"]
+MFA_REQUIRED = False
+MFA_TOTP_ISSUER = "react-django-template"
+# Allow signing in with a passkey only (no password roundtrip). Modern UX win;
+# safe to enable because allauth still requires a password at signup unless
+# explicitly configured otherwise.
+MFA_PASSKEY_LOGIN_ENABLED = True
+MFA_PASSKEY_SIGNUP_ENABLED = False
 
 # --- DRF ---
 REST_FRAMEWORK = {

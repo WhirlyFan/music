@@ -1,8 +1,13 @@
 # react-django-template
 
 Full-stack starter: Django + DRF + Postgres + RLS + Hatchet on the backend,
-React + Vite + TanStack + shadcn on the frontend. Self-hosted equivalent of
-Supabase's auth + RLS + workflow feature set, owned end-to-end.
+React + Vite + TanStack + shadcn on the frontend. Auth, permissions, RLS,
+and background workflows wired up day one — owned end-to-end, no SaaS
+dependency.
+
+**See [`docs/`](docs/README.md) for architecture, design decisions, and ops
+walkthroughs** — the README covers installation and day-to-day commands; the
+docs explain *why* the template is shaped this way.
 
 ---
 

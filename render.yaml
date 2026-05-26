@@ -1,0 +1,144 @@
+# Render Blueprint — declarative spec for the entire deployment.
+#
+# On every push to the connected branch, Render reads this file and reconciles
+# live infrastructure to match. New services are provisioned; changed services
+# are rebuilt; removed services are NOT auto-deleted (safety against typos).
+#
+# Phase A (this file): frontend static site + Django backend + Postgres.
+# Hatchet engine + worker are deliberately deferred — they require paid
+# background workers ($7/mo each), and the template has no workflows wired
+# to user-visible features yet.
+#
+# Docs: https://render.com/docs/blueprint-spec
+# Companion walkthrough: docs/ops/deploy-render.md
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────
+  # Frontend — Static Site (free forever).
+  #
+  # Renders the Vite build output. The four `rewrite` rules below are the
+  # heart of the same-origin design: from the browser's perspective, /api/*,
+  # /_allauth/*, /admin/*, and /health/ all live on the SAME host as the SPA.
+  # That means session cookies, CSRF tokens, and SameSite=Lax all work
+  # without CORS contortions — identical to local dev behind nginx.
+  # ─────────────────────────────────────────────────────────────────────────
+  - type: web
+    runtime: static
+    name: react-django-template-frontend
+    rootDir: frontend
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    staticPublishPath: ./dist
+    # Build-time variables: baked into the bundle, NOT runtime overridable.
+    envVars:
+      - key: VITE_API_BASE
+        value: /api/v1
+    routes:
+      # Proxy server-rendered Django + DRF + allauth paths to the backend.
+      # Order matters — most specific first.
+      - type: rewrite
+        source: /api/*
+        destination: https://react-django-template-backend.onrender.com/api/*
+      - type: rewrite
+        source: /_allauth/*
+        destination: https://react-django-template-backend.onrender.com/_allauth/*
+      - type: rewrite
+        source: /admin/*
+        destination: https://react-django-template-backend.onrender.com/admin/*
+      - type: rewrite
+        source: /static/*
+        destination: https://react-django-template-backend.onrender.com/static/*
+      - type: rewrite
+        source: /health
+        destination: https://react-django-template-backend.onrender.com/health/
+      # SPA fallback: anything else serves the React index so client-side
+      # routing (TanStack Router) takes over.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    # Long-cache the immutable hashed bundle, never cache the entry HTML.
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Backend — Web Service (free tier sleeps after 15 min idle).
+  #
+  # Builds backend/Dockerfile. The same image we run locally. The entrypoint
+  # runs `migrate` on every boot (idempotent) before exec'ing gunicorn.
+  # ─────────────────────────────────────────────────────────────────────────
+  - type: web
+    runtime: docker
+    name: react-django-template-backend
+    rootDir: backend
+    plan: free
+    region: oregon                 # pin to one region; match the DB below
+    branch: main                   # auto-deploy from main; change to a release branch later if desired
+    healthCheckPath: /health/      # used by Render's edge to gate traffic
+    autoDeploy: true
+    envVars:
+      # ── Django core ─────────────────────────────────────────────────────
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.prod
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true        # Render generates a strong secret + stores it in encrypted env
+
+      # ── Host / origin allow-lists ───────────────────────────────────────
+      # Django checks the Host header against ALLOWED_HOSTS. With our
+      # same-origin Render rewrites, requests arrive at the backend with the
+      # BACKEND's host (Render proxies set Host to the destination), so the
+      # backend host is what must be allowed here.
+      - key: DJANGO_ALLOWED_HOSTS
+        value: react-django-template-backend.onrender.com
+      # CSRF middleware checks the Origin/Referer of state-changing requests.
+      # Same-origin from the browser's perspective means Origin =
+      # https://<frontend>.onrender.com — that's what to trust.
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://react-django-template-frontend.onrender.com
+      # CORS is a defense-in-depth backstop. With rewrites we don't strictly
+      # need it, but leaving the frontend origin allow-listed costs nothing.
+      - key: DJANGO_CORS_ALLOWED_ORIGINS
+        value: https://react-django-template-frontend.onrender.com
+
+      # ── Database ────────────────────────────────────────────────────────
+      # Render auto-injects the connection string when the service is linked
+      # to the database below. The two-role split (app_user / app_admin) we
+      # use locally is collapsed to one privileged role in Phase A — see
+      # docs/ops/deploy-render.md "Phase B: restore two-role Postgres".
+      - key: DATABASE_URL
+        fromDatabase:
+          name: react-django-template-db
+          property: connectionString
+      - key: DATABASE_URL_ADMIN    # same URL — migrations + runtime share the role
+        fromDatabase:
+          name: react-django-template-db
+          property: connectionString
+
+      # ── Gunicorn ────────────────────────────────────────────────────────
+      # Free tier has 0.5 CPU; 2 workers fits without thrash.
+      - key: WEB_CONCURRENCY
+        value: "2"
+
+      # ── Observability (optional) ────────────────────────────────────────
+      # Set SENTRY_DSN in the Render dashboard to enable error tracking.
+      # Left unset here so the file doesn't leak secrets if forked.
+      - key: SENTRY_DSN
+        sync: false                # marks it as "manage this one in the dashboard"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Managed Postgres (free 90 days, then $7/mo Starter required).
+#
+# After 90 days Render will email warnings and eventually pause the service.
+# Upgrade to Starter to keep it (recommended) or delete + recreate for another
+# 90 days (loses all data).
+# ─────────────────────────────────────────────────────────────────────────────
+databases:
+  - name: react-django-template-db
+    plan: free
+    region: oregon                 # MUST match the backend service region
+    postgresMajorVersion: "16"

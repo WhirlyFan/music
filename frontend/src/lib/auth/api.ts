@@ -62,6 +62,10 @@ export const auth = {
    * Login by EITHER email or username. We detect which by the '@' in the
    * identifier and submit the right field name; allauth (with both login
    * methods enabled) accepts either.
+   *
+   * If the user has MFA enrolled, allauth returns status 401 with
+   * `data.flows[]` including `mfa_authenticate`. The caller handles that
+   * step via `auth.mfaAuthenticate(code)`.
    */
   login: (identifier: string, password: string) => {
     const looksLikeEmail = identifier.includes('@')
@@ -75,4 +79,22 @@ export const auth = {
     call('POST', '/auth/signup', params),
 
   logout: () => call('DELETE', '/auth/session'),
+
+  // --- MFA challenge step (post-password) ---
+  /** Submit a TOTP/recovery code mid-login to finish authenticating. */
+  mfaAuthenticate: (code: string) => call('POST', '/auth/2fa/authenticate', { code }),
+
+  // --- Authenticator management (post-login) ---
+  /** List enrolled authenticators (TOTP, recovery codes, WebAuthn). */
+  listAuthenticators: () => call('GET', '/account/authenticators'),
+  /** Start TOTP enrollment — returns { secret, totp_url } for QR rendering. */
+  getTotpSetup: () => call('GET', '/account/authenticators/totp'),
+  /** Finalize TOTP by submitting the first valid code. */
+  activateTotp: (code: string) => call('POST', '/account/authenticators/totp', { code }),
+  /** Remove TOTP. Recovery codes invalidate as a side effect. */
+  deactivateTotp: () => call('DELETE', '/account/authenticators/totp'),
+  /** List unused recovery codes. */
+  listRecoveryCodes: () => call('GET', '/account/authenticators/recovery-codes'),
+  /** Generate a fresh recovery code set (invalidates the old one). */
+  generateRecoveryCodes: () => call('POST', '/account/authenticators/recovery-codes'),
 }

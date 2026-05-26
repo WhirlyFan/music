@@ -40,3 +40,23 @@ export function useLogout() {
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.session }),
   })
 }
+
+/**
+ * Submit the user's TOTP / recovery code mid-login. Used when /auth/login
+ * returns 401 with a `mfa_authenticate` flow — allauth tracks the pending
+ * login server-side, this mutation completes it.
+ */
+export function useMfaAuthenticate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (code: string) => auth.mfaAuthenticate(code),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.session }),
+  })
+}
+
+/** Detect whether an allauth response is asking for the MFA step. */
+export function isMfaChallenge(response: { status: number; data?: unknown } | undefined) {
+  if (!response || response.status !== 401) return false
+  const flows = (response.data as { flows?: Array<{ id: string; is_pending?: boolean }> })?.flows
+  return Boolean(flows?.some((f) => f.id === 'mfa_authenticate' && f.is_pending))
+}

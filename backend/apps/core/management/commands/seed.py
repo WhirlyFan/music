@@ -22,8 +22,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import factory.random
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from apps.notes.models import Note
@@ -79,7 +80,34 @@ def upsert_known_account(spec: AccountSpec):
     user.is_superuser = spec.is_superuser
     user.set_password(spec.password)
     user.save()
+    if spec.is_superuser:
+        ensure_dev_totp(user)
     return user, created
+
+
+# Fixed dev TOTP secret. Base32-encoded; same across reseeds so local
+# devs can keep one authenticator entry. This is checked into the repo
+# alongside the seed admin password — both are dev-only artifacts and
+# the `handle()` guard refuses to run with DEBUG=False so they can never
+# reach prod. Production admins create their own credentials via
+# `python manage.py createsuperuser` and enroll TOTP via the UI.
+_DEV_TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+
+
+def ensure_dev_totp(user) -> None:
+    """Idempotently enroll the seeded staff user in TOTP.
+
+    Why: the RequireMfaForStaffMiddleware redirects /admin/ visits to the
+    enrollment page until at least one Authenticator exists. Without this,
+    every fresh seed leaves admin@example.com unable to reach /admin/.
+    """
+    from allauth.mfa.models import Authenticator
+
+    Authenticator.objects.update_or_create(
+        user=user,
+        type=Authenticator.Type.TOTP,
+        defaults={"data": {"secret": _DEV_TOTP_SECRET}},
+    )
 
 
 # ---------- Per-user data -------------------------------------------------
@@ -121,9 +149,29 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete notes + non-superuser users before seeding.",
         )
+        parser.add_argument(
+            "--allow-in-prod",
+            action="store_true",
+            help=(
+                "Force seeding even when DJANGO_DEBUG=False. Almost certainly "
+                "wrong — bakes a known superuser password + TOTP into prod."
+            ),
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
+        # Hard guard: this command bakes in fixed credentials (incl. a known
+        # superuser password and TOTP secret — see seed.py and .env). Running
+        # it against a non-DEBUG environment would create a backdoor superuser
+        # in prod. Refuse loudly unless an operator has explicitly opted in.
+        if not settings.DEBUG and not options.get("allow_in_prod"):
+            raise CommandError(
+                "Refusing to seed: DJANGO_DEBUG is False. The seed command bakes "
+                "in fixed credentials (including a known admin password and TOTP "
+                "secret) and must not run in production. Pass --allow-in-prod if "
+                "you really mean it (you almost certainly don't)."
+            )
+
         # Deterministic Faker output across runs.
         factory.random.reseed_random("react-django-template-dev")
 
@@ -163,3 +211,8 @@ class Command(BaseCommand):
                 f"  {spec.username:<6}→ email '{spec.email}' or username '{spec.username}' "
                 f"/ {spec.password}{role}"
             )
+        self.stdout.write("")
+        self.stdout.write(
+            "Admin TOTP enrolled with dev secret. Add a new authenticator entry "
+            "with secret = " + _DEV_TOTP_SECRET
+        )

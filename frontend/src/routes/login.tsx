@@ -1,12 +1,13 @@
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
-import { useLogin } from '@/lib/auth/hooks'
+import { isMfaChallenge, useLogin, useMfaAuthenticate } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -24,20 +25,33 @@ const loginSchema = z.object({
 function LoginPage() {
   const navigate = useNavigate()
   const login = useLogin()
+  // `mfaRequired` flips to true after a successful password step where the
+  // server signaled `mfa_authenticate` is pending. Kept in state so it
+  // survives unrelated re-renders.
+  const [mfaRequired, setMfaRequired] = useState(false)
 
   const form = useForm({
     defaultValues: { identifier: '', password: '' },
     onSubmit: async ({ value }) => {
       const result = await login.mutateAsync(value)
-      if (result.status === 200) navigate({ to: '/notes' })
+      if (result.status === 200) {
+        navigate({ to: '/notes' })
+      } else if (isMfaChallenge(result)) {
+        setMfaRequired(true)
+      }
     },
     validators: { onChange: loginSchema },
   })
 
+  if (mfaRequired) {
+    return <MfaChallenge onCancel={() => setMfaRequired(false)} />
+  }
+
   // Parse allauth's structured error response so we can show actionable copy
   // instead of "400 Bad Request". The shape is { status, errors:[{message,param}] }.
   const parsed = parseAllAuthErrors(login.data)
-  const showError = login.data && login.data.status !== 200
+  // A 401 with mfa_authenticate is NOT a failed login — suppress the error banner.
+  const showError = login.data && login.data.status !== 200 && !isMfaChallenge(login.data)
   const summary = showError
     ? friendlyAuthError(parsed, 'Login failed — check your credentials and try again.')
     : null
@@ -121,6 +135,96 @@ function LoginPage() {
         </Button>
 
         <FormError id="login-form-error" message={summary} />
+      </form>
+    </div>
+  )
+}
+
+/**
+ * Second step of login: prompt for the TOTP or recovery code. allauth has
+ * already accepted the password on the server side; this finalizes the
+ * session by hitting /_allauth/browser/v1/auth/2fa/authenticate.
+ */
+function MfaChallenge({ onCancel }: { onCancel: () => void }) {
+  const navigate = useNavigate()
+  const mfa = useMfaAuthenticate()
+  const codeForm = useForm({
+    defaultValues: { code: '' },
+    onSubmit: async ({ value }) => {
+      const result = await mfa.mutateAsync(value.code.trim())
+      if (result.status === 200) navigate({ to: '/notes' })
+    },
+  })
+  const parsedMfa = parseAllAuthErrors(mfa.data)
+  const mfaError =
+    mfa.data && mfa.data.status !== 200
+      ? friendlyAuthError(parsedMfa, 'Invalid code — try again.')
+      : null
+
+  return (
+    <div className="mx-auto max-w-sm space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Two-factor code</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Enter the 6-digit code from your authenticator app, or one of your recovery codes.
+        </p>
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          codeForm.handleSubmit()
+        }}
+        aria-describedby={mfaError ? 'mfa-form-error' : undefined}
+        className="space-y-4"
+      >
+        <codeForm.Field name="code">
+          {(field) => {
+            const fieldErr = parsedMfa.byField['code']?.[0]
+            return (
+              <div className="space-y-1">
+                <label htmlFor={field.name} className="text-sm font-medium">
+                  Code
+                </label>
+                <Input
+                  id={field.name}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  required
+                  aria-required="true"
+                  aria-invalid={fieldErr ? true : undefined}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <FormError id={`${field.name}-error`} message={fieldErr} />
+              </div>
+            )
+          }}
+        </codeForm.Field>
+
+        <Button
+          type="submit"
+          aria-busy={mfa.isPending || undefined}
+          aria-disabled={mfa.isPending || undefined}
+          className={`w-full ${mfa.isPending ? 'pointer-events-none opacity-60' : ''}`}
+        >
+          {mfa.isPending ? 'Verifying…' : 'Verify'}
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onCancel}
+          className="w-full"
+          disabled={mfa.isPending}
+        >
+          Cancel
+        </Button>
+
+        <FormError id="mfa-form-error" message={mfaError} />
       </form>
     </div>
   )

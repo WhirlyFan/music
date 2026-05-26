@@ -181,7 +181,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "dj-database-url" },
     { name = "django" },
-    { name = "django-allauth", extra = ["socialaccount"] },
+    { name = "django-allauth", extra = ["mfa", "socialaccount"] },
     { name = "django-anymail" },
     { name = "django-axes" },
     { name = "django-cors-headers" },
@@ -196,10 +196,12 @@ dependencies = [
     { name = "django-rls" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
+    { name = "fido2" },
     { name = "gunicorn" },
     { name = "hatchet-sdk" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pwned-passwords-django" },
+    { name = "qrcode" },
     { name = "sentry-sdk", extra = ["django"] },
     { name = "whitenoise" },
 ]
@@ -221,7 +223,7 @@ dev = [
 requires-dist = [
     { name = "dj-database-url", specifier = ">=2.2" },
     { name = "django", specifier = ">=5.1,<6.0" },
-    { name = "django-allauth", extras = ["socialaccount"], specifier = ">=65.0" },
+    { name = "django-allauth", extras = ["socialaccount", "mfa"], specifier = ">=65.0" },
     { name = "django-anymail", specifier = ">=11.0" },
     { name = "django-axes", specifier = ">=7.0" },
     { name = "django-cors-headers", specifier = ">=4.4" },
@@ -236,10 +238,12 @@ requires-dist = [
     { name = "django-rls", specifier = ">=0.2" },
     { name = "djangorestframework", specifier = ">=3.15" },
     { name = "drf-spectacular", specifier = ">=0.27" },
+    { name = "fido2", specifier = ">=1.1" },
     { name = "gunicorn", specifier = ">=23.0" },
     { name = "hatchet-sdk", specifier = ">=0.40" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pwned-passwords-django", specifier = ">=5.2.0" },
+    { name = "qrcode", specifier = ">=7.4" },
     { name = "sentry-sdk", extras = ["django"], specifier = ">=2.0" },
     { name = "whitenoise", specifier = ">=6.7" },
 ]
@@ -539,6 +543,10 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+mfa = [
+    { name = "fido2" },
+    { name = "qrcode" },
+]
 socialaccount = [
     { name = "oauthlib" },
     { name = "pyjwt", extra = ["crypto"] },
@@ -811,6 +819,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/15/01/28c8ddae8caaf82c929655000963d83e3f01265a9af34e823c2ef2eee8ac/faker-40.19.1.tar.gz", hash = "sha256:76fa71fd3bf320db25e5504eb356f9a76b8a95cd6098524d006f446035b6b89d", size = 1969318, upload-time = "2026-05-22T15:57:37.433Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/49/b4/40a1ec12ec834604f3848143343baf1c67bc9a1096e401907eaa0d25876a/faker-40.19.1-py3-none-any.whl", hash = "sha256:265259b37c013838baaae34940207288170df385d6c5281413fce56a3504d580", size = 2007643, upload-time = "2026-05-22T15:57:35.867Z" },
+]
+
+[[package]]
+name = "fido2"
+version = "2.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/09/34/4837e2f5640baf61d8abd6125ccb6cc60b4b2933088528356ad6e781496f/fido2-2.2.0.tar.gz", hash = "sha256:0d8122e690096ad82afde42ac9d6433a4eeffda64084f36341ea02546b181dd1", size = 294167, upload-time = "2026-04-15T06:42:50.264Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/01/82/f3c5dd87b0977f5547cc132b7969e6f5075a8c2f5881cf4b6df6378505f9/fido2-2.2.0-py3-none-any.whl", hash = "sha256:3587ccf0af7b71b5dd73f17e1dbec9f0fd157292f9163f02e7778f46d0d25fe5", size = 234025, upload-time = "2026-04-15T06:42:51.813Z" },
 ]
 
 [[package]]
@@ -1659,6 +1679,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/da/92/1446574745d74df0c92e6aa4a7b0b3130706a4142b2d1a5869f2eaa423c6/pyyaml-6.0.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16249ee61e95f858e83976573de0f5b2893b3677ba71c9dd36b9cf8be9ac6d65", size = 829923, upload-time = "2025-09-25T21:32:54.537Z" },
     { url = "https://files.pythonhosted.org/packages/f0/7a/1c7270340330e575b92f397352af856a8c06f230aa3e76f86b39d01b416a/pyyaml-6.0.3-cp314-cp314t-win_amd64.whl", hash = "sha256:4ad1906908f2f5ae4e5a8ddfce73c320c2a1429ec52eafd27138b7f1cbe341c9", size = 174062, upload-time = "2025-09-25T21:32:55.767Z" },
     { url = "https://files.pythonhosted.org/packages/f1/12/de94a39c2ef588c7e6455cfbe7343d3b2dc9d6b6b2f40c4c6565744c873d/pyyaml-6.0.3-cp314-cp314t-win_arm64.whl", hash = "sha256:ebc55a14a21cb14062aa4162f906cd962b28e2e9ea38f9b4391244cd8de4ae0b", size = 149341, upload-time = "2025-09-25T21:32:56.828Z" },
+]
+
+[[package]]
+name = "qrcode"
+version = "8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8f/b2/7fc2931bfae0af02d5f53b174e9cf701adbb35f39d69c2af63d4a39f81a9/qrcode-8.2.tar.gz", hash = "sha256:35c3f2a4172b33136ab9f6b3ef1c00260dd2f66f858f24d88418a015f446506c", size = 43317, upload-time = "2025-05-01T15:44:24.726Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dd/b8/d2d6d731733f51684bbf76bf34dab3b70a9148e8f2cef2bb544fccec681a/qrcode-8.2-py3-none-any.whl", hash = "sha256:16e64e0716c14960108e85d853062c9e8bba5ca8252c0b4d0231b9df4060ff4f", size = 45986, upload-time = "2025-05-01T15:44:22.781Z" },
 ]
 
 [[package]]

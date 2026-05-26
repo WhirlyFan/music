@@ -14,6 +14,10 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as Account2faRouteImport } from './routes/account/2fa'
+import { Route as Account2faWebauthnRouteImport } from './routes/account/2fa/webauthn'
+import { Route as Account2faTotpRouteImport } from './routes/account/2fa/totp'
+import { Route as Account2faRecoveryCodesRouteImport } from './routes/account/2fa/recovery-codes'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -40,6 +44,26 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Account2faRoute = Account2faRouteImport.update({
+  id: '/account/2fa',
+  path: '/account/2fa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Account2faWebauthnRoute = Account2faWebauthnRouteImport.update({
+  id: '/webauthn',
+  path: '/webauthn',
+  getParentRoute: () => Account2faRoute,
+} as any)
+const Account2faTotpRoute = Account2faTotpRouteImport.update({
+  id: '/totp',
+  path: '/totp',
+  getParentRoute: () => Account2faRoute,
+} as any)
+const Account2faRecoveryCodesRoute = Account2faRecoveryCodesRouteImport.update({
+  id: '/recovery-codes',
+  path: '/recovery-codes',
+  getParentRoute: () => Account2faRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +71,10 @@ export interface FileRoutesByFullPath {
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/account/2fa': typeof Account2faRouteWithChildren
+  '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
+  '/account/2fa/totp': typeof Account2faTotpRoute
+  '/account/2fa/webauthn': typeof Account2faWebauthnRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +82,10 @@ export interface FileRoutesByTo {
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/account/2fa': typeof Account2faRouteWithChildren
+  '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
+  '/account/2fa/totp': typeof Account2faTotpRoute
+  '/account/2fa/webauthn': typeof Account2faWebauthnRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +94,45 @@ export interface FileRoutesById {
   '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/account/2fa': typeof Account2faRouteWithChildren
+  '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
+  '/account/2fa/totp': typeof Account2faTotpRoute
+  '/account/2fa/webauthn': typeof Account2faWebauthnRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/notes' | '/settings' | '/signup'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/notes'
+    | '/settings'
+    | '/signup'
+    | '/account/2fa'
+    | '/account/2fa/recovery-codes'
+    | '/account/2fa/totp'
+    | '/account/2fa/webauthn'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/notes' | '/settings' | '/signup'
-  id: '__root__' | '/' | '/login' | '/notes' | '/settings' | '/signup'
+  to:
+    | '/'
+    | '/login'
+    | '/notes'
+    | '/settings'
+    | '/signup'
+    | '/account/2fa'
+    | '/account/2fa/recovery-codes'
+    | '/account/2fa/totp'
+    | '/account/2fa/webauthn'
+  id:
+    | '__root__'
+    | '/'
+    | '/login'
+    | '/notes'
+    | '/settings'
+    | '/signup'
+    | '/account/2fa'
+    | '/account/2fa/recovery-codes'
+    | '/account/2fa/totp'
+    | '/account/2fa/webauthn'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +141,7 @@ export interface RootRouteChildren {
   NotesRoute: typeof NotesRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
+  Account2faRoute: typeof Account2faRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -116,8 +181,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/2fa': {
+      id: '/account/2fa'
+      path: '/account/2fa'
+      fullPath: '/account/2fa'
+      preLoaderRoute: typeof Account2faRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/account/2fa/webauthn': {
+      id: '/account/2fa/webauthn'
+      path: '/webauthn'
+      fullPath: '/account/2fa/webauthn'
+      preLoaderRoute: typeof Account2faWebauthnRouteImport
+      parentRoute: typeof Account2faRoute
+    }
+    '/account/2fa/totp': {
+      id: '/account/2fa/totp'
+      path: '/totp'
+      fullPath: '/account/2fa/totp'
+      preLoaderRoute: typeof Account2faTotpRouteImport
+      parentRoute: typeof Account2faRoute
+    }
+    '/account/2fa/recovery-codes': {
+      id: '/account/2fa/recovery-codes'
+      path: '/recovery-codes'
+      fullPath: '/account/2fa/recovery-codes'
+      preLoaderRoute: typeof Account2faRecoveryCodesRouteImport
+      parentRoute: typeof Account2faRoute
+    }
   }
 }
+
+interface Account2faRouteChildren {
+  Account2faRecoveryCodesRoute: typeof Account2faRecoveryCodesRoute
+  Account2faTotpRoute: typeof Account2faTotpRoute
+  Account2faWebauthnRoute: typeof Account2faWebauthnRoute
+}
+
+const Account2faRouteChildren: Account2faRouteChildren = {
+  Account2faRecoveryCodesRoute: Account2faRecoveryCodesRoute,
+  Account2faTotpRoute: Account2faTotpRoute,
+  Account2faWebauthnRoute: Account2faWebauthnRoute,
+}
+
+const Account2faRouteWithChildren = Account2faRoute._addFileChildren(
+  Account2faRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -125,6 +234,7 @@ const rootRouteChildren: RootRouteChildren = {
   NotesRoute: NotesRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
+  Account2faRoute: Account2faRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
