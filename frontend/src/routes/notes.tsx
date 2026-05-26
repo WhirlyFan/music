@@ -37,7 +37,7 @@ function NotesPage() {
     <div className="space-y-8">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Notes</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Only your own notes are visible — RLS enforces that at the database.
         </p>
       </header>
@@ -48,7 +48,7 @@ function NotesPage() {
           form.handleSubmit()
         }}
         aria-labelledby="new-note-heading"
-        className="space-y-3 rounded-lg border border-border p-4"
+        className="border-border space-y-3 rounded-lg border p-4"
       >
         <h2 id="new-note-heading" className="sr-only">
           New note
@@ -74,7 +74,10 @@ function NotesPage() {
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
-                <FormError id={`${field.name}-error`} message={errorMsg ? String(errorMsg) : null} />
+                <FormError
+                  id={`${field.name}-error`}
+                  message={errorMsg ? String(errorMsg) : null}
+                />
               </div>
             )
           }}
@@ -127,11 +130,11 @@ function NotesPage() {
 
       <ul className="space-y-3">
         {data?.results.map((note) => (
-          <li key={note.id} className="flex items-start gap-3 rounded-lg border border-border p-4">
+          <li key={note.id} className="border-border flex items-start gap-3 rounded-lg border p-4">
             <div className="flex-1 space-y-1">
               <p className="font-medium">{note.title}</p>
-              {note.body && <p className="text-sm text-muted-foreground">{note.body}</p>}
-              <p className="text-xs text-muted-foreground">
+              {note.body && <p className="text-muted-foreground text-sm">{note.body}</p>}
+              <p className="text-muted-foreground text-xs">
                 {new Date(note.created_at).toLocaleString()}
               </p>
             </div>

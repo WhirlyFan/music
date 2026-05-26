@@ -24,7 +24,7 @@ function Index() {
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Design tokens</h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           Every color is a CSS variable. Use the avatar menu → Theme to flip light/dark.
         </p>
 
@@ -47,18 +47,10 @@ function Index() {
   )
 }
 
-function Swatch({
-  name,
-  bgClass,
-  fgClass,
-}: {
-  name: string
-  bgClass: string
-  fgClass: string
-}) {
+function Swatch({ name, bgClass, fgClass }: { name: string; bgClass: string; fgClass: string }) {
   return (
     <div
-      className={`flex h-20 items-center justify-center rounded-md border border-border ${bgClass} ${fgClass}`}
+      className={`border-border flex h-20 items-center justify-center rounded-md border ${bgClass} ${fgClass}`}
     >
       <span className="text-sm font-medium">{name}</span>
     </div>

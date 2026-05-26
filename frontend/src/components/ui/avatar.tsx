@@ -47,7 +47,7 @@ function AvatarFallback({
       ref={ref}
       data-slot="avatar-fallback"
       className={cn(
-        'flex h-full w-full items-center justify-center rounded-full bg-secondary text-secondary-foreground',
+        'bg-secondary text-secondary-foreground flex h-full w-full items-center justify-center rounded-full',
         className,
       )}
       {...props}

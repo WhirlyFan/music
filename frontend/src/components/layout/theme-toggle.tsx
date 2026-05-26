@@ -27,7 +27,7 @@ export function ThemeToggle() {
     <DropdownMenu>
       {/* 44x44 touch target per WCAG 2.5.5. Visual icon stays at 16px. */}
       <DropdownMenuTrigger
-        className="inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:ring-ring focus-visible:ring-offset-background inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         aria-label="Change theme"
       >
         <CurrentThemeIcon theme={theme} />

@@ -23,10 +23,11 @@ export type ParsedErrors = {
 }
 
 export function parseAllAuthErrors(res: unknown): ParsedErrors {
-  const errors =
-    (res && typeof res === 'object' && 'errors' in res
+  const errors = (
+    res && typeof res === 'object' && 'errors' in res
       ? ((res as AllAuthErrorResponse).errors ?? [])
-      : []) as AllAuthErrorItem[]
+      : []
+  ) as AllAuthErrorItem[]
 
   const byField: Record<string, string[]> = {}
   const formMessages: string[] = []

@@ -38,7 +38,9 @@ function LoginPage() {
   // instead of "400 Bad Request". The shape is { status, errors:[{message,param}] }.
   const parsed = parseAllAuthErrors(login.data)
   const showError = login.data && login.data.status !== 200
-  const summary = showError ? friendlyAuthError(parsed, 'Login failed — check your credentials and try again.') : null
+  const summary = showError
+    ? friendlyAuthError(parsed, 'Login failed — check your credentials and try again.')
+    : null
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -54,7 +56,11 @@ function LoginPage() {
       >
         <form.Field name="identifier">
           {(field) => {
-            const fieldErrors = parsed.byField['identifier'] ?? parsed.byField['email'] ?? parsed.byField['username'] ?? []
+            const fieldErrors =
+              parsed.byField['identifier'] ??
+              parsed.byField['email'] ??
+              parsed.byField['username'] ??
+              []
             const errMsg = fieldErrors[0]
             return (
               <div className="space-y-1">

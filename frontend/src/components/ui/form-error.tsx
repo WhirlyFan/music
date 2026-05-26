@@ -18,7 +18,7 @@ export function FormError({
 }) {
   if (!message) return null
   return (
-    <p id={id} role="alert" className={cn('text-xs text-destructive', className)}>
+    <p id={id} role="alert" className={cn('text-destructive text-xs', className)}>
       {message}
     </p>
   )

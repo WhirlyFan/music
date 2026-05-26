@@ -110,7 +110,7 @@ function SignupPage() {
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
                 <FormError id={`${field.name}-error`} message={errMsg} />
-                <p id={`${field.name}-hint`} className="text-xs text-muted-foreground">
+                <p id={`${field.name}-hint`} className="text-muted-foreground text-xs">
                   3–30 characters: letters, numbers, underscores, dashes.
                 </p>
               </div>
@@ -142,7 +142,7 @@ function SignupPage() {
                   onChange={(e) => field.handleChange(e.target.value)}
                 />
                 <FormError id={`${field.name}-error`} message={errMsg} />
-                <p id={`${field.name}-hint`} className="text-xs text-muted-foreground">
+                <p id={`${field.name}-hint`} className="text-muted-foreground text-xs">
                   At least 12 characters. Avoid passwords used on other sites.
                 </p>
               </div>

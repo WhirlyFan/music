@@ -25,7 +25,7 @@ function DropdownMenuSubTrigger({
       ref={ref}
       data-slot="dropdown-menu-sub-trigger"
       className={cn(
-        'flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-secondary focus:text-secondary-foreground data-[state=open]:bg-secondary data-[state=open]:text-secondary-foreground',
+        'focus:bg-secondary focus:text-secondary-foreground data-[state=open]:bg-secondary data-[state=open]:text-secondary-foreground flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm outline-none select-none',
         inset && 'pl-8',
         className,
       )}
@@ -47,7 +47,7 @@ function DropdownMenuSubContent({
       ref={ref}
       data-slot="dropdown-menu-sub-content"
       className={cn(
-        'z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-background p-1 text-foreground shadow-lg',
+        'border-border bg-background text-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-lg',
         'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
         className,
       )}
@@ -69,7 +69,7 @@ function DropdownMenuContent({
         sideOffset={sideOffset}
         data-slot="dropdown-menu-content"
         className={cn(
-          'z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-background p-1 text-foreground shadow-md',
+          'border-border bg-background text-foreground z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md',
           'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           className,
         )}
@@ -92,7 +92,7 @@ function DropdownMenuItem({
       ref={ref}
       data-slot="dropdown-menu-item"
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors',
+        'relative flex cursor-default items-center rounded-sm px-2 py-1.5 text-sm transition-colors outline-none select-none',
         'focus:bg-secondary focus:text-secondary-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         inset && 'pl-8',
@@ -115,7 +115,7 @@ function DropdownMenuCheckboxItem({
       ref={ref}
       data-slot="dropdown-menu-checkbox-item"
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors',
+        'relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm transition-colors outline-none select-none',
         'focus:bg-secondary focus:text-secondary-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
@@ -144,7 +144,7 @@ function DropdownMenuRadioItem({
       ref={ref}
       data-slot="dropdown-menu-radio-item"
       className={cn(
-        'relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors',
+        'relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 text-sm transition-colors outline-none select-none',
         'focus:bg-secondary focus:text-secondary-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         className,
@@ -188,7 +188,7 @@ function DropdownMenuSeparator({
     <DropdownMenuPrimitive.Separator
       ref={ref}
       data-slot="dropdown-menu-separator"
-      className={cn('-mx-1 my-1 h-px bg-border', className)}
+      className={cn('bg-border -mx-1 my-1 h-px', className)}
       {...props}
     />
   )
@@ -197,7 +197,7 @@ function DropdownMenuSeparator({
 const DropdownMenuShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
   return (
     <span
-      className={cn('ml-auto text-xs tracking-widest text-muted-foreground', className)}
+      className={cn('text-muted-foreground ml-auto text-xs tracking-widest', className)}
       {...props}
     />
   )

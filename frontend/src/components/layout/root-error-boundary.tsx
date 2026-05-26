@@ -34,10 +34,10 @@ export class RootErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.error) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-background px-6">
+        <div className="bg-background flex min-h-screen items-center justify-center px-6">
           <div className="max-w-md space-y-4 text-center">
             <h1 className="text-2xl font-semibold tracking-tight">Something went wrong.</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {this.state.error.message || 'An unexpected error occurred.'}
             </p>
             <div className="flex justify-center gap-3">

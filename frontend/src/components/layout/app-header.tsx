@@ -27,7 +27,7 @@ export function AppHeader() {
   const user = (data?.data as SessionData | undefined)?.user
 
   return (
-    <header className="border-b border-border bg-card text-card-foreground">
+    <header className="border-border bg-card text-card-foreground border-b">
       <nav className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-6">
         <Link to="/" className="font-semibold tracking-tight">
           react-django-template
@@ -36,7 +36,7 @@ export function AppHeader() {
         {isAuthed && (
           <Link
             to="/notes"
-            className="text-sm text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground text-sm"
             activeProps={{ className: 'text-foreground font-medium' }}
           >
             Notes
@@ -57,16 +57,10 @@ export function AppHeader() {
             />
           ) : (
             <div className="flex items-center gap-3 pl-1">
-              <Link
-                to="/login"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
+              <Link to="/login" className="text-muted-foreground hover:text-foreground text-sm">
                 Log in
               </Link>
-              <Link
-                to="/signup"
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
+              <Link to="/signup" className="text-muted-foreground hover:text-foreground text-sm">
                 Sign up
               </Link>
             </div>
