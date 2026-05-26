@@ -14,7 +14,8 @@ this table is the source of truth for *who triggered it*.
 from django.conf import settings
 from django.db import models
 from django_rls import RLSModel
-from django_rls.policies import UserPolicy
+
+from apps.core.rls import owner_scoped_policy
 
 
 class WorkflowRun(RLSModel):
@@ -40,9 +41,7 @@ class WorkflowRun(RLSModel):
 
     class Meta:
         ordering = ["-created_at"]
-        rls_policies = [
-            UserPolicy(name="owner_isolation", user_field="owner"),
-        ]
+        rls_policies = [owner_scoped_policy("owner")]
 
     def __str__(self) -> str:
         return f"{self.workflow} ({self.id}, {self.status})"

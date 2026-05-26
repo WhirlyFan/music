@@ -112,6 +112,14 @@ DATABASES = {
 # emit ENABLE ROW LEVEL SECURITY / CREATE POLICY / etc. for RLSModel subclasses.
 DATABASES["default"]["ENGINE"] = "django_rls.backends.postgresql"
 
+# Extra session vars set per request, on top of django-rls's defaults
+# (rls.user_id, rls.tenant_id). `set_admin_bypass` flips rls.bypass = 'true'
+# for is_staff users on /admin/ so the Django admin can see every row.
+# API endpoints stay RLS-scoped because the processor only fires on /admin/.
+RLS_CONTEXT_PROCESSORS = [
+    "apps.core.rls_context.set_admin_bypass",
+]
+
 # --- Auth ---
 AUTH_USER_MODEL = "users.User"
 

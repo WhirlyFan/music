@@ -30,16 +30,23 @@ User = get_user_model()
 
 
 @contextmanager
-def as_app_user(user_id: int | None):
+def as_app_user(user_id: int | None, *, bypass: bool = False):
     """Run a block as the non-superuser `app_user` Postgres role with
     `rls.user_id` set. SET LOCAL ROLE is bounded by the surrounding
-    transaction, so role state never leaks out."""
+    transaction, so role state never leaks out.
+
+    Pass bypass=True to also set `rls.bypass='true'` — the same flag the
+    admin middleware sets for is_staff users on /admin/."""
     with transaction.atomic():
         with connection.cursor() as cur:
             cur.execute("SET LOCAL ROLE app_user")
             cur.execute(
                 "SELECT set_config('rls.user_id', %s, true)",
                 [str(user_id) if user_id is not None else ""],
+            )
+            cur.execute(
+                "SELECT set_config('rls.bypass', %s, true)",
+                ["true" if bypass else ""],
             )
         try:
             yield
@@ -51,8 +58,8 @@ def as_app_user(user_id: int | None):
 @pytest.fixture
 def two_users_with_notes(db):
     """Seed two users, each with one note. Setup runs as admin (BYPASSRLS)."""
-    a = User.objects.create_user(email="a@example.com", password="pw")
-    b = User.objects.create_user(email="b@example.com", password="pw")
+    a = User.objects.create_user(email="a@example.com", username="alice", password="pw")
+    b = User.objects.create_user(email="b@example.com", username="bob", password="pw")
     Note.objects.create(owner=a, title="A's note", body="alpha")
     Note.objects.create(owner=b, title="B's note", body="beta")
     return a, b
@@ -100,6 +107,29 @@ def test_user_isolation(two_users_with_notes):
     with as_app_user(user_id=b.id):
         titles = list(Note.objects.values_list("title", flat=True))
         assert titles == ["B's note"]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_admin_bypass_shows_all_rows(two_users_with_notes):
+    """`rls.bypass='true'` (set by RLSContextMiddleware for is_staff users
+    on /admin/) makes the app_user role see every row. Without bypass,
+    same setup would only show one user's notes."""
+    a, _b = two_users_with_notes
+
+    with as_app_user(user_id=a.id, bypass=True):
+        titles = set(Note.objects.values_list("title", flat=True))
+        assert titles == {"A's note", "B's note"}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_bypass_off_means_user_scoped(two_users_with_notes):
+    """Sanity check the bypass flag is what flipped the behavior — same
+    user, bypass=False, only own row visible."""
+    a, _b = two_users_with_notes
+
+    with as_app_user(user_id=a.id, bypass=False):
+        titles = list(Note.objects.values_list("title", flat=True))
+        assert titles == ["A's note"]
 
 
 @pytest.mark.django_db(transaction=True)

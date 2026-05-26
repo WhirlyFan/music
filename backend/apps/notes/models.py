@@ -1,15 +1,18 @@
 from django.conf import settings
 from django.db import models
 from django_rls import RLSModel
-from django_rls.policies import UserPolicy
+
+from apps.core.rls import owner_scoped_policy
 
 
 class Note(RLSModel):
     """A user-owned note.
 
     RLS is enforced at the database layer: even if a viewset forgets to filter
-    by owner, the `owner_isolation` policy ensures app_user can only see rows
-    where `owner_id = current_setting('rls.user_id')`.
+    by owner, the `owner_isolation` policy ensures the runtime DB role can only
+    see rows where `owner_id = current_setting('rls.user_id')` — UNLESS the
+    request set `rls.bypass = 'true'`, which only happens for is_staff users
+    on /admin/ (see apps/core/rls_context.py).
     """
 
     owner = models.ForeignKey(
@@ -24,9 +27,7 @@ class Note(RLSModel):
 
     class Meta:
         ordering = ["-created_at"]
-        rls_policies = [
-            UserPolicy(name="owner_isolation", user_field="owner"),
-        ]
+        rls_policies = [owner_scoped_policy("owner")]
 
     def __str__(self) -> str:
         return self.title
