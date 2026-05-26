@@ -1,6 +1,7 @@
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -42,19 +43,27 @@ function ResetPasswordPage() {
       if (complete.isPending) return
       const res = await complete.mutateAsync({ key, password: value.password })
       // 200 = password updated AND user logged in.
-      if (res.status === 200) navigate({ to: '/' })
+      if (res.status === 200) {
+        navigate({ to: '/' })
+        return
+      }
+      // 410 = expired/used link. The inline banner below stays visible
+      // because it carries the "request a new link" CTA — persistent
+      // guidance, not a transient notification. For other form-level
+      // failures (rate limit, server error), toast.
+      if (res.status === 410) return
+      const msg = bannerError(res, 'Could not reset password. The link may be invalid.')
+      if (msg) toast.error(msg)
     },
     // Submit-time validation only — errors on every keystroke is hostile UX.
     validators: { onSubmit: schema },
   })
 
   const parsed = parseAllAuthErrors(complete.data)
-  // 410 GONE = expired or already-used key. Show a distinct message — the
-  // user can't recover by retrying with the same link.
+  // 410 GONE = expired or already-used key. Keep this as an INLINE banner
+  // (not a toast) because the persistent "Request a new link" CTA is the
+  // only way out — a toast disappears, this guidance shouldn't.
   const expired = complete.data?.status === 410
-  const summary = expired
-    ? 'This reset link has expired or already been used. Request a new one.'
-    : bannerError(complete.data, 'Could not reset password. The link may be invalid.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -66,22 +75,20 @@ function ResetPasswordPage() {
         </p>
       </div>
 
-      {summary ? (
+      {expired ? (
         <div
           role="alert"
           aria-live="assertive"
           className="border-destructive/30 bg-destructive/10 text-destructive space-y-2 rounded-md border p-3 text-sm"
           id="reset-form-error"
         >
-          <p>{summary}</p>
-          {expired ? (
-            <Link
-              to="/account/password/forgot"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              Request a new link
-            </Link>
-          ) : null}
+          <p>This reset link has expired or already been used. Request a new one.</p>
+          <Link
+            to="/account/password/forgot"
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            Request a new link
+          </Link>
         </div>
       ) : null}
 
@@ -90,7 +97,7 @@ function ResetPasswordPage() {
           e.preventDefault()
           form.handleSubmit()
         }}
-        aria-describedby={summary ? 'reset-form-error' : undefined}
+        aria-describedby={expired ? 'reset-form-error' : undefined}
         className="space-y-4"
       >
         <form.Field name="password">

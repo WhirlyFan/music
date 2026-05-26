@@ -2,6 +2,7 @@ import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,11 @@ function LoginPage() {
         // Unverified user attempted to log in. Send them to the waiting
         // page where they can resend the verification email.
         navigate({ to: '/account/verify-email' })
+      } else {
+        // Form-level failure (wrong credentials, account locked by axes, etc.)
+        // Field-bound errors stay inline; this toast catches the rest.
+        const msg = bannerError(result, 'Login failed — check your credentials and try again.')
+        if (msg) toast.error(msg)
       }
     },
     // Submit-time validation only — errors on every keystroke is hostile UX.
@@ -62,38 +68,19 @@ function LoginPage() {
 
   // Parse allauth's structured error response so we can show actionable copy
   // instead of "400 Bad Request". The shape is { status, errors:[{message,param}] }.
+  // Field-bound errors are rendered inline below each input; form-level
+  // failures bubble up via toast.error() from the onSubmit handler.
   const parsed = parseAllAuthErrors(login.data)
-  // Banner only for form-level errors (no specific field). MFA challenge
-  // and verify-email-pending both have their own UI paths, not error banners.
-  const summary =
-    isMfaChallenge(login.data) || isEmailVerificationPending(login.data)
-      ? null
-      : bannerError(login.data, 'Login failed — check your credentials and try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
-
-      {/* Form-level error banner — assertive aria-live so screen readers
-          interrupt with the message. Inline field errors below still
-          appear under the specific input that caused the failure. */}
-      {summary ? (
-        <div
-          role="alert"
-          aria-live="assertive"
-          className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
-          id="login-form-error"
-        >
-          {summary}
-        </div>
-      ) : null}
 
       <form
         onSubmit={(e) => {
           e.preventDefault()
           form.handleSubmit()
         }}
-        aria-describedby={summary ? 'login-form-error' : undefined}
         className="space-y-4"
       >
         <form.Field name="identifier">
@@ -202,11 +189,15 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
     onSubmit: async ({ value }) => {
       if (mfa.isPending) return
       const result = await mfa.mutateAsync(value.code.trim())
-      if (result.status === 200) navigate({ to: '/' })
+      if (result.status === 200) {
+        navigate({ to: '/' })
+      } else {
+        const msg = bannerError(result, 'Invalid code — try again.')
+        if (msg) toast.error(msg)
+      }
     },
   })
   const parsedMfa = parseAllAuthErrors(mfa.data)
-  const mfaError = bannerError(mfa.data, 'Invalid code — try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -222,7 +213,6 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
           e.preventDefault()
           codeForm.handleSubmit()
         }}
-        aria-describedby={mfaError ? 'mfa-form-error' : undefined}
         className="space-y-4"
       >
         <codeForm.Field name="code">
@@ -277,8 +267,6 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
         >
           Cancel
         </Button>
-
-        <FormError id="mfa-form-error" message={mfaError} />
       </form>
     </div>
   )

@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react'
 
 import { buttonVariants } from '@/components/ui/button'
 
-export const Route = createFileRoute('/account/2fa/webauthn')({
+export const Route = createFileRoute('/account/mfa/webauthn')({
   component: WebAuthnPlaceholder,
   head: () => ({ meta: [{ title: 'Passkeys — react-django-template' }] }),
 })
@@ -22,7 +22,7 @@ function WebAuthnPlaceholder() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <Link
-        to="/account/2fa"
+        to="/account/mfa"
         className={buttonVariants({ variant: 'ghost', size: 'sm' }) + ' -ml-3'}
       >
         <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />

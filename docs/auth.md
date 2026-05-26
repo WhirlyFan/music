@@ -68,8 +68,8 @@ new signups MUST verify their email before they can log in.
 4. Waiting page shows "Check your email" + "Resend verification email" button
 5. User clicks the link in the email → lands at `/account/verify-email/{key}` (URL pattern from `HEADLESS_FRONTEND_URLS.account_confirm_email`)
 6. Route auto-POSTs the key to `/_allauth/browser/v1/auth/email/verify`
-7. allauth marks the email verified; if the user is still in the same browser session as signup, they're now logged in too
-8. Frontend redirects to `/notes`
+7. allauth marks the email verified; with `ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True` (set in `base.py`), a same-session click ALSO completes the auth — the response carries `is_authenticated: true`. Cross-browser clicks (email opened in a different browser than signup) only verify the email at the data layer; the user must then log in normally.
+8. Frontend toasts "Email verified" and redirects to `/`
 
 ### Why mandatory
 
@@ -83,7 +83,7 @@ new signups MUST verify their email before they can log in.
 allauth refuses to mint TOTP authenticators for unverified emails — returns
 409 with `unverified_email`. Verification is a hard precondition for MFA
 regardless of the global verification policy; mandatory mode makes the
-flow consistent (by the time the user reaches `/account/2fa/totp`, they're
+flow consistent (by the time the user reaches `/account/mfa/totp`, they're
 already verified).
 
 ### Local dev: seeded accounts skip verification
@@ -137,7 +137,7 @@ ADR: [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional
 [`apps/core/middleware.py::RequireMfaForStaffMiddleware`](../backend/apps/core/middleware.py)
 intercepts `/admin/*` requests. If the user is authenticated, `is_staff`,
 and has zero `Authenticator` rows, redirects to
-`/account/2fa?required=true&next=<path>`. Exempt prefixes: `/account/2fa`,
+`/account/mfa?required=true&next=<path>`. Exempt prefixes: `/account/mfa`,
 `/_allauth/`, `/account/logout` (so the user can actually enroll without
 hitting a redirect loop).
 
@@ -255,7 +255,7 @@ SAML adds cleanly later:
 | `403 CSRF verification failed` on first POST | No `csrftoken` cookie yet | `ensureCsrfCookie()` runs a GET to `/_allauth/auth/session` first |
 | Login returns 200, but DRF says unauthenticated on next request | Using `app/v1` instead of `browser/v1` | Switch the frontend wrapper to `browser/v1` |
 | MFA-enrolled user "can't log in" | Frontend not handling the 401-with-`mfa_authenticate` flow | `isMfaChallenge(response)` + MFA challenge form |
-| Staff user redirected to `/account/2fa` and back | Enrollment route was gated by mistake | Verify `_EXEMPT_PREFIXES` in `apps/core/middleware.py` |
+| Staff user redirected to `/account/mfa` and back | Enrollment route was gated by mistake | Verify `_EXEMPT_PREFIXES` in `apps/core/middleware.py` |
 | `axes` locks out a real user during dev | Hit 5 failed logins | `python manage.py axes_reset` |
 
 ## Password reset

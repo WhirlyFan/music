@@ -173,6 +173,14 @@ AUTH_PASSWORD_VALIDATORS = [
 # The seed command bakes admin@example.com + dev@example.com with verified
 # email rows so local /admin/ access + dev login keep working out-of-box.
 ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+# Auto-authenticate the user when they click the verification link from the
+# same browser they signed up with. Without this, even same-session
+# verification returns 401 — user is verified but has to log in separately,
+# which feels broken from the user's perspective ("I clicked the link, why
+# am I not logged in?"). Cross-browser clicks (different session) still
+# require a normal login afterward — there's no way to auto-login someone
+# whose session we don't have.
+ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
 ACCOUNT_LOGIN_METHODS = {"email", "username"}
 # Signup collects username + email + password (+ confirm). The `*` suffix
 # marks required fields.

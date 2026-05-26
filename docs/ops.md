@@ -19,6 +19,17 @@ make bootstrap                # brings everything up + migrate + seed
 
 Visit `http://localhost`. Login: `dev@example.com` / `password1234`.
 
+## Branching
+
+- **Feature PRs target `dev`.** That's the integration branch — CI gates it,
+  same as `main`, so nothing untested lands.
+- **`main` is the deploy line.** Render auto-deploys whatever's on `main`.
+  Promote `dev → main` when ready to ship: open a PR `dev → main` and merge.
+- Hotfixes can branch from `main` directly when a prod issue needs an
+  immediate fix — PR to `main`, then sync `dev` from `main` to avoid drift.
+
+See [decisions/0007-dev-branch-staging.md](decisions/0007-dev-branch-staging.md).
+
 ## Makefile targets
 
 | Target | What it does |
@@ -123,7 +134,7 @@ Flags:
 ### Why the seed bakes a fixed TOTP
 
 `admin@example.com` is `is_staff=True`. The `RequireMfaForStaffMiddleware`
-redirects `/admin/` to `/account/2fa` until they enroll. Without the seed
+redirects `/admin/` to `/account/mfa` until they enroll. Without the seed
 enrolling TOTP, every fresh `make seed` leaves admin unable to reach
 `/admin/`. The fixed secret means devs can keep one authenticator-app
 entry across reseeds.

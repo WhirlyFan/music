@@ -38,7 +38,7 @@ function SettingsPage() {
           status={mfaEnrolled ? 'on' : 'off'}
           action={
             <Link
-              to="/account/2fa"
+              to="/account/mfa"
               className={buttonVariants({
                 variant: mfaEnrolled ? 'outline' : 'default',
                 size: 'sm',

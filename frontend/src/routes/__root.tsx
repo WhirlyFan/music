@@ -2,6 +2,7 @@ import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import { AppHeader } from '@/components/layout/app-header'
+import { Toaster } from '@/components/ui/sonner'
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -30,6 +31,12 @@ function RootLayout() {
       <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8">
         <Outlet />
       </main>
+
+      {/* Global toast surface (theme-synced, top-right). The wrapper
+          component lives at components/ui/sonner.tsx — that's where to
+          tune positioning, duration, etc. Use `toast.success/error/...`
+          from 'sonner' anywhere to emit. */}
+      <Toaster />
 
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </div>

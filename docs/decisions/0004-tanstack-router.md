@@ -56,4 +56,4 @@ codegen produces `routeTree.gen.ts` at build time.
 ## Notes / future work
 - See [frontend.md](../frontend.md) for the routing patterns we use.
 - The codegen file is checked in; we don't gitignore it.
-- File-based routes for nested paths use directories: `routes/account/2fa/totp.tsx`.
+- File-based routes for nested paths use directories: `routes/account/mfa/totp.tsx`.

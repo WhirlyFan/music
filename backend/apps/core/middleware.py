@@ -16,11 +16,11 @@ from __future__ import annotations
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 
-# Paths exempt from the staff-MFA gate. Enrollment lives at /account/2fa,
+# Paths exempt from the staff-MFA gate. Enrollment lives at /account/mfa,
 # the MFA challenge endpoints live under /_allauth/, and we don't want a
 # logged-in staff user to be unable to log out without first enrolling.
 _EXEMPT_PREFIXES: tuple[str, ...] = (
-    "/account/2fa",
+    "/account/mfa",
     "/_allauth/",
     "/account/logout",
 )
@@ -35,7 +35,7 @@ class RequireMfaForStaffMiddleware:
 
     Trust model: any *one* enrolled allauth.mfa.Authenticator (TOTP, recovery
     codes, or webauthn) satisfies the gate. The user enrolls once at
-    /account/2fa and is then unblocked for future /admin/ visits.
+    /account/mfa and is then unblocked for future /admin/ visits.
     """
 
     def __init__(self, get_response):
@@ -57,6 +57,6 @@ class RequireMfaForStaffMiddleware:
         from allauth.mfa.models import Authenticator
 
         if not Authenticator.objects.filter(user=user).exists():
-            return redirect(f"/account/2fa?required=true&next={path}")
+            return redirect(f"/account/mfa?required=true&next={path}")
 
         return self.get_response(request)

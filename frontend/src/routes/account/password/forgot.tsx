@@ -1,6 +1,7 @@
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ArrowLeft, Loader2, MailCheck } from 'lucide-react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -25,7 +26,14 @@ function ForgotPasswordPage() {
     defaultValues: { email: '' },
     onSubmit: async ({ value }) => {
       if (request.isPending) return
-      await request.mutateAsync(value.email)
+      const result = await request.mutateAsync(value.email)
+      // allauth always returns 200 here (don't leak which emails exist).
+      // The page renders its "check your email" state below on result.status===200,
+      // so we only toast on the rare error cases (5xx, network, etc).
+      if (result.status !== 200) {
+        const msg = bannerError(result, 'Could not send reset email. Try again.')
+        if (msg) toast.error(msg)
+      }
     },
     // Submit-time validation only — errors on every keystroke is hostile UX.
     validators: { onSubmit: schema },
@@ -55,8 +63,9 @@ function ForgotPasswordPage() {
     )
   }
 
+  // Field errors stay inline via parsed.byField; form-level failures
+  // surface as toast.error from onSubmit above.
   const parsed = parseAllAuthErrors(request.data)
-  const summary = bannerError(request.data, 'Could not send reset email. Try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -68,23 +77,11 @@ function ForgotPasswordPage() {
         </p>
       </div>
 
-      {summary ? (
-        <div
-          role="alert"
-          aria-live="assertive"
-          className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
-          id="forgot-form-error"
-        >
-          {summary}
-        </div>
-      ) : null}
-
       <form
         onSubmit={(e) => {
           e.preventDefault()
           form.handleSubmit()
         }}
-        aria-describedby={summary ? 'forgot-form-error' : undefined}
         className="space-y-4"
       >
         <form.Field name="email">

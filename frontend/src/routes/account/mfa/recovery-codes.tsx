@@ -4,7 +4,7 @@ import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { useGenerateRecoveryCodes, useRecoveryCodes } from '@/lib/auth/mfa'
 
-export const Route = createFileRoute('/account/2fa/recovery-codes')({
+export const Route = createFileRoute('/account/mfa/recovery-codes')({
   component: RecoveryCodesPage,
   head: () => ({ meta: [{ title: 'Recovery codes — react-django-template' }] }),
 })
@@ -25,7 +25,7 @@ function RecoveryCodesPage() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <Link
-        to="/account/2fa"
+        to="/account/mfa"
         className={buttonVariants({ variant: 'ghost', size: 'sm' }) + ' -ml-3'}
       >
         <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />

@@ -1,5 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -16,29 +17,41 @@ export const Route = createFileRoute('/signup')({
 // Keep this regex in sync with backend USERNAME_REGEX in apps/users/models.py.
 const usernameRegex = /^[a-zA-Z0-9_-]+$/
 
-const signupSchema = z.object({
-  email: z.string().email(),
-  username: z
-    .string()
-    .min(3, 'At least 3 characters')
-    .max(30, 'At most 30 characters')
-    .regex(usernameRegex, 'Letters, numbers, underscore, dash only'),
-  // NIST 2026 guidance: length over complexity. No special-char / mixed-case
-  // rules. Backend additionally screens against haveibeenpwned breach list.
-  password: z.string().min(12, 'At least 12 characters'),
-})
+const signupSchema = z
+  .object({
+    email: z.string().email(),
+    username: z
+      .string()
+      .min(3, 'At least 3 characters')
+      .max(30, 'At most 30 characters')
+      .regex(usernameRegex, 'Letters, numbers, underscore, dash only'),
+    // NIST 2026 guidance: length over complexity. No special-char / mixed-case
+    // rules. Backend additionally screens against haveibeenpwned breach list.
+    password: z.string().min(12, 'At least 12 characters'),
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, {
+    message: 'Passwords don’t match',
+    path: ['confirm'],
+  })
 
 function SignupPage() {
   const navigate = useNavigate()
   const signup = useSignup()
 
   const form = useForm({
-    defaultValues: { email: '', username: '', password: '' },
+    defaultValues: { email: '', username: '', password: '', confirm: '' },
     onSubmit: async ({ value }) => {
       // Idempotency guard: if a request is already in-flight, ignore the
       // submission. Belt-and-suspenders with the `disabled` button below.
       if (signup.isPending) return
-      const result = await signup.mutateAsync(value)
+      // Drop `confirm` — allauth doesn't expect it. Schema already ensured
+      // it matches `password`.
+      const result = await signup.mutateAsync({
+        email: value.email,
+        username: value.username,
+        password: value.password,
+      })
       // With ACCOUNT_EMAIL_VERIFICATION=mandatory, signup returns a
       // `verify_email` flow instead of an authenticated session. Send the
       // user to the "check your email" holding page until they click the link.
@@ -46,6 +59,11 @@ function SignupPage() {
         navigate({ to: '/account/verify-email' })
       } else if (result.status === 200) {
         navigate({ to: '/' })
+      } else {
+        // Form-level errors (rate limit, server error, etc.) — field-bound
+        // errors stay inline.
+        const msg = bannerError(result, 'Could not create account.')
+        if (msg) toast.error(msg)
       }
     },
     // Submit-time validation only. Showing errors on every keystroke is
@@ -55,33 +73,19 @@ function SignupPage() {
     validators: { onSubmit: signupSchema },
   })
 
+  // Field-bound errors stay inline via parsed.byField; form-level failures
+  // surface as toast.error from onSubmit above.
   const parsed = parseAllAuthErrors(signup.data)
-  // Banner shows ONLY form-level errors (no field). When errors are
-  // bound to specific fields, the inline FormError below each input
-  // is the single source of truth — no duplicate banner.
-  const summary = bannerError(signup.data, 'Could not create account.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-
-      {summary ? (
-        <div
-          role="alert"
-          aria-live="assertive"
-          className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
-          id="signup-form-error"
-        >
-          {summary}
-        </div>
-      ) : null}
 
       <form
         onSubmit={(e) => {
           e.preventDefault()
           form.handleSubmit()
         }}
-        aria-describedby={summary ? 'signup-form-error' : undefined}
         className="space-y-4"
       >
         <form.Field name="email">
@@ -169,6 +173,32 @@ function SignupPage() {
                 <p id={`${field.name}-hint`} className="text-muted-foreground text-xs">
                   At least 12 characters. Avoid passwords used on other sites.
                 </p>
+              </div>
+            )
+          }}
+        </form.Field>
+
+        <form.Field name="confirm">
+          {(field) => {
+            const errMsg = fieldErrorMessage(field.state.meta.errors[0])
+            return (
+              <div className="space-y-1">
+                <label htmlFor={field.name} className="text-sm font-medium">
+                  Confirm password
+                </label>
+                <Input
+                  id={field.name}
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  aria-required="true"
+                  aria-invalid={errMsg ? true : undefined}
+                  aria-errormessage={errMsg ? `${field.name}-error` : undefined}
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                />
+                <FormError id={`${field.name}-error`} message={errMsg} />
               </div>
             )
           }}

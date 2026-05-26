@@ -5,9 +5,9 @@ only when they have zero Authenticator rows. Verifying each branch:
 
 - Anonymous /admin/ → standard Django admin login redirect (we don't touch)
 - Authenticated non-staff /admin/ → admin's own permission redirect
-- Authenticated staff without MFA → our redirect to /account/2fa?required=true&next=…
+- Authenticated staff without MFA → our redirect to /account/mfa?required=true&next=…
 - Authenticated staff with MFA → admin renders normally
-- Staff without MFA hitting /account/2fa → no redirect loop
+- Staff without MFA hitting /account/mfa → no redirect loop
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def test_staff_without_mfa_redirected_from_admin(staff_no_mfa):
     client.force_login(staff_no_mfa)
     response = client.get("/admin/")
     assert response.status_code == 302
-    assert response["Location"].startswith("/account/2fa")
+    assert response["Location"].startswith("/account/mfa")
     assert "required=true" in response["Location"]
     assert "next=/admin/" in response["Location"]
 
@@ -72,8 +72,8 @@ def test_staff_with_mfa_can_reach_admin(staff_with_totp):
     client.force_login(staff_with_totp)
     response = client.get("/admin/")
     # Admin renders (200) or short-redirects to its own index — anything
-    # NOT /account/2fa is a pass.
-    assert "/account/2fa" not in response.get("Location", "")
+    # NOT /account/mfa is a pass.
+    assert "/account/mfa" not in response.get("Location", "")
     assert response.status_code in (200, 302)
 
 
@@ -84,7 +84,7 @@ def test_non_staff_user_not_redirected_by_mfa_gate(regular_user):
     client = Client()
     client.force_login(regular_user)
     response = client.get("/admin/")
-    assert "/account/2fa" not in response.get("Location", "")
+    assert "/account/mfa" not in response.get("Location", "")
 
 
 @pytest.mark.django_db
@@ -93,7 +93,7 @@ def test_anonymous_request_to_admin_not_affected(db):
     redirect; our gate must not fire (request.user is anonymous, not staff)."""
     client = Client()
     response = client.get("/admin/")
-    assert "/account/2fa" not in response.get("Location", "")
+    assert "/account/mfa" not in response.get("Location", "")
 
 
 @pytest.mark.django_db
@@ -102,9 +102,9 @@ def test_staff_without_mfa_can_reach_enrollment_page(staff_no_mfa):
     a redirect loop and can never enroll."""
     client = Client()
     client.force_login(staff_no_mfa)
-    response = client.get("/account/2fa?required=true&next=/admin/")
-    # Anything other than a redirect to /account/2fa would be a loop; this
+    response = client.get("/account/mfa?required=true&next=/admin/")
+    # Anything other than a redirect to /account/mfa would be a loop; this
     # path isn't handled by Django (no view), so it 404s — that's fine,
     # the point is the MIDDLEWARE didn't loop. Either 200, 302-elsewhere,
     # or 404 is acceptable.
-    assert "/account/2fa?required=" not in response.get("Location", "")
+    assert "/account/mfa?required=" not in response.get("Location", "")

@@ -3,7 +3,7 @@
  *
  * Three groupings:
  *
- *  1. Enrollment list / status (useAuthenticators) — drives the /account/2fa
+ *  1. Enrollment list / status (useAuthenticators) — drives the /account/mfa
  *     overview page (what methods are enrolled, "remove" buttons).
  *
  *  2. TOTP enrollment (useTotpSetup + useActivateTotp + useDeactivateTotp).

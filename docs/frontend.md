@@ -35,7 +35,7 @@ frontend/src/
 │   ├── index.tsx         # landing
 │   ├── login.tsx         # password + MFA challenge
 │   ├── signup.tsx
-│   ├── settings.tsx      # security section links to /account/2fa
+│   ├── settings.tsx      # security section links to /account/mfa
 │   ├── notes.tsx         # day-1 vertical slice
 │   └── account/
 │       ├── 2fa.tsx       # MFA overview

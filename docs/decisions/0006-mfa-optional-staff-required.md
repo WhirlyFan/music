@@ -27,7 +27,7 @@ auth policy; your app trusts the SAML `AuthnContextClassRef` if anything.
 - **`/admin/` gate: every `is_staff` user must have at least one enrolled
   Authenticator** (TOTP, recovery codes, or WebAuthn). Enforced by
   `apps.core.middleware.RequireMfaForStaffMiddleware`. Redirects to
-  `/account/2fa?required=true&next=/admin/` with a banner explaining why.
+  `/account/mfa?required=true&next=/admin/` with a banner explaining why.
 - **The gate fires regardless of auth method** — password, social, eventual
   SAML. It's a role-scoped policy, not an auth-method policy.
 - **When SAML lands: app-level MFA stays opt-in.** The customer's IdP

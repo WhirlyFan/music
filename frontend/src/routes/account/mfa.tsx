@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button, buttonVariants } from '@/components/ui/button'
+import { bannerError } from '@/lib/auth/errors'
 import { useAuthenticators, useDeactivateTotp } from '@/lib/auth/mfa'
 
 // `?required=true&next=/admin/` is set by RequireMfaForStaffMiddleware when a
@@ -13,7 +15,7 @@ const searchSchema = z.object({
   next: z.string().optional(),
 })
 
-export const Route = createFileRoute('/account/2fa')({
+export const Route = createFileRoute('/account/mfa')({
   validateSearch: searchSchema,
   component: TwoFactorOverview,
   head: () => ({ meta: [{ title: 'Two-factor auth — react-django-template' }] }),
@@ -35,6 +37,17 @@ function TwoFactorOverview() {
   const hasTotp = enrolledTypes.has('totp')
   const hasWebAuthn = enrolledTypes.has('webauthn')
   const hasRecoveryCodes = enrolledTypes.has('recovery_codes')
+
+  const handleRemoveTotp = async () => {
+    if (deactivateTotp.isPending) return
+    const res = await deactivateTotp.mutateAsync()
+    if (res.status === 200) {
+      toast.success('Authenticator removed.')
+    } else {
+      const msg = bannerError(res, 'Could not remove authenticator. Try again.')
+      if (msg) toast.error(msg)
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -74,13 +87,13 @@ function TwoFactorOverview() {
           description="Use Google Authenticator, 1Password, Authy, or similar. Recommended."
           enrollLink={
             <Link
-              to="/account/2fa/totp"
+              to="/account/mfa/totp"
               className={buttonVariants({ variant: hasTotp ? 'outline' : 'default', size: 'sm' })}
             >
               {hasTotp ? 'Manage' : 'Enroll'}
             </Link>
           }
-          onRemove={hasTotp ? () => deactivateTotp.mutate() : undefined}
+          onRemove={hasTotp ? handleRemoveTotp : undefined}
           removeBusy={deactivateTotp.isPending}
         />
         <MethodRow
@@ -89,7 +102,7 @@ function TwoFactorOverview() {
           description="Touch ID, Face ID, YubiKey, or another WebAuthn device."
           enrollLink={
             <Link
-              to="/account/2fa/webauthn"
+              to="/account/mfa/webauthn"
               className={buttonVariants({
                 variant: hasWebAuthn ? 'outline' : 'default',
                 size: 'sm',
@@ -112,7 +125,7 @@ function TwoFactorOverview() {
             description="Single-use backup codes. Use one if you lose your authenticator."
             enrollLink={
               <Link
-                to="/account/2fa/recovery-codes"
+                to="/account/mfa/recovery-codes"
                 className={buttonVariants({
                   variant: hasRecoveryCodes ? 'outline' : 'default',
                   size: 'sm',
