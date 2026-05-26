@@ -1,6 +1,6 @@
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { z } from 'zod'
 
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -42,28 +42,11 @@ function ResetPasswordPage() {
       if (complete.isPending) return
       const res = await complete.mutateAsync({ key, password: value.password })
       // 200 = password updated AND user logged in.
-      if (res.status === 200) {
-        // Brief pause so the success state is visible, then off to /notes.
-        setTimeout(() => navigate({ to: '/notes' }), 1200)
-      }
+      if (res.status === 200) navigate({ to: '/' })
     },
     // Submit-time validation only — errors on every keystroke is hostile UX.
     validators: { onSubmit: schema },
   })
-
-  if (complete.data?.status === 200) {
-    return (
-      <div className="mx-auto max-w-sm space-y-6 text-center">
-        <CheckCircle2 className="text-success mx-auto h-12 w-12" aria-hidden="true" />
-        <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Password updated</h1>
-          <p className="text-muted-foreground text-sm">
-            You&apos;re logged in. Redirecting to your notes…
-          </p>
-        </div>
-      </div>
-    )
-  }
 
   const parsed = parseAllAuthErrors(complete.data)
   // 410 GONE = expired or already-used key. Show a distinct message — the

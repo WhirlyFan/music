@@ -14,7 +14,9 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
 import { Route as Account2faRouteImport } from './routes/account/2fa'
+import { Route as AccountVerifyEmailKeyRouteImport } from './routes/account/verify-email/$key'
 import { Route as AccountPasswordForgotRouteImport } from './routes/account/password/forgot'
 import { Route as Account2faWebauthnRouteImport } from './routes/account/2fa/webauthn'
 import { Route as Account2faTotpRouteImport } from './routes/account/2fa/totp'
@@ -46,10 +48,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountVerifyEmailRoute = AccountVerifyEmailRouteImport.update({
+  id: '/account/verify-email',
+  path: '/account/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Account2faRoute = Account2faRouteImport.update({
   id: '/account/2fa',
   path: '/account/2fa',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AccountVerifyEmailKeyRoute = AccountVerifyEmailKeyRouteImport.update({
+  id: '/$key',
+  path: '/$key',
+  getParentRoute: () => AccountVerifyEmailRoute,
 } as any)
 const AccountPasswordForgotRoute = AccountPasswordForgotRouteImport.update({
   id: '/account/password/forgot',
@@ -85,10 +97,12 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/2fa': typeof Account2faRouteWithChildren
+  '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
   '/account/2fa/totp': typeof Account2faTotpRoute
   '/account/2fa/webauthn': typeof Account2faWebauthnRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
+  '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
   '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRoutesByTo {
@@ -98,10 +112,12 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/2fa': typeof Account2faRouteWithChildren
+  '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
   '/account/2fa/totp': typeof Account2faTotpRoute
   '/account/2fa/webauthn': typeof Account2faWebauthnRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
+  '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
   '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRoutesById {
@@ -112,10 +128,12 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/2fa': typeof Account2faRouteWithChildren
+  '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
   '/account/2fa/totp': typeof Account2faTotpRoute
   '/account/2fa/webauthn': typeof Account2faWebauthnRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
+  '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
   '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRouteTypes {
@@ -127,10 +145,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/account/2fa'
+    | '/account/verify-email'
     | '/account/2fa/recovery-codes'
     | '/account/2fa/totp'
     | '/account/2fa/webauthn'
     | '/account/password/forgot'
+    | '/account/verify-email/$key'
     | '/account/password/reset/key/$key'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -140,10 +160,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/account/2fa'
+    | '/account/verify-email'
     | '/account/2fa/recovery-codes'
     | '/account/2fa/totp'
     | '/account/2fa/webauthn'
     | '/account/password/forgot'
+    | '/account/verify-email/$key'
     | '/account/password/reset/key/$key'
   id:
     | '__root__'
@@ -153,10 +175,12 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/account/2fa'
+    | '/account/verify-email'
     | '/account/2fa/recovery-codes'
     | '/account/2fa/totp'
     | '/account/2fa/webauthn'
     | '/account/password/forgot'
+    | '/account/verify-email/$key'
     | '/account/password/reset/key/$key'
   fileRoutesById: FileRoutesById
 }
@@ -167,6 +191,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   Account2faRoute: typeof Account2faRouteWithChildren
+  AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
   AccountPasswordForgotRoute: typeof AccountPasswordForgotRoute
   AccountPasswordResetKeyKeyRoute: typeof AccountPasswordResetKeyKeyRoute
 }
@@ -208,12 +233,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/verify-email': {
+      id: '/account/verify-email'
+      path: '/account/verify-email'
+      fullPath: '/account/verify-email'
+      preLoaderRoute: typeof AccountVerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account/2fa': {
       id: '/account/2fa'
       path: '/account/2fa'
       fullPath: '/account/2fa'
       preLoaderRoute: typeof Account2faRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/account/verify-email/$key': {
+      id: '/account/verify-email/$key'
+      path: '/$key'
+      fullPath: '/account/verify-email/$key'
+      preLoaderRoute: typeof AccountVerifyEmailKeyRouteImport
+      parentRoute: typeof AccountVerifyEmailRoute
     }
     '/account/password/forgot': {
       id: '/account/password/forgot'
@@ -269,6 +308,17 @@ const Account2faRouteWithChildren = Account2faRoute._addFileChildren(
   Account2faRouteChildren,
 )
 
+interface AccountVerifyEmailRouteChildren {
+  AccountVerifyEmailKeyRoute: typeof AccountVerifyEmailKeyRoute
+}
+
+const AccountVerifyEmailRouteChildren: AccountVerifyEmailRouteChildren = {
+  AccountVerifyEmailKeyRoute: AccountVerifyEmailKeyRoute,
+}
+
+const AccountVerifyEmailRouteWithChildren =
+  AccountVerifyEmailRoute._addFileChildren(AccountVerifyEmailRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   LoginRoute: LoginRoute,
@@ -276,6 +326,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   Account2faRoute: Account2faRouteWithChildren,
+  AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,
   AccountPasswordForgotRoute: AccountPasswordForgotRoute,
   AccountPasswordResetKeyKeyRoute: AccountPasswordResetKeyKeyRoute,
 }

@@ -82,7 +82,26 @@ def upsert_known_account(spec: AccountSpec):
     user.save()
     if spec.is_superuser:
         ensure_dev_totp(user)
+    ensure_verified_email(user, spec.email)
     return user, created
+
+
+def ensure_verified_email(user, email: str) -> None:
+    """Mark the seeded user's email as verified.
+
+    Why: ACCOUNT_EMAIL_VERIFICATION = "mandatory" blocks login until the
+    user has clicked a verification link. The seed bakes in known
+    credentials so devs can log in without going through email — make the
+    EmailAddress row exist and `verified=True` so allauth treats them as
+    fully verified.
+    """
+    from allauth.account.models import EmailAddress
+
+    EmailAddress.objects.update_or_create(
+        user=user,
+        email=email,
+        defaults={"verified": True, "primary": True},
+    )
 
 
 # Fixed dev TOTP secret. Base32-encoded; same across reseeds so local
@@ -195,6 +214,7 @@ class Command(BaseCommand):
         #    busy lists. Each gets the same per-user data treatment.
         for _ in range(options["fake_users"]):
             user = UserFactory()
+            ensure_verified_email(user, user.email)  # mandatory mode requires this
             seed_user_data(user, notes=notes_per_user)
 
         # Summary.

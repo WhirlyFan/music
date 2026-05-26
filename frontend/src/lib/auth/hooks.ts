@@ -61,6 +61,43 @@ export function isMfaChallenge(response: { status: number; data?: unknown } | un
   return Boolean(flows?.some((f) => f.id === 'mfa_authenticate' && f.is_pending))
 }
 
+// ─── Email verification ──────────────────────────────────────────────────
+
+/**
+ * Consume the verification link's `key` and mark the email verified. On
+ * success, the user transitions from "unverified" to "fully authenticated"
+ * — invalidate session so any gated UI re-evaluates.
+ */
+export function useVerifyEmail() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (key: string) => auth.verifyEmail(key),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.session }),
+  })
+}
+
+/** Resend the verification email to the current pending-verification user. */
+export function useResendEmailVerification() {
+  return useMutation({
+    mutationFn: () => auth.resendEmailVerification(),
+  })
+}
+
+/**
+ * Whether the current session is awaiting email verification.
+ *
+ * allauth's GET /auth/session returns 200 with status=401 + a `verify_email`
+ * flow when the user has signed up but not yet verified their email. The
+ * frontend route guard uses this to redirect to /account/verify-email.
+ */
+export function isEmailVerificationPending(
+  response: { status?: number; data?: unknown } | undefined,
+): boolean {
+  if (!response) return false
+  const flows = (response.data as { flows?: Array<{ id: string; is_pending?: boolean }> })?.flows
+  return Boolean(flows?.some((f) => f.id === 'verify_email' && f.is_pending))
+}
+
 // ─── Password reset ──────────────────────────────────────────────────────
 
 /**

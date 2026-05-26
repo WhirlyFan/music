@@ -34,7 +34,7 @@ async function ensureCsrfCookie(): Promise<void> {
 }
 
 async function call<T = unknown>(
-  method: 'GET' | 'POST' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   body?: unknown,
 ): Promise<AllAuthResponse<T>> {
@@ -79,6 +79,21 @@ export const auth = {
     call('POST', '/auth/signup', params),
 
   logout: () => call('DELETE', '/auth/session'),
+
+  // --- Email verification (mandatory after signup) ---
+  /**
+   * Complete email verification by submitting the key from the email link.
+   * On success, allauth marks the EmailAddress.verified=True and the user
+   * can now log in (or, if they were mid-signup-session, continue).
+   */
+  verifyEmail: (key: string) => call('POST', '/auth/email/verify', { key }),
+
+  /**
+   * Resend the verification email to the in-progress signup user. Only
+   * works during an unverified session — allauth uses the session's
+   * pending-email-verification flow.
+   */
+  resendEmailVerification: () => call('PUT', '/auth/email/verify'),
 
   // --- Password reset (two-step) ---
   /**

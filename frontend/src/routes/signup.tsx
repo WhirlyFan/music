@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { useSignup } from '@/lib/auth/hooks'
+import { isEmailVerificationPending, useSignup } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/signup')({
   component: SignupPage,
@@ -39,7 +39,14 @@ function SignupPage() {
       // submission. Belt-and-suspenders with the `disabled` button below.
       if (signup.isPending) return
       const result = await signup.mutateAsync(value)
-      if (result.status === 200) navigate({ to: '/notes' })
+      // With ACCOUNT_EMAIL_VERIFICATION=mandatory, signup returns a
+      // `verify_email` flow instead of an authenticated session. Send the
+      // user to the "check your email" holding page until they click the link.
+      if (isEmailVerificationPending(result)) {
+        navigate({ to: '/account/verify-email' })
+      } else if (result.status === 200) {
+        navigate({ to: '/' })
+      }
     },
     // Submit-time validation only. Showing errors on every keystroke is
     // hostile UX — the user is mid-thought. After the first failed

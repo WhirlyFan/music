@@ -162,7 +162,17 @@ AUTH_PASSWORD_VALIDATORS = [
 # whether the input looks like an email; both flows hit the same endpoint.
 # REQUIRES django-allauth >= 65.16 (April 2026) — earlier versions had a
 # 400 invalid_login bug when both methods were enabled in headless mode.
-ACCOUNT_EMAIL_VERIFICATION = "optional"
+# `mandatory` blocks login until the user clicks the verification link. The
+# alternative ("optional") lets unverified users in but downstream allauth
+# preconditions (e.g. TOTP enrollment) still gate on verification — so the
+# UX is broken either way unless we pick one and commit. Mandatory is the
+# safer default for a template: filters typos / throwaway emails at signup,
+# guarantees we can actually reach users via email, and is one settings
+# flip away from "optional" if a downstream project wants to relax it.
+#
+# The seed command bakes admin@example.com + dev@example.com with verified
+# email rows so local /admin/ access + dev login keep working out-of-box.
+ACCOUNT_EMAIL_VERIFICATION = "mandatory"
 ACCOUNT_LOGIN_METHODS = {"email", "username"}
 # Signup collects username + email + password (+ confirm). The `*` suffix
 # marks required fields.

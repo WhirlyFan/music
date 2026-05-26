@@ -8,7 +8,12 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
-import { isMfaChallenge, useLogin, useMfaAuthenticate } from '@/lib/auth/hooks'
+import {
+  isEmailVerificationPending,
+  isMfaChallenge,
+  useLogin,
+  useMfaAuthenticate,
+} from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
@@ -38,9 +43,13 @@ function LoginPage() {
       if (login.isPending) return
       const result = await login.mutateAsync(value)
       if (result.status === 200) {
-        navigate({ to: '/notes' })
+        navigate({ to: '/' })
       } else if (isMfaChallenge(result)) {
         setMfaRequired(true)
+      } else if (isEmailVerificationPending(result)) {
+        // Unverified user attempted to log in. Send them to the waiting
+        // page where they can resend the verification email.
+        navigate({ to: '/account/verify-email' })
       }
     },
     // Submit-time validation only — errors on every keystroke is hostile UX.
@@ -54,11 +63,12 @@ function LoginPage() {
   // Parse allauth's structured error response so we can show actionable copy
   // instead of "400 Bad Request". The shape is { status, errors:[{message,param}] }.
   const parsed = parseAllAuthErrors(login.data)
-  // Banner only for form-level errors (no specific field). The MFA challenge
-  // 401 has its own UI path, not an error banner.
-  const summary = isMfaChallenge(login.data)
-    ? null
-    : bannerError(login.data, 'Login failed — check your credentials and try again.')
+  // Banner only for form-level errors (no specific field). MFA challenge
+  // and verify-email-pending both have their own UI paths, not error banners.
+  const summary =
+    isMfaChallenge(login.data) || isEmailVerificationPending(login.data)
+      ? null
+      : bannerError(login.data, 'Login failed — check your credentials and try again.')
 
   return (
     <div className="mx-auto max-w-sm space-y-6">
@@ -192,7 +202,7 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
     onSubmit: async ({ value }) => {
       if (mfa.isPending) return
       const result = await mfa.mutateAsync(value.code.trim())
-      if (result.status === 200) navigate({ to: '/notes' })
+      if (result.status === 200) navigate({ to: '/' })
     },
   })
   const parsedMfa = parseAllAuthErrors(mfa.data)

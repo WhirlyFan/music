@@ -52,6 +52,46 @@ The frontend's `useLogin` wrapper detects `@` in the identifier and submits
 > ⚠️ Requires `django-allauth >= 65.16`. Earlier versions had a 400 bug when
 > both methods were enabled in headless mode.
 
+## Email verification (mandatory)
+
+`ACCOUNT_EMAIL_VERIFICATION = "mandatory"` in `config/settings/base.py` —
+new signups MUST verify their email before they can log in.
+
+### Flow
+
+1. User submits signup form → `POST /_allauth/browser/v1/auth/signup`
+2. allauth creates the user (unverified), sends a verification email, returns:
+   ```json
+   { "status": 401, "data": { "flows": [..., { "id": "verify_email", "is_pending": true }] } }
+   ```
+3. Frontend detects `isEmailVerificationPending(response)` → navigates to `/account/verify-email`
+4. Waiting page shows "Check your email" + "Resend verification email" button
+5. User clicks the link in the email → lands at `/account/verify-email/{key}` (URL pattern from `HEADLESS_FRONTEND_URLS.account_confirm_email`)
+6. Route auto-POSTs the key to `/_allauth/browser/v1/auth/email/verify`
+7. allauth marks the email verified; if the user is still in the same browser session as signup, they're now logged in too
+8. Frontend redirects to `/notes`
+
+### Why mandatory
+
+- Filters typos and throwaway emails at signup
+- Guarantees the app can actually reach users via email (resets, MFA recovery)
+- Forces downstream forks to think about email deliverability (Mailpit dev + Resend prod is wired)
+- One-line relaxation: flip to `"optional"` if a fork wants lower friction
+
+### Side-effects on TOTP enrollment
+
+allauth refuses to mint TOTP authenticators for unverified emails — returns
+409 with `unverified_email`. Verification is a hard precondition for MFA
+regardless of the global verification policy; mandatory mode makes the
+flow consistent (by the time the user reaches `/account/2fa/totp`, they're
+already verified).
+
+### Local dev: seeded accounts skip verification
+
+The seed bakes an `EmailAddress` row with `verified=True` for every seeded
+user (known accounts + fake users via UserFactory). Without this, every
+fresh `make seed` would lock out `dev@example.com` and `admin@example.com`.
+
 ## Session cookies — why not JWT
 
 | Reason | Detail |
