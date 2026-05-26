@@ -35,6 +35,7 @@ snapshot*; everything in this folder is the *current truth*.
 | [ops.md](ops.md) | Compose, env vars, migrations, seed, health checks |
 | [ops/deploy-render.md](ops/deploy-render.md) | First production deploy on Render (Phase A) |
 | [ops/email.md](ops/email.md) | Transactional email — providers, wiring, deliverability |
+| [ops/storage.md](ops/storage.md) | File storage — deferred design, R2 → GCS migration story |
 
 ## Architecture Decision Records (ADRs)
 

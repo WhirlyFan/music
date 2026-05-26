@@ -168,6 +168,7 @@ Before deploying, set these in your deploy target's env (Render dashboard / k8s 
 | **Social login** (Google etc.) | Add provider to `INSTALLED_APPS` + config — see [docs/auth.md](docs/auth.md) | Free | `allauth.socialaccount` is already installed |
 | **Custom domain** | Render dashboard or your DNS provider | Free on Render | Replace `*.onrender.com` URLs throughout |
 | **Hatchet for workflows** | Already wired in dev; deferred for Render Phase A — see [docs/jobs.md](docs/jobs.md) | $0 free self-hosted; +$14/mo on Render | Background DAG engine |
+| **File storage** (avatars, uploads, exports) | Not yet wired — pick S3-compatible (Cloudflare R2: free 10 GB + free egress) when first needed; swap to GCS later via `django-storages` env var. See [docs/ops/storage.md](docs/ops/storage.md) | Free for hobby (R2 10 GB) | No use case yet; design path locked in so future wiring is mechanical |
 
 ### 4. Dev-only credentials baked into the seed (DO NOT touch unless you understand why)
 
