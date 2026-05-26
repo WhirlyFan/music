@@ -11,6 +11,7 @@ documented values on every run so README + reality stay in sync):
 
 Pass --flush to wipe Notes + non-superuser Users first.
 """
+
 from __future__ import annotations
 
 import factory.random
