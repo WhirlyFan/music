@@ -41,7 +41,8 @@ function LoginPage() {
         setMfaRequired(true)
       }
     },
-    validators: { onChange: loginSchema },
+    // Submit-time validation only — errors on every keystroke is hostile UX.
+    validators: { onSubmit: loginSchema },
   })
 
   if (mfaRequired) {

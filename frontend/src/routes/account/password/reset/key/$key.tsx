@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
-import { friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
+import { fieldErrorMessage, friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
 import { useCompletePasswordReset } from '@/lib/auth/hooks'
 
 // $key is captured from the URL by TanStack Router's file-based routing.
@@ -46,7 +46,8 @@ function ResetPasswordPage() {
         setTimeout(() => navigate({ to: '/notes' }), 1200)
       }
     },
-    validators: { onChange: schema },
+    // Submit-time validation only — errors on every keystroke is hostile UX.
+    validators: { onSubmit: schema },
   })
 
   if (complete.data?.status === 200) {
@@ -113,7 +114,8 @@ function ResetPasswordPage() {
       >
         <form.Field name="password">
           {(field) => {
-            const fieldErr = parsed.byField['password']?.[0] ?? field.state.meta.errors[0]?.message
+            const fieldErr =
+              fieldErrorMessage(field.state.meta.errors[0]) ?? parsed.byField['password']?.[0]
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">
@@ -139,7 +141,7 @@ function ResetPasswordPage() {
 
         <form.Field name="confirm">
           {(field) => {
-            const fieldErr = field.state.meta.errors[0]?.message
+            const fieldErr = fieldErrorMessage(field.state.meta.errors[0])
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">

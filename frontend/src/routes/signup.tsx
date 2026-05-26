@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
-import { friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
+import { fieldErrorMessage, friendlyAuthError, parseAllAuthErrors } from '@/lib/auth/errors'
 import { useSignup } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/signup')({
@@ -38,7 +38,11 @@ function SignupPage() {
       const result = await signup.mutateAsync(value)
       if (result.status === 200) navigate({ to: '/notes' })
     },
-    validators: { onChange: signupSchema },
+    // Submit-time validation only. Showing errors on every keystroke is
+    // hostile UX — the user is mid-thought. After the first failed
+    // submit, errors stay visible until the next submit attempt clears
+    // them by re-running validation.
+    validators: { onSubmit: signupSchema },
   })
 
   const parsed = parseAllAuthErrors(signup.data)
@@ -59,9 +63,8 @@ function SignupPage() {
       >
         <form.Field name="email">
           {(field) => {
-            const clientErr = field.state.meta.errors[0]
-            const serverErr = parsed.byField['email']?.[0]
-            const errMsg = (clientErr ? String(clientErr) : null) ?? serverErr
+            const errMsg =
+              fieldErrorMessage(field.state.meta.errors[0]) ?? parsed.byField['email']?.[0]
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">
@@ -87,9 +90,8 @@ function SignupPage() {
 
         <form.Field name="username">
           {(field) => {
-            const clientErr = field.state.meta.errors[0]
-            const serverErr = parsed.byField['username']?.[0]
-            const errMsg = (clientErr ? String(clientErr) : null) ?? serverErr
+            const errMsg =
+              fieldErrorMessage(field.state.meta.errors[0]) ?? parsed.byField['username']?.[0]
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">
@@ -120,9 +122,8 @@ function SignupPage() {
 
         <form.Field name="password">
           {(field) => {
-            const clientErr = field.state.meta.errors[0]
-            const serverErr = parsed.byField['password']?.[0]
-            const errMsg = (clientErr ? String(clientErr) : null) ?? serverErr
+            const errMsg =
+              fieldErrorMessage(field.state.meta.errors[0]) ?? parsed.byField['password']?.[0]
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">

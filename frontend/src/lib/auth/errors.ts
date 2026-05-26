@@ -48,3 +48,22 @@ export function friendlyAuthError(parsed: ParsedErrors, fallback = 'Login failed
   if (allFieldMessages.length) return allFieldMessages.join(' ')
   return fallback
 }
+
+/**
+ * Extract a displayable string from a TanStack Form field-level error.
+ *
+ * TanStack Form's `field.state.meta.errors[i]` is whatever the validator
+ * returned — a plain string for inline validators, OR a Zod issue object
+ * `{ code, message, path, ... }` when a Zod schema is used as the
+ * validator. Doing `String(...)` on the latter yields "[object Object]"
+ * in the UI — this helper unwraps it safely.
+ */
+export function fieldErrorMessage(err: unknown): string | undefined {
+  if (!err) return undefined
+  if (typeof err === 'string') return err
+  if (typeof err === 'object' && 'message' in err) {
+    const m = (err as { message: unknown }).message
+    return typeof m === 'string' ? m : undefined
+  }
+  return undefined
+}

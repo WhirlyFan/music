@@ -26,7 +26,8 @@ function ForgotPasswordPage() {
     onSubmit: async ({ value }) => {
       await request.mutateAsync(value.email)
     },
-    validators: { onChange: schema },
+    // Submit-time validation only — errors on every keystroke is hostile UX.
+    validators: { onSubmit: schema },
   })
 
   // allauth always returns 200 here — successful "request" doesn't disclose
