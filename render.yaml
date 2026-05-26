@@ -26,7 +26,11 @@ services:
     runtime: static
     name: react-django-template-frontend
     rootDir: frontend
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    # We skip `corepack enable` because Render's static-site build container
+    # has /usr/bin read-only — corepack tries to symlink the pnpm shim there
+    # and fails with EROFS. Installing pnpm via npm -g writes to a user
+    # path Render allows.
+    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm build
     staticPublishPath: ./dist
     # Build-time variables: baked into the bundle, NOT runtime overridable.
     envVars:
