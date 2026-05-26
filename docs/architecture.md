@@ -23,7 +23,7 @@ frontend.
 | Rate limits | **django-ratelimit** | Decorator-based per-IP / per-user limits |
 | Health checks | **django-health-check** | `/health/` endpoint validates DB, cache, storage |
 | Request correlation | **django-guid** | X-Request-ID → log records + Sentry `transaction_id` |
-| Database | **Postgres 16** | Via Docker locally; managed Postgres in cloud |
+| Database | **Postgres 17** | Via Docker locally; managed Postgres in cloud |
 | ORM | **Django ORM** | Built-in |
 | WSGI server (prod) | **gunicorn** | Standard. Swap for daphne/uvicorn when we need Channels |
 | Background jobs | **Hatchet Lite** | Postgres-backed DAG engine. ([jobs.md](jobs.md)) |
@@ -89,7 +89,7 @@ Six containers in dev:
 
 | Service | Image | Role |
 |---|---|---|
-| `db` | postgres:16-alpine | Two DBs (`appdb`, `hatchetdb`) + two roles (`app_user`, `app_admin`) |
+| `db` | postgres:17.10-alpine | Two DBs (`appdb`, `hatchetdb`) + two roles (`app_user`, `app_admin`) |
 | `backend` | local Dockerfile | Django + DRF; `runserver` in dev, `gunicorn` in prod |
 | `worker` | same image as backend | Runs `manage.py hatchet_worker`; picks up DAG steps |
 | `hatchet` | hatchet-dev/hatchet-lite | Postgres-backed workflow engine; gRPC :7077, admin UI :8080 |

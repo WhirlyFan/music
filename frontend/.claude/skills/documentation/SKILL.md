@@ -2,19 +2,20 @@
 name: frontend-documentation
 description: Internal frontend component documentation standards. Covers essential sections (overview, demo, features, examples, props/API, accessibility, changelog), best practices, and documentation framework options. Use when writing component documentation.
 ---
+
 # Frontend Documentation
 
 Internal frontend component documentation standards. Covers essential sections, best practices, and documentation framework options.
 
 ### Documentation Framework Options
 
-| Framework | Best For | Key Features |
-|-----------|----------|-------------|
-| **Fumadocs** | Next.js projects | Fast, feature-rich, built for App Router, Auto Type Table |
-| **Nextra** | Markdown-heavy docs | Built-in search, MDX support, file-system routing |
-| **Content Collections** | Type-safe content | Schema validation, transforms, type generation |
-| **Docusaurus** | Large doc sites | Versioning, i18n, plugin ecosystem |
-| **VitePress** | Vue-powered docs | Optimized for docs, fast HMR, Markdown extensions |
+| Framework               | Best For            | Key Features                                              |
+| ----------------------- | ------------------- | --------------------------------------------------------- |
+| **Fumadocs**            | Next.js projects    | Fast, feature-rich, built for App Router, Auto Type Table |
+| **Nextra**              | Markdown-heavy docs | Built-in search, MDX support, file-system routing         |
+| **Content Collections** | Type-safe content   | Schema validation, transforms, type generation            |
+| **Docusaurus**          | Large doc sites     | Versioning, i18n, plugin ecosystem                        |
+| **VitePress**           | Vue-powered docs    | Optimized for docs, fast HMR, Markdown extensions         |
 
 **Our recommendation:** Fumadocs for Next.js projects — integrates natively with App Router, supports MDX, and has Auto Type Table for generating prop documentation from TypeScript types.
 
@@ -41,7 +42,7 @@ and row selection. Built on TanStack Table with shadcn/ui styling.
 
 Show the component in action with the code used to create the demo. Use tabbed interfaces for code/preview.
 
-```md
+````md
 ## Demo
 
 <Tabs defaultValue="preview">
@@ -60,9 +61,10 @@ Show the component in action with the code used to create the demo. Use tabbed i
     ```
   </TabsContent>
 </Tabs>
-```
+````
 
 **Rules:**
+
 - Every demo must be interactive — no static screenshots
 - Show the minimal code needed to reproduce the demo
 - Include import statements in code examples
@@ -164,27 +166,28 @@ How it adapts to screen sizes:
 
 For each prop, document:
 
-| Field | Description |
-|-------|-------------|
-| **Name** | Prop identifier |
-| **Type** | TypeScript type definition |
-| **Default** | Default value (or "required") |
-| **Required** | Whether mandatory |
+| Field           | Description                     |
+| --------------- | ------------------------------- |
+| **Name**        | Prop identifier                 |
+| **Type**        | TypeScript type definition      |
+| **Default**     | Default value (or "required")   |
+| **Required**    | Whether mandatory               |
 | **Description** | What it does and when to use it |
 
 ```md
 ## Props
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `variant` | `"default" \| "destructive" \| "outline" \| "secondary" \| "ghost" \| "link"` | `"default"` | Visual style variant |
-| `size` | `"default" \| "sm" \| "lg" \| "icon"` | `"default"` | Size variant |
-| `asChild` | `boolean` | `false` | Render as child element via Radix Slot |
-| `className` | `string` | — | Additional CSS classes |
-| `disabled` | `boolean` | `false` | Disables the button |
+| Prop        | Type                                                                          | Default     | Description                            |
+| ----------- | ----------------------------------------------------------------------------- | ----------- | -------------------------------------- |
+| `variant`   | `"default" \| "destructive" \| "outline" \| "secondary" \| "ghost" \| "link"` | `"default"` | Visual style variant                   |
+| `size`      | `"default" \| "sm" \| "lg" \| "icon"`                                         | `"default"` | Size variant                           |
+| `asChild`   | `boolean`                                                                     | `false`     | Render as child element via Radix Slot |
+| `className` | `string`                                                                      | —           | Additional CSS classes                 |
+| `disabled`  | `boolean`                                                                     | `false`     | Disables the button                    |
 ```
 
 **Tips:**
+
 - Use Fumadocs Auto Type Table to generate prop tables from TypeScript types automatically
 - Group props by category for complex components (e.g., "Appearance", "Behavior", "Accessibility")
 - Document callback signatures: `onChange: (value: string) => void`
@@ -199,10 +202,10 @@ Document how the component meets accessibility standards:
 
 ### Keyboard Navigation
 
-| Key | Action |
-|-----|--------|
-| `Tab` | Move focus to the button |
-| `Enter` / `Space` | Activate the button |
+| Key               | Action                   |
+| ----------------- | ------------------------ |
+| `Tab`             | Move focus to the button |
+| `Enter` / `Space` | Activate the button      |
 
 ### ARIA Attributes
 
@@ -248,6 +251,7 @@ Track changes with semantic versioning:
 ```
 
 **Rules:**
+
 - Use semantic versioning (major.minor.patch)
 - Major = breaking changes, Minor = new features, Patch = bug fixes
 - Include migration guides with before/after code examples for breaking changes
@@ -257,23 +261,23 @@ Track changes with semantic versioning:
 
 #### Writing Style
 
-* Keep docs up-to-date with code changes — stale docs are worse than no docs
-* Use real-world examples that solve actual problems — not contrived demos
-* Include common pitfalls and troubleshooting sections
-* Provide performance considerations when relevant
-* Link to related components and patterns
-* Make all code examples runnable and tested
+- Keep docs up-to-date with code changes — stale docs are worse than no docs
+- Use real-world examples that solve actual problems — not contrived demos
+- Include common pitfalls and troubleshooting sections
+- Provide performance considerations when relevant
+- Link to related components and patterns
+- Make all code examples runnable and tested
 
 #### Structure
 
-* Start with the simplest example, then build complexity
-* Group related examples under clear headings
-* Use consistent naming across all component docs
-* Include "Do / Don't" examples for common mistakes
+- Start with the simplest example, then build complexity
+- Group related examples under clear headings
+- Use consistent naming across all component docs
+- Include "Do / Don't" examples for common mistakes
 
 #### Maintenance
 
-* Review docs when component API changes
-* Delete docs for removed components — don't leave ghosts
-* Run code examples in CI if possible (MDX component tests)
-* Track doc coverage — every exported component should have a doc page
+- Review docs when component API changes
+- Delete docs for removed components — don't leave ghosts
+- Run code examples in CI if possible (MDX component tests)
+- Track doc coverage — every exported component should have a doc page

@@ -8,6 +8,7 @@ The `ParallelLLMWorkflow` is a template for the fan-out / fan-in pattern
 described in the plan — replace the `_call_llm` placeholder with a real
 provider call (OpenAI, Anthropic, etc.) when you wire LLM work in.
 """
+
 from __future__ import annotations
 
 import asyncio

@@ -2,7 +2,6 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.db import models
 
-
 # Letters, numbers, underscore, dash. 3-30 chars. Same pattern enforced by
 # the frontend Zod schema so client + server agree.
 USERNAME_REGEX = r"^[a-zA-Z0-9_-]+$"

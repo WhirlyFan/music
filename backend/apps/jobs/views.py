@@ -7,6 +7,7 @@ via WebSocket, future) until the status flips to SUCCEEDED/FAILED.
 RLS scopes both endpoints to the current user via the Hatchet-side
 `WorkflowRun.owner` policy.
 """
+
 from __future__ import annotations
 
 import os

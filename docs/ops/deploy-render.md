@@ -10,7 +10,7 @@ bottom.
 |---|---|---|
 | `https://react-django-template-frontend.onrender.com` | React app, public | Static Site (free forever) |
 | `https://react-django-template-backend.onrender.com` | Django + DRF, public but only accessed via frontend rewrites | Web Service (free, sleeps 15 min) |
-| (managed) | Postgres 16 | Database (free for 90 days, then $7/mo) |
+| (managed) | Postgres 17 | Database (free for 90 days, then $7/mo) |
 
 The frontend's `render.yaml` rewrites `/api/*`, `/_allauth/*`, `/admin/*`,
 `/static/*`, and `/health` to the backend, so from the browser's perspective

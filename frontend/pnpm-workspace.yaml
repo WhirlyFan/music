@@ -2,8 +2,15 @@
 # Single-package projects can still have a pnpm-workspace.yaml — it's used purely
 # for config.
 #
-# `minimumReleaseAge` defaults to 1440 (1 day) and blocks packages published
-# within that window. We disable it because we're pulling bleeding-edge TanStack
-# / React releases during initial development. Re-enable (e.g. `1440` or
-# `10080` for a week) once the dep set stabilizes.
-minimumReleaseAge: 0
+# `minimumReleaseAge` blocks packages published within the window (in minutes).
+# This is the primary in-tool defense against the npm supply-chain attack class
+# where a compromised account publishes a malicious patch release. A 24-hour
+# hold gives the community time to spot + report compromise before we install.
+#
+# - 1440 = 24 hours (pnpm's default; what we want)
+# -    0 = disabled (used during bootstrap when we needed fresh packages)
+#
+# Override per-install if a fresh package is genuinely needed:
+#     pnpm install --ignore-min-release-age
+# That bypass is loud + intentional, which is the point.
+minimumReleaseAge: 1440

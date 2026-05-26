@@ -2,6 +2,7 @@
 name: frontend-overlays
 description: Imperative `overlay.open()` pattern for viewport-rendered ephemeral overlays (modals, confirms, drawers, sheets, command palettes), backed by a private Zustand store and a renderer component. Eliminates `useState` open flags, prop-drilled `onClose` handlers, and ad-hoc modal stores. The trigger is imperative; the JSX returned from the controller is declarative. Use when designing or refactoring any modal-family overlay triggered programmatically. Does NOT cover anchored popups (Tooltip, Popover, Dropdown — use Radix) or toasts (use sonner).
 ---
+
 # Overlays
 
 An imperative `overlay.open()` API for viewport-rendered ephemeral overlays — modals, confirms, drawers, sheets, command palettes. The call site is imperative; the JSX returned from the controller is declarative.
@@ -21,17 +22,17 @@ The store is private to the module. Consumers only see `overlay.*` and `<Overlay
 
 This pattern covers **viewport-rendered overlays** — UI rendered at a fixed location on the screen. It does NOT cover **anchored popups** (positioned relative to a trigger element) or toasts.
 
-| Surface | Use | Why |
-|---|---|---|
-| Modal | this pattern + shadcn `<Dialog>` | Viewport-centered, ephemeral, often Promise-returning |
-| Confirm / alert | this pattern + shadcn `<AlertDialog>` (`confirm()` helper) | Same as modal |
-| Drawer / sheet | this pattern + shadcn `<Sheet>` | Viewport-edge, ephemeral |
-| Command palette | this pattern + `<CommandDialog>` | Viewport-rendered |
-| Tooltip | shadcn `<Tooltip>` (Radix) | Anchored to trigger element — needs Floating UI positioning |
-| Popover | shadcn `<Popover>` (Radix) | Anchored — same |
-| Dropdown menu | shadcn `<DropdownMenu>` (Radix) | Anchored + roving tabindex + type-ahead |
-| Context menu | shadcn `<ContextMenu>` (Radix) | Anchored + right-click capture |
-| Toast | `sonner` global `toast()` API | Already imperative-global; specialized for auto-dismiss + stacking |
+| Surface         | Use                                                        | Why                                                                |
+| --------------- | ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| Modal           | this pattern + shadcn `<Dialog>`                           | Viewport-centered, ephemeral, often Promise-returning              |
+| Confirm / alert | this pattern + shadcn `<AlertDialog>` (`confirm()` helper) | Same as modal                                                      |
+| Drawer / sheet  | this pattern + shadcn `<Sheet>`                            | Viewport-edge, ephemeral                                           |
+| Command palette | this pattern + `<CommandDialog>`                           | Viewport-rendered                                                  |
+| Tooltip         | shadcn `<Tooltip>` (Radix)                                 | Anchored to trigger element — needs Floating UI positioning        |
+| Popover         | shadcn `<Popover>` (Radix)                                 | Anchored — same                                                    |
+| Dropdown menu   | shadcn `<DropdownMenu>` (Radix)                            | Anchored + roving tabindex + type-ahead                            |
+| Context menu    | shadcn `<ContextMenu>` (Radix)                             | Anchored + right-click capture                                     |
+| Toast           | `sonner` global `toast()` API                              | Already imperative-global; specialized for auto-dismiss + stacking |
 
 The dividing line: **does the overlay need to position itself relative to a trigger element?** If yes → Radix primitive. If it's viewport-relative → this pattern.
 
@@ -74,14 +75,14 @@ Code lives in `frontend/lib/overlay/` (5 files, ~120 LOC). Read the source for c
 
 **Public API** (`import { ... } from '@/lib/overlay'`):
 
-| Export | Purpose |
-| --- | --- |
-| `overlay.open(controller, opts?)` | Fire-and-forget. Returns the overlay id. |
-| `overlay.openAsync<T>(controller, opts?)` | `Promise<T \| null>`. Resolves with `value` when the dialog calls `close(value)`; resolves with `null` if `closeAll` / `unmount` dismisses it first. Never rejects. |
-| `overlay.close(id)` / `overlay.unmount(id)` / `overlay.closeAll()` | Imperative dismissal. |
-| `<OverlayRenderer />` | Singleton renderer. Mount once at root. |
-| `confirm({ title, description?, confirmLabel, destructive? })` | `Promise<boolean>`. |
-| Types | `OverlayProps`, `OverlayAsyncProps<T>`, `OverlayController`, `OverlayAsyncController<T>` |
+| Export                                                             | Purpose                                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `overlay.open(controller, opts?)`                                  | Fire-and-forget. Returns the overlay id.                                                                                                                            |
+| `overlay.openAsync<T>(controller, opts?)`                          | `Promise<T \| null>`. Resolves with `value` when the dialog calls `close(value)`; resolves with `null` if `closeAll` / `unmount` dismisses it first. Never rejects. |
+| `overlay.close(id)` / `overlay.unmount(id)` / `overlay.closeAll()` | Imperative dismissal.                                                                                                                                               |
+| `<OverlayRenderer />`                                              | Singleton renderer. Mount once at root.                                                                                                                             |
+| `confirm({ title, description?, confirmLabel, destructive? })`     | `Promise<boolean>`.                                                                                                                                                 |
+| Types                                                              | `OverlayProps`, `OverlayAsyncProps<T>`, `OverlayController`, `OverlayAsyncController<T>`                                                                            |
 
 **Contract notes** (things that aren't obvious from reading the code):
 
@@ -99,9 +100,8 @@ One `<OverlayRenderer />` at the app root, as a sibling of `{children}` — not 
 ### Modal triggered from a button
 
 ```tsx
-import { overlay } from '@/lib/overlay';
-
-<Button
+import { overlay } from '@/lib/overlay'
+;<Button
   onClick={() =>
     overlay.open(({ isOpen, close, unmount }) => (
       <Dialog open={isOpen} onOpenChange={(o) => !o && close()}>
@@ -121,7 +121,7 @@ import { overlay } from '@/lib/overlay';
 ### Promise-based confirm
 
 ```tsx
-import { confirm } from '@/lib/overlay';
+import { confirm } from '@/lib/overlay'
 
 async function handleDelete(id: string) {
   const ok = await confirm({
@@ -129,9 +129,9 @@ async function handleDelete(id: string) {
     description: 'This cannot be undone.',
     confirmLabel: 'Yes, delete',
     destructive: true,
-  });
-  if (!ok) return;
-  await deleteMutation.mutateAsync(id);
+  })
+  if (!ok) return
+  await deleteMutation.mutateAsync(id)
 }
 ```
 
@@ -146,16 +146,13 @@ const result = await overlay.openAsync<{ name: string; email: string } | null>(
   ({ isOpen, close, unmount }) => (
     <Dialog open={isOpen} onOpenChange={(o) => !o && close(null)}>
       <DialogContent onCloseAutoFocus={() => !isOpen && unmount()}>
-        <InviteForm
-          onSubmit={(values) => close(values)}
-          onCancel={() => close(null)}
-        />
+        <InviteForm onSubmit={(values) => close(values)} onCancel={() => close(null)} />
       </DialogContent>
     </Dialog>
-  )
-);
-if (!result) return;
-await invite.mutateAsync(result);
+  ),
+)
+if (!result) return
+await invite.mutateAsync(result)
 ```
 
 ## Forms inside overlays
@@ -198,11 +195,15 @@ function PermissionsDialog({ teamId, ... }) {
 ```tsx
 // ✗ Captures `mutation` at open time. If the parent unmounts before the
 //   user clicks, you call a stale mutation. `isPending` isn't visible.
-const mutation = useDeleteTeam(teamId);
-overlay.open(({ close }) => <Dialog><Button onClick={() => mutation.mutate()}>Delete</Button></Dialog>);
+const mutation = useDeleteTeam(teamId)
+overlay.open(({ close }) => (
+  <Dialog>
+    <Button onClick={() => mutation.mutate()}>Delete</Button>
+  </Dialog>
+))
 
 // ✓ Dialog owns its mutation lifecycle.
-overlay.openAsync<boolean>((props) => <DeleteTeamDialog {...props} teamId={teamId} />);
+overlay.openAsync<boolean>((props) => <DeleteTeamDialog {...props} teamId={teamId} />)
 ```
 
 **Quick test:** if every value you're closing over is `string | number | boolean | null` AND every callback is bound to something stable (the router, a top-level handler), you're fine. If you're closing over an object that comes from `useQuery` / a Zustand selector / a parent's state, pass the ID and fetch inside the dialog instead.
@@ -214,6 +215,7 @@ The dialog is rendered from `<OverlayRenderer />` at the app root, not from wher
 Existing dialogs use `useState` flags + payload state lifted to the parent + `<Dialog open onOpenChange>` props. Don't rewrite all of them at once.
 
 Rules of engagement:
+
 1. **New ephemeral overlays use `overlay.open`** by default.
 2. **When touching an existing dialog**, refactor as part of that change.
 3. **Confirm dialogs get the `confirm()` helper immediately** — pure win, no migration cost.

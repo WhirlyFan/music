@@ -2,6 +2,7 @@
 name: frontend-component-design
 description: Frontend component design and styling with shadcn/ui, CVA variants, DataTable (TanStack Table), virtualization, design tokens, cn/tailwind-merge, data-state/data-slot attributes, and page shell patterns. Use when building or styling UI components, tables, or page layouts.
 ---
+
 # Frontend Component Design
 
 Frontend component design and styling with shadcn/ui, CVA variants, DataTable (TanStack Table), virtualization, design tokens, cn/tailwind-merge, data-state/data-slot attributes, and page shell patterns.
@@ -32,6 +33,7 @@ Defined in `globals.css`. Components reference via Tailwind classes like `bg-pri
 ```
 
 **Rules:**
+
 - Always use CSS variable references (`bg-primary`, `text-muted-foreground`) — never raw colors (`bg-blue-600`, `#1e40af`)
 - Add new tokens to `globals.css` when a color/spacing/radius is used in 3+ places
 - Dark mode tokens go in `.dark {}` block — components adapt automatically
@@ -41,36 +43,37 @@ Defined in `globals.css`. Components reference via Tailwind classes like `bg-pri
 Inside `components/ui/*.tsx`, `cva()` defines variant props. Consumers pass attributes, never raw classes.
 
 ```tsx
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva, type VariantProps } from 'class-variance-authority'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50",
+  'inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        ghost: 'hover:bg-accent hover:text-accent-foreground',
+        link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        default: 'h-10 px-4 py-2',
+        sm: 'h-9 rounded-md px-3',
+        lg: 'h-11 rounded-md px-8',
+        icon: 'h-10 w-10',
       },
     },
     defaultVariants: {
-      variant: "default",
-      size: "default",
+      variant: 'default',
+      size: 'default',
     },
-  }
-);
+  },
+)
 ```
 
 **CVA Rules:**
+
 1. Only add a variant if used in **3+ places** (Rule of Three)
 2. Define in the component's `cva()` call, not as one-off `className` props
 3. Use `defaultVariants` so consumers get sensible defaults
@@ -117,13 +120,13 @@ frontend/components/
 `cn()` is `twMerge(clsx(...))` — it merges class names with Tailwind-aware conflict resolution:
 
 ```tsx
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils'
 
 // Conflict resolution: consumer override wins
-cn("px-4 py-2", "px-6") // → "py-2 px-6" (px-4 removed)
+cn('px-4 py-2', 'px-6') // → "py-2 px-6" (px-4 removed)
 
 // Conditional classes
-cn("base-class", isActive && "bg-primary", className)
+cn('base-class', isActive && 'bg-primary', className)
 ```
 
 #### Class Ordering in `cn()`
@@ -133,10 +136,10 @@ Base styles → Variant styles → Conditional styles → User overrides (`class
 ```tsx
 <div
   className={cn(
-    "rounded-md border p-4",           // Base styles
-    variants({ variant, size }),         // Variant styles
-    isDisabled && "opacity-50",          // Conditional styles
-    className                            // Consumer overrides (ALWAYS last)
+    'rounded-md border p-4', // Base styles
+    variants({ variant, size }), // Variant styles
+    isDisabled && 'opacity-50', // Conditional styles
+    className, // Consumer overrides (ALWAYS last)
   )}
 />
 ```
@@ -171,11 +174,9 @@ Expose component state declaratively instead of prop explosion. Consumers style 
 
 ```tsx
 // Component exposes state
-<Dialog data-state={isOpen ? "open" : "closed"}>
-  <DialogOverlay data-state={isOpen ? "open" : "closed"} />
-  <DialogContent data-state={isOpen ? "open" : "closed"}>
-    {children}
-  </DialogContent>
+<Dialog data-state={isOpen ? 'open' : 'closed'}>
+  <DialogOverlay data-state={isOpen ? 'open' : 'closed'} />
+  <DialogContent data-state={isOpen ? 'open' : 'closed'}>{children}</DialogContent>
 </Dialog>
 
 // Consumer styles via data attributes
@@ -187,14 +188,14 @@ Expose component state declaratively instead of prop explosion. Consumers style 
 
 Common `data-state` values:
 
-| Component | States |
-|-----------|--------|
-| Dialog/Sheet | `open`, `closed` |
-| Accordion | `open`, `closed` |
-| Checkbox | `checked`, `unchecked`, `indeterminate` |
-| Toggle | `on`, `off` |
-| Tab | `active`, `inactive` |
-| Collapsible | `open`, `closed` |
+| Component    | States                                  |
+| ------------ | --------------------------------------- |
+| Dialog/Sheet | `open`, `closed`                        |
+| Accordion    | `open`, `closed`                        |
+| Checkbox     | `checked`, `unchecked`, `indeterminate` |
+| Toggle       | `on`, `off`                             |
+| Tab          | `active`, `inactive`                    |
+| Collapsible  | `open`, `closed`                        |
 
 #### `data-slot` for Component Identification
 
@@ -209,7 +210,7 @@ function FormField({ children, label, error }) {
       <div data-slot="form-control">{children}</div>
       {error && <p data-slot="form-error">{error}</p>}
     </div>
-  );
+  )
 }
 
 // Parent targets slots for layout
@@ -220,10 +221,10 @@ function FormField({ children, label, error }) {
 
 #### Naming Conventions
 
-* Use **kebab-case**: `data-slot="form-field"`
-* Be **specific**: `data-slot="submit-button"` not `data-slot="button"`
-* Match **component purpose**, not appearance
-* Prefix with component name for uniqueness: `data-slot="dialog-close"` not `data-slot="close"`
+- Use **kebab-case**: `data-slot="form-field"`
+- Be **specific**: `data-slot="submit-button"` not `data-slot="button"`
+- Match **component purpose**, not appearance
+- Prefix with component name for uniqueness: `data-slot="dialog-close"` not `data-slot="close"`
 
 ### Design Tokens
 
@@ -231,14 +232,14 @@ Design tokens are the single source of truth for visual decisions. They live in 
 
 #### Token Categories
 
-| Category | Example Variable | Tailwind Usage |
-|----------|-----------------|----------------|
-| Color | `--primary` | `bg-primary`, `text-primary` |
-| Foreground | `--primary-foreground` | `text-primary-foreground` |
-| Border | `--border` | `border-border` |
-| Radius | `--radius` | `rounded-[var(--radius)]` |
-| Ring | `--ring` | `ring-ring` |
-| Muted | `--muted` | `bg-muted`, `text-muted-foreground` |
+| Category   | Example Variable       | Tailwind Usage                      |
+| ---------- | ---------------------- | ----------------------------------- |
+| Color      | `--primary`            | `bg-primary`, `text-primary`        |
+| Foreground | `--primary-foreground` | `text-primary-foreground`           |
+| Border     | `--border`             | `border-border`                     |
+| Radius     | `--radius`             | `rounded-[var(--radius)]`           |
+| Ring       | `--ring`               | `ring-ring`                         |
+| Muted      | `--muted`              | `bg-muted`, `text-muted-foreground` |
 
 #### Adding New Tokens
 
@@ -286,7 +287,7 @@ Reusable compound component with named slots for standard page chrome. Every pag
 // Page shell compound component
 <PageShell>
   <PageShell.Breadcrumbs>
-    <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Settings" }]} />
+    <Breadcrumb items={[{ label: 'Home', href: '/' }, { label: 'Settings' }]} />
   </PageShell.Breadcrumbs>
   <PageShell.Header>
     <PageShell.Title>Settings</PageShell.Title>
@@ -295,16 +296,13 @@ Reusable compound component with named slots for standard page chrome. Every pag
       <Button>Save Changes</Button>
     </PageShell.Actions>
   </PageShell.Header>
-  <PageShell.Content>
-    {/* Page content */}
-  </PageShell.Content>
-  <PageShell.Sidebar>
-    {/* Optional sidebar */}
-  </PageShell.Sidebar>
+  <PageShell.Content>{/* Page content */}</PageShell.Content>
+  <PageShell.Sidebar>{/* Optional sidebar */}</PageShell.Sidebar>
 </PageShell>
 ```
 
 **Benefits:**
+
 - Consistent spacing, heading hierarchy, and responsive behavior across all pages
 - Named slots prevent layout drift — new pages automatically match the design system
 - Actions slot handles responsive collapse to menu on small screens
@@ -336,6 +334,7 @@ Build compound components first (composition API), then configured wrappers for 
 ```
 
 **Rules:**
+
 1. **Composition first** — always build compound component API before configured wrapper
 2. **Wrapper uses compound components** — no parallel implementation
 3. **Rule of Three** — only create wrapper when pattern repeats 3+ times
@@ -347,28 +346,28 @@ Build compound components first (composition API), then configured wrappers for 
 For lists with 50+ items, use TanStack Virtual to only render visible DOM nodes:
 
 ```tsx
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 function VirtualList({ items }) {
-  const parentRef = useRef<HTMLDivElement>(null);
+  const parentRef = useRef<HTMLDivElement>(null)
 
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 50,
-  });
+  })
 
   return (
-    <div ref={parentRef} style={{ height: "400px", overflow: "auto" }}>
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+    <div ref={parentRef} style={{ height: '400px', overflow: 'auto' }}>
+      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
             key={virtualItem.key}
             style={{
-              position: "absolute",
+              position: 'absolute',
               top: 0,
               left: 0,
-              width: "100%",
+              width: '100%',
               height: `${virtualItem.size}px`,
               transform: `translateY(${virtualItem.start}px)`,
             }}
@@ -378,7 +377,7 @@ function VirtualList({ items }) {
         ))}
       </div>
     </div>
-  );
+  )
 }
 ```
 
@@ -398,12 +397,12 @@ function VirtualList({ items }) {
 
 ### Anti-Patterns
 
-* Writing raw Tailwind in feature components for styles that should be variants
-* Creating wrappers for components used only once
-* Adding `mr-*` spacing between Button icons and text
-* Using raw hex colors instead of CSS variable references
-* Building tables without `<DataTable>` when they need sorting/filtering
-* Storing table sort/filter state in Zustand — let TanStack Table own it
-* Importing entire icon libraries — use tree-shakeable imports
-* Nesting `cva()` calls — compose with `cn()` instead
-* Using `style={{}}` for values that can be design tokens
+- Writing raw Tailwind in feature components for styles that should be variants
+- Creating wrappers for components used only once
+- Adding `mr-*` spacing between Button icons and text
+- Using raw hex colors instead of CSS variable references
+- Building tables without `<DataTable>` when they need sorting/filtering
+- Storing table sort/filter state in Zustand — let TanStack Table own it
+- Importing entire icon libraries — use tree-shakeable imports
+- Nesting `cva()` calls — compose with `cn()` instead
+- Using `style={{}}` for values that can be design tokens

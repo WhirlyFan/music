@@ -7,6 +7,7 @@ changes — add /api/v2/ alongside v1, deprecate v1 on a known timeline.
 The OpenAPI schema endpoint stays at /api/schema/ (unversioned) so the
 codegen path doesn't need to know about API versions.
 """
+
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
@@ -29,4 +30,5 @@ urlpatterns = [
 
 if settings.DEBUG:
     import debug_toolbar
+
     urlpatterns = [path("__debug__/", include(debug_toolbar.urls))] + urlpatterns

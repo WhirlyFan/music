@@ -8,6 +8,7 @@
    only where the policy permits. This makes the dev DB *and* every
    pytest test DB usable as `app_user` without manual SQL.
 """
+
 from __future__ import annotations
 
 import logging

@@ -2,6 +2,7 @@
 name: frontend-composition
 description: Frontend component composition patterns including compound components, asChild/polymorphism, React 19 APIs, TypeScript patterns, controlled/uncontrolled state, dual API (composition + configuration), and page shell scaffolding. Use when designing component APIs or composition patterns.
 ---
+
 # Frontend Composition
 
 Frontend component composition patterns including compound components, asChild/polymorphism, React 19 APIs, TypeScript patterns, controlled/uncontrolled state, dual API (composition + configuration), and page shell scaffolding.
@@ -86,43 +87,49 @@ Each sub-component handles one responsibility: Root manages state, Item scopes c
 Use React Context to share state between parent and children:
 
 ```tsx
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState } from 'react'
 
 type DisclosureContextType = {
-  isOpen: boolean;
-  toggle: () => void;
-};
-
-const DisclosureContext = createContext<DisclosureContextType | null>(null);
-
-function useDisclosure() {
-  const ctx = useContext(DisclosureContext);
-  if (!ctx) throw new Error("useDisclosure must be used within Disclosure");
-  return ctx;
+  isOpen: boolean
+  toggle: () => void
 }
 
-function Disclosure({ children, defaultOpen = false }: { children: React.ReactNode; defaultOpen?: boolean }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+const DisclosureContext = createContext<DisclosureContextType | null>(null)
+
+function useDisclosure() {
+  const ctx = useContext(DisclosureContext)
+  if (!ctx) throw new Error('useDisclosure must be used within Disclosure')
+  return ctx
+}
+
+function Disclosure({
+  children,
+  defaultOpen = false,
+}: {
+  children: React.ReactNode
+  defaultOpen?: boolean
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen)
   return (
     <DisclosureContext.Provider value={{ isOpen, toggle: () => setIsOpen((o) => !o) }}>
       {children}
     </DisclosureContext.Provider>
-  );
+  )
 }
 
 function DisclosureTrigger({ children }: { children: React.ReactNode }) {
-  const { toggle } = useDisclosure();
-  return <button onClick={toggle}>{children}</button>;
+  const { toggle } = useDisclosure()
+  return <button onClick={toggle}>{children}</button>
 }
 
 function DisclosureContent({ children }: { children: React.ReactNode }) {
-  const { isOpen } = useDisclosure();
-  if (!isOpen) return null;
-  return <div>{children}</div>;
+  const { isOpen } = useDisclosure()
+  if (!isOpen) return null
+  return <div>{children}</div>
 }
 
-Disclosure.Trigger = DisclosureTrigger;
-Disclosure.Content = DisclosureContent;
+Disclosure.Trigger = DisclosureTrigger
+Disclosure.Content = DisclosureContent
 ```
 
 ### Polymorphism with `asChild`
@@ -144,11 +151,13 @@ The `asChild` pattern (via Radix `Slot`) lets consumers change the rendered elem
 The parent's styles, event handlers, and ARIA attributes merge onto the child element. The parent does not render its own DOM node.
 
 **When to use `asChild`:**
+
 - Navigation links that need button styling
 - Custom trigger elements for dialogs/popovers/tooltips
 - Wrapping third-party components that need your component's behavior
 
 **When NOT to use `asChild`:**
+
 - When the default element is correct
 - For simple className changes (use `className` prop instead)
 
@@ -166,7 +175,7 @@ For cases where a child component needs data from its parent without Context:
           {options.map((option) => (
             <Listbox.Option key={option.id} value={option}>
               {({ active, selected }) => (
-                <span className={cn(active && "bg-accent")}>
+                <span className={cn(active && 'bg-accent')}>
                   {selected && <CheckIcon />}
                   {option.name}
                 </span>
@@ -181,6 +190,7 @@ For cases where a child component needs data from its parent without Context:
 ```
 
 **Use render props when:**
+
 - Child needs parent state but Context is overkill (one-off relationship)
 - The rendering logic varies significantly between consumers
 - You need to expose internal state for custom rendering
@@ -258,6 +268,7 @@ Build compound components first (composition API), then configured wrappers for 
 ```
 
 **Rules:**
+
 1. **Composition first** — always build compound component API before configured wrapper
 2. **Wrapper uses compound components** — no parallel implementation
 3. **Rule of Three** — only create wrapper when pattern repeats 3+ times
@@ -270,13 +281,13 @@ Build compound components first (composition API), then configured wrappers for 
 
 ```tsx
 // Extend native element props
-type ButtonProps = React.ComponentProps<"button"> & {
-  variant?: "default" | "destructive" | "outline";
-  size?: "default" | "sm" | "lg";
-};
+type ButtonProps = React.ComponentProps<'button'> & {
+  variant?: 'default' | 'destructive' | 'outline'
+  size?: 'default' | 'sm' | 'lg'
+}
 
 function Button({ variant, size, className, ...props }: ButtonProps) {
-  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />;
+  return <button className={cn(buttonVariants({ variant, size }), className)} {...props} />
 }
 ```
 
@@ -285,28 +296,28 @@ function Button({ variant, size, className, ...props }: ButtonProps) {
 ```tsx
 // Props that depend on variant
 type NotificationProps =
-  | { variant: "simple"; title: string }
-  | { variant: "action"; title: string; actionLabel: string; onAction: () => void }
-  | { variant: "dismissible"; title: string; onDismiss: () => void };
+  | { variant: 'simple'; title: string }
+  | { variant: 'action'; title: string; actionLabel: string; onAction: () => void }
+  | { variant: 'dismissible'; title: string; onDismiss: () => void }
 
 function Notification(props: NotificationProps) {
   switch (props.variant) {
-    case "simple":
-      return <div>{props.title}</div>;
-    case "action":
+    case 'simple':
+      return <div>{props.title}</div>
+    case 'action':
       return (
         <div>
           {props.title}
           <button onClick={props.onAction}>{props.actionLabel}</button>
         </div>
-      );
-    case "dismissible":
+      )
+    case 'dismissible':
       return (
         <div>
           {props.title}
           <button onClick={props.onDismiss}>×</button>
         </div>
-      );
+      )
   }
 }
 ```
@@ -316,10 +327,10 @@ function Notification(props: NotificationProps) {
 ```tsx
 // Type-safe data rendering
 type ListProps<T> = {
-  items: T[];
-  renderItem: (item: T, index: number) => React.ReactNode;
-  keyExtractor: (item: T) => string;
-};
+  items: T[]
+  renderItem: (item: T, index: number) => React.ReactNode
+  keyExtractor: (item: T) => string
+}
 
 function List<T>({ items, renderItem, keyExtractor }: ListProps<T>) {
   return (
@@ -328,38 +339,37 @@ function List<T>({ items, renderItem, keyExtractor }: ListProps<T>) {
         <li key={keyExtractor(item)}>{renderItem(item, i)}</li>
       ))}
     </ul>
-  );
+  )
 }
 
 // Usage — T is inferred from items
-<List
-  items={users}
-  keyExtractor={(u) => u.id}
-  renderItem={(user) => <span>{user.name}</span>}
-/>
+;<List items={users} keyExtractor={(u) => u.id} renderItem={(user) => <span>{user.name}</span>} />
 ```
 
 #### CVA Integration
 
 ```tsx
-import { cva, type VariantProps } from "class-variance-authority";
+import { cva, type VariantProps } from 'class-variance-authority'
 
-const badgeVariants = cva("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold", {
-  variants: {
-    variant: {
-      default: "bg-primary text-primary-foreground",
-      secondary: "bg-secondary text-secondary-foreground",
-      destructive: "bg-destructive text-destructive-foreground",
-      outline: "border text-foreground",
+const badgeVariants = cva(
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+  {
+    variants: {
+      variant: {
+        default: 'bg-primary text-primary-foreground',
+        secondary: 'bg-secondary text-secondary-foreground',
+        destructive: 'bg-destructive text-destructive-foreground',
+        outline: 'border text-foreground',
+      },
     },
+    defaultVariants: { variant: 'default' },
   },
-  defaultVariants: { variant: "default" },
-});
+)
 
-type BadgeProps = React.ComponentProps<"div"> & VariantProps<typeof badgeVariants>;
+type BadgeProps = React.ComponentProps<'div'> & VariantProps<typeof badgeVariants>
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  return <div className={cn(badgeVariants({ variant }), className)} {...props} />
 }
 ```
 
@@ -371,8 +381,8 @@ No more `forwardRef` wrapper. `ref` is just a prop:
 
 ```tsx
 // React 19 — ref is a regular prop
-function Input({ ref, ...props }: React.ComponentProps<"input">) {
-  return <input ref={ref} {...props} />;
+function Input({ ref, ...props }: React.ComponentProps<'input'>) {
+  return <input ref={ref} {...props} />
 }
 ```
 
@@ -381,35 +391,35 @@ function Input({ ref, ...props }: React.ComponentProps<"input">) {
 Read context and promises directly:
 
 ```tsx
-import { use } from "react";
+import { use } from 'react'
 
 // Read context without useContext
 function ThemeButton() {
-  const theme = use(ThemeContext);
-  return <button className={theme.buttonClass}>Click</button>;
+  const theme = use(ThemeContext)
+  return <button className={theme.buttonClass}>Click</button>
 }
 
 // Read promise (must be in Suspense boundary)
 function UserProfile({ userPromise }: { userPromise: Promise<User> }) {
-  const user = use(userPromise);
-  return <div>{user.name}</div>;
+  const user = use(userPromise)
+  return <div>{user.name}</div>
 }
 ```
 
 #### `useActionState` for Forms
 
 ```tsx
-import { useActionState } from "react";
+import { useActionState } from 'react'
 
 function LoginForm() {
   const [state, formAction, isPending] = useActionState(
     async (prevState: FormState, formData: FormData) => {
-      const result = await login(formData);
-      if (result.error) return { error: result.error };
-      redirect("/dashboard");
+      const result = await login(formData)
+      if (result.error) return { error: result.error }
+      redirect('/dashboard')
     },
-    { error: null }
-  );
+    { error: null },
+  )
 
   return (
     <form action={formAction}>
@@ -417,28 +427,28 @@ function LoginForm() {
       <input name="password" type="password" />
       {state.error && <p role="alert">{state.error}</p>}
       <button type="submit" disabled={isPending}>
-        {isPending ? "Logging in..." : "Log in"}
+        {isPending ? 'Logging in...' : 'Log in'}
       </button>
     </form>
-  );
+  )
 }
 ```
 
 #### `useOptimistic` for Optimistic UI
 
 ```tsx
-import { useOptimistic } from "react";
+import { useOptimistic } from 'react'
 
 function TodoList({ todos, addTodo }: { todos: Todo[]; addTodo: (text: string) => Promise<void> }) {
-  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
-    todos,
-    (state, newTodo: string) => [...state, { id: "temp", text: newTodo, pending: true }]
-  );
+  const [optimisticTodos, addOptimisticTodo] = useOptimistic(todos, (state, newTodo: string) => [
+    ...state,
+    { id: 'temp', text: newTodo, pending: true },
+  ])
 
   async function handleAdd(formData: FormData) {
-    const text = formData.get("text") as string;
-    addOptimisticTodo(text);
-    await addTodo(text);
+    const text = formData.get('text') as string
+    addOptimisticTodo(text)
+    await addTodo(text)
   }
 
   return (
@@ -455,7 +465,7 @@ function TodoList({ todos, addTodo }: { todos: Todo[]; addTodo: (text: string) =
         ))}
       </ul>
     </div>
-  );
+  )
 }
 ```
 
@@ -464,7 +474,7 @@ function TodoList({ todos, addTodo }: { todos: Todo[]; addTodo: (text: string) =
 Show/hide without unmounting — preserves state and DOM:
 
 ```tsx
-<Activity mode={activeTab === "settings" ? "visible" : "hidden"}>
+<Activity mode={activeTab === 'settings' ? 'visible' : 'hidden'}>
   <SettingsPanel />
 </Activity>
 ```
@@ -477,17 +487,23 @@ Components with multiple named render areas:
 
 ```tsx
 type CardProps = {
-  children: React.ReactNode;
-  header?: React.ReactNode;
-  footer?: React.ReactNode;
-  actions?: React.ReactNode;
-};
+  children: React.ReactNode
+  header?: React.ReactNode
+  footer?: React.ReactNode
+  actions?: React.ReactNode
+}
 
 function Card({ children, header, footer, actions }: CardProps) {
   return (
-    <div className="rounded-lg border bg-card">
-      {header && <div data-slot="card-header" className="border-b p-4">{header}</div>}
-      <div data-slot="card-body" className="p-4">{children}</div>
+    <div className="bg-card rounded-lg border">
+      {header && (
+        <div data-slot="card-header" className="border-b p-4">
+          {header}
+        </div>
+      )}
+      <div data-slot="card-body" className="p-4">
+        {children}
+      </div>
       {(footer || actions) && (
         <div data-slot="card-footer" className="flex items-center justify-between border-t p-4">
           {footer}
@@ -495,7 +511,7 @@ function Card({ children, header, footer, actions }: CardProps) {
         </div>
       )}
     </div>
-  );
+  )
 }
 ```
 
@@ -505,10 +521,10 @@ For tree-like data structures:
 
 ```tsx
 type TreeNode = {
-  id: string;
-  label: string;
-  children?: TreeNode[];
-};
+  id: string
+  label: string
+  children?: TreeNode[]
+}
 
 function TreeView({ nodes, level = 0 }: { nodes: TreeNode[]; level?: number }) {
   return (
@@ -520,7 +536,7 @@ function TreeView({ nodes, level = 0 }: { nodes: TreeNode[]; level?: number }) {
         </li>
       ))}
     </ul>
-  );
+  )
 }
 ```
 
@@ -579,30 +595,30 @@ export function InboxSortsSkeleton() {
 
 ```tsx
 // Test the composed behavior, not individual sub-components
-it("opens accordion item on trigger click", () => {
+it('opens accordion item on trigger click', () => {
   render(
     <Accordion type="single">
       <AccordionItem value="item-1">
         <AccordionTrigger>Toggle</AccordionTrigger>
         <AccordionContent>Content</AccordionContent>
       </AccordionItem>
-    </Accordion>
-  );
+    </Accordion>,
+  )
 
-  expect(screen.queryByText("Content")).not.toBeVisible();
-  fireEvent.click(screen.getByText("Toggle"));
-  expect(screen.getByText("Content")).toBeVisible();
-});
+  expect(screen.queryByText('Content')).not.toBeVisible()
+  fireEvent.click(screen.getByText('Toggle'))
+  expect(screen.getByText('Content')).toBeVisible()
+})
 ```
 
 #### Testing Accessibility
 
 ```tsx
-it("has correct ARIA attributes", () => {
-  render(<Tabs defaultValue="tab1">...</Tabs>);
+it('has correct ARIA attributes', () => {
+  render(<Tabs defaultValue="tab1">...</Tabs>)
 
-  const tab = screen.getByRole("tab", { name: "Tab 1" });
-  expect(tab).toHaveAttribute("aria-selected", "true");
-  expect(tab).toHaveAttribute("aria-controls", "panel-tab1");
-});
+  const tab = screen.getByRole('tab', { name: 'Tab 1' })
+  expect(tab).toHaveAttribute('aria-selected', 'true')
+  expect(tab).toHaveAttribute('aria-controls', 'panel-tab1')
+})
 ```

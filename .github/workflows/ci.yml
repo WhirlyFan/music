@@ -1,0 +1,202 @@
+# Continuous Integration — runs on every PR and every push to main.
+#
+# Three parallel jobs:
+#   - backend:  pytest + ruff + Django prod-settings check
+#   - frontend: typecheck + lint + Vite build
+#   - security: pnpm audit + pip-audit (CVE scan)
+#
+# Branch protection requires these checks to pass before merging to main.
+#
+# All versions pinned EXACTLY to prevent supply-chain drift between runs:
+#   - GitHub Actions: pinned to exact release tag (vN.M.P, not vN)
+#   - Postgres service container: pinned to exact tag
+#   - Node version: pinned to exact tag
+#   - pnpm: read from package.json's `packageManager` field by action-setup
+#   - uv: pinned to exact version
+#
+# To upgrade any of the above, bump the tag here AND verify nothing in the
+# build relies on the previous version's behavior.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancel in-flight runs on the same branch when a new commit arrives.
+# Saves CI minutes + avoids the "I pushed twice, both running" cycle.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────
+  # Backend — pytest + ruff + Django deploy check
+  # ──────────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (pytest + ruff)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Pinned exactly. Bump in lockstep with docker-compose.yml.
+        image: postgres:17.10-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DATABASE_URL: postgres://app_admin:app_admin@localhost:5432/appdb
+      DATABASE_URL_ADMIN: postgres://app_admin:app_admin@localhost:5432/appdb
+      DJANGO_DEBUG: "True"
+      DJANGO_SECRET_KEY: ci-test-secret-key-not-for-production
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "0.11.13"
+          enable-cache: true
+
+      - name: Install Python via uv
+        # Matches backend/.python-version (3.13). Latest 3.13 patch.
+        run: uv python install 3.13.13
+
+      - name: Install Python deps (frozen)
+        run: uv sync --frozen
+
+      - name: Bootstrap Postgres roles + databases
+        # init.sql creates app_user (no BYPASSRLS) and app_admin (BYPASSRLS),
+        # plus appdb and hatchetdb. Same script docker-compose mounts locally.
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -f ../postgres/init.sql
+
+      - name: ruff (lint)
+        run: uv run ruff check
+
+      - name: ruff (format check)
+        run: uv run ruff format --check
+
+      - name: pytest
+        run: uv run pytest
+
+      - name: Django prod-settings check --deploy
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.prod
+          DJANGO_DEBUG: "False"
+          DJANGO_ALLOWED_HOSTS: ci.example.com
+          DJANGO_CSRF_TRUSTED_ORIGINS: https://ci.example.com
+        run: uv run python manage.py check --deploy
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Frontend — typecheck + lint + Vite build
+  # ──────────────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (typecheck + lint + build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install pnpm
+        # Pinned explicitly here. Must match `packageManager` in
+        # frontend/package.json and `pnpm@X.Y.Z` in render.yaml — bump all
+        # three together. Three readers, one source of truth (the version
+        # number itself), zero version drift across environments.
+        uses: pnpm/action-setup@v6.0.8
+        with:
+          version: 11.3.0
+
+      - name: Install Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install JS deps (frozen)
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript
+        run: pnpm typecheck
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: Prettier (check)
+        run: pnpm format:check
+
+      - name: Vite build
+        run: pnpm build
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Security audit — fail on known high/critical CVEs in production deps
+  # ──────────────────────────────────────────────────────────────────────
+  security:
+    name: Security audit (pnpm audit + pip-audit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      # ── Frontend audit ──
+      - name: Install pnpm
+        # Pinned — keep in sync with the frontend job + packageManager field.
+        uses: pnpm/action-setup@v6.0.8
+        with:
+          version: 11.3.0
+
+      - name: Install Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: pnpm install (frontend)
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm audit (high+ severity, prod deps)
+        working-directory: frontend
+        # `--prod` skips dev deps (production reach is what matters).
+        # `--audit-level high` filters out low/moderate noise — bump to
+        # `moderate` if you want stricter signal.
+        run: pnpm audit --prod --audit-level high
+
+      # ── Backend audit ──
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: "0.11.13"
+
+      - name: pip-audit (backend)
+        working-directory: backend
+        # Install prod-only deps into a uv-managed venv, add pip-audit
+        # alongside them, and audit the env directly. Avoids pip-audit's
+        # `pip install --dry-run` path which is fragile with uv-exported
+        # requirements (no wheel resolution, complex extras).
+        run: |
+          uv sync --frozen --no-dev
+          uv pip install pip-audit
+          uv run pip-audit --strict

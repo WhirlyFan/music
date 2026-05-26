@@ -35,33 +35,33 @@ Dependencies in `frontend/package.json` are **exact-pinned** — no `^` or `~` p
 
 ## The Stack — Each Tool Owns Its Lane
 
-| Concern | Tool | Notes |
-|---|---|---|
-| API/server data | TanStack Query (`useQuery`) | Cached, deduped, auto-refetched |
-| URL-persisted state (tabs, filters, sort, pagination) | nuqs (`useQueryState`) | Shareable, bookmarkable |
-| Shared client state (not URL-worthy) | Zustand store | Import directly, no prop drilling |
-| Ephemeral local state (hover, focus) | `useState` | Scoped to one component |
-| Form state + validation | TanStack Form + Zod | Schema-driven, type-safe |
-| Styled markup | shadcn/ui (`components/ui/`) | HTML + Tailwind. No logic. You own the code. |
-| Variant logic | CVA (`class-variance-authority`) | Predefined style props. No raw Tailwind for primitives. |
-| Class merging | `cn()` = `twMerge(clsx(...))` | Always wrap in `cn()` so consumer overrides win. |
-| Table state | TanStack Table | Headless sorting, pagination, filtering, selection. |
-| Virtualization | TanStack Virtual | Only renders visible DOM nodes for 50+ item lists. |
-| Motion (transitions, indicators, fades) | CSS + `--ease-*` / `--duration-*` tokens | No `framer-motion`. See `frontend-motion`. |
+| Concern                                               | Tool                                     | Notes                                                   |
+| ----------------------------------------------------- | ---------------------------------------- | ------------------------------------------------------- |
+| API/server data                                       | TanStack Query (`useQuery`)              | Cached, deduped, auto-refetched                         |
+| URL-persisted state (tabs, filters, sort, pagination) | nuqs (`useQueryState`)                   | Shareable, bookmarkable                                 |
+| Shared client state (not URL-worthy)                  | Zustand store                            | Import directly, no prop drilling                       |
+| Ephemeral local state (hover, focus)                  | `useState`                               | Scoped to one component                                 |
+| Form state + validation                               | TanStack Form + Zod                      | Schema-driven, type-safe                                |
+| Styled markup                                         | shadcn/ui (`components/ui/`)             | HTML + Tailwind. No logic. You own the code.            |
+| Variant logic                                         | CVA (`class-variance-authority`)         | Predefined style props. No raw Tailwind for primitives. |
+| Class merging                                         | `cn()` = `twMerge(clsx(...))`            | Always wrap in `cn()` so consumer overrides win.        |
+| Table state                                           | TanStack Table                           | Headless sorting, pagination, filtering, selection.     |
+| Virtualization                                        | TanStack Virtual                         | Only renders visible DOM nodes for 50+ item lists.      |
+| Motion (transitions, indicators, fades)               | CSS + `--ease-*` / `--duration-*` tokens | No `framer-motion`. See `frontend-motion`.              |
 
 ## Quick Decision Table
 
-| Data | Where | Why |
-|---|---|---|
-| API responses | React Query (`useQuery`) | Cached, deduped, auto-refetched |
-| Active tab, sort, filter, pagination | nuqs (`useQueryState`) | URL-persisted, shareable |
-| UI state not in URL | Zustand store | Shared across components |
-| Ephemeral UI (hover, focus) | `useState` | Scoped to one component |
-| Form input values | TanStack Form + Zod | Schema-driven validation |
-| Static table display | shadcn `<Table>` | No interactivity needed |
-| Table with sort/filter/paginate | `<DataTable>` (TanStack Table) | Headless state management |
-| Long scrollable list (50+) | TanStack Virtual | Only renders visible DOM |
-| Styled primitive | shadcn component + CVA variant | Consumer never writes raw Tailwind |
+| Data                                 | Where                          | Why                                |
+| ------------------------------------ | ------------------------------ | ---------------------------------- |
+| API responses                        | React Query (`useQuery`)       | Cached, deduped, auto-refetched    |
+| Active tab, sort, filter, pagination | nuqs (`useQueryState`)         | URL-persisted, shareable           |
+| UI state not in URL                  | Zustand store                  | Shared across components           |
+| Ephemeral UI (hover, focus)          | `useState`                     | Scoped to one component            |
+| Form input values                    | TanStack Form + Zod            | Schema-driven validation           |
+| Static table display                 | shadcn `<Table>`               | No interactivity needed            |
+| Table with sort/filter/paginate      | `<DataTable>` (TanStack Table) | Headless state management          |
+| Long scrollable list (50+)           | TanStack Virtual               | Only renders visible DOM           |
+| Styled primitive                     | shadcn component + CVA variant | Consumer never writes raw Tailwind |
 
 ## Server-Side Prefetching
 
@@ -79,27 +79,32 @@ See `frontend-state-management` skill for full pattern and rules.
 4. **Always capture errors via PostHog** — All errors must be sent to PostHog for triage. Never use `console.error` — it's not captured and violates `no-console`.
 
    **Server-side (API routes):**
-   ```typescript
-   import { getDistinctIdFromRequest, getPostHogServer } from '@/src/lib/posthog-server';
 
-   const posthog = getPostHogServer(); // module-level — singleton, one instance per process
+   ```typescript
+   import { getDistinctIdFromRequest, getPostHogServer } from '@/src/lib/posthog-server'
+
+   const posthog = getPostHogServer() // module-level — singleton, one instance per process
 
    export async function POST(request: NextRequest) {
      try {
        // ...
      } catch (error) {
-       const distinctId = getDistinctIdFromRequest(request);
-       posthog.captureException(error instanceof Error ? error : new Error(String(error)), distinctId);
-       return NextResponse.json({ error: 'Failed' }, { status: 500 });
+       const distinctId = getDistinctIdFromRequest(request)
+       posthog.captureException(
+         error instanceof Error ? error : new Error(String(error)),
+         distinctId,
+       )
+       return NextResponse.json({ error: 'Failed' }, { status: 500 })
      }
    }
    ```
 
    **Client-side (components, hooks):**
-   ```typescript
-   import posthog from 'posthog-js';
 
-   posthog.captureException(error, { source: 'descriptive_label' });
+   ```typescript
+   import posthog from 'posthog-js'
+
+   posthog.captureException(error, { source: 'descriptive_label' })
    ```
 
    **Rules:**
@@ -108,6 +113,7 @@ See `frontend-state-management` skill for full pattern and rules.
    - Client-side always include a `source` label for triage context
    - `getPostHogServer()` returns a singleton from `@/src/lib/posthog-server` (`posthog-node`) — safe to call at module level
    - `getDistinctIdFromRequest()` extracts the PostHog `distinct_id` from the request cookie — returns `undefined` if not found
+
 5. **Graceful degradation only at boundaries** — Server layouts that prefetch data should wrap in try/catch and degrade (e.g., show public view) rather than crash the page with a 500. But within a prefetch function, individual query failures should be logged, not swallowed.
 
 ### React Query error handling
@@ -150,6 +156,7 @@ queryKey: keys.tracked(nodeId, workspaceId ?? ''),
 ```
 
 **Rules:**
+
 - Query key factories should accept `string | null` when callers pass nullable values — don't force callers to cast
 - `skipToken` replaces `enabled: false` and gives TypeScript proper narrowing
 - For mutations with nullable params, guard with `if (!param) throw new Error('...')` at the top of `mutationFn` — fail fast, don't cast
@@ -158,34 +165,37 @@ queryKey: keys.tracked(nodeId, workspaceId ?? ''),
 
 ```typescript
 // Good — log the error, return null to signal failure
-const { data, error } = await supabase.from("table").select("*").eq("id", id).single();
+const { data, error } = await supabase.from('table').select('*').eq('id', id).single()
 if (error) {
-  console.error("[functionName] query failed:", error);
-  return null;
+  console.error('[functionName] query failed:', error)
+  return null
 }
 
 // Bad — silently swallow error, return empty data that looks like success
-const { data } = await supabase.from("table").select("*").eq("id", id).single();
-return data ?? {};  // caller can't distinguish "no data" from "query failed"
+const { data } = await supabase.from('table').select('*').eq('id', id).single()
+return data ?? {} // caller can't distinguish "no data" from "query failed"
 ```
 
 ### Nullable parameters in `.eq()` — guard before, never fallback inside
 
 ```typescript
 // GOOD — guard before the query, fail fast if required param is missing
-if (!profile?.team_id) return null; // or redirect, or return error response
-const { data } = await supabase.from("teams").select("*").eq("id", profile.team_id);
+if (!profile?.team_id) return null // or redirect, or return error response
+const { data } = await supabase.from('teams').select('*').eq('id', profile.team_id)
 
 // BAD — ?? '' silently queries WHERE id = '' → returns 0 rows, hides the bug
-const { data } = await supabase.from("teams").select("*").eq("id", profile?.team_id ?? '');
+const { data } = await supabase
+  .from('teams')
+  .select('*')
+  .eq('id', profile?.team_id ?? '')
 
 // BAD — ! assertion crashes at runtime if value is actually null
-const { data } = await supabase.from("teams").select("*").eq("id", profile?.team_id!);
+const { data } = await supabase.from('teams').select('*').eq('id', profile?.team_id!)
 
 // For optional IDs in loops (e.g. after insert returns ids):
 for (const item of items) {
-  if (item.id == null) continue; // skip items without IDs
-  await supabase.from("table").update(data).eq("id", item.id);
+  if (item.id == null) continue // skip items without IDs
+  await supabase.from('table').update(data).eq('id', item.id)
 }
 ```
 
@@ -196,19 +206,20 @@ for (const item of items) {
 ```typescript
 // GOOD — type matches what the DB actually returns
 interface Campaign {
-  project_id: number | null;  // DB column is nullable → use | null
+  project_id: number | null // DB column is nullable → use | null
 }
 // Consumer reads it directly:
-setRetryingCampaign({ focusAreaId: campaign.project_id }); // null is valid
+setRetryingCampaign({ focusAreaId: campaign.project_id }) // null is valid
 
 // BAD — converting null → undefined to satisfy a lying type
 interface RetryState {
-  focusAreaId?: number;  // pretends null doesn't exist
+  focusAreaId?: number // pretends null doesn't exist
 }
-setRetryingCampaign({ focusAreaId: campaign.project_id ?? undefined }); // hides the null
+setRetryingCampaign({ focusAreaId: campaign.project_id ?? undefined }) // hides the null
 ```
 
 **Rules:**
+
 - **`T | null`** — use for DB/API response fields that are present but may have no value. This is the truth about the data.
 - **`T?` (optional)** — use only for fields that may genuinely not exist on the object (e.g. enrichment fields added conditionally, config options with defaults).
 - **Never `?? undefined`** — if you need this, the receiving type is wrong. Fix the type to accept `null`, don't convert at the call site.
@@ -218,16 +229,16 @@ setRetryingCampaign({ focusAreaId: campaign.project_id ?? undefined }); // hides
 
 ```typescript
 // Good — try/catch at the layout boundary, degrade gracefully
-let userData = null;
+let userData = null
 try {
-  userData = await getCachedUserData();
+  userData = await getCachedUserData()
 } catch (e) {
-  console.error("[dashboard layout] prefetchUserData failed:", e);
+  console.error('[dashboard layout] prefetchUserData failed:', e)
 }
 // Continue with userData possibly null — renders public view
 
 // Bad — no error handling, layout crashes with 500
-const userData = await getCachedUserData(); // throws → 500 page
+const userData = await getCachedUserData() // throws → 500 page
 ```
 
 ### Anti-patterns

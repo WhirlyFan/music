@@ -2,6 +2,7 @@
 
 set_rls_user is the canonical way to scope a test's queries to a specific user
 via the same `app.current_user_id` session variable that production uses."""
+
 from collections.abc import Generator
 from contextlib import contextmanager
 

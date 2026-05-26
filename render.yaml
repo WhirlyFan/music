@@ -26,14 +26,21 @@ services:
     runtime: static
     name: react-django-template-frontend
     rootDir: frontend
-    # We skip `corepack enable` because Render's static-site build container
-    # has /usr/bin read-only — corepack tries to symlink the pnpm shim there
-    # and fails with EROFS. Installing pnpm via npm -g writes to a user
-    # path Render allows.
-    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm build
+    # Render's static-site build container has BOTH `/usr/bin` and
+    # `/usr/lib/node_modules` read-only — so corepack-enable AND npm-install-g
+    # both crash with EROFS. We sidestep by using `npx --yes` which fetches
+    # pnpm into a writable temp dir per-invocation and runs it directly.
+    #
+    # pnpm version pinned EXACTLY (matches packageManager field in
+    # frontend/package.json + the version action-setup uses in CI). Bump in
+    # one place; supply-chain attack surface narrows to that one version.
+    buildCommand: npx --yes pnpm@11.3.0 install --frozen-lockfile && npx --yes pnpm@11.3.0 build
     staticPublishPath: ./dist
-    # Build-time variables: baked into the bundle, NOT runtime overridable.
     envVars:
+      # NODE_VERSION pins Render's build-env Node to match our Dockerfile + CI.
+      - key: NODE_VERSION
+        value: 24.16.0
+      # Build-time variable: baked into the bundle, NOT runtime overridable.
       - key: VITE_API_BASE
         value: /api/v1
     routes:

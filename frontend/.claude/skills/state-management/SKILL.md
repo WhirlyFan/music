@@ -2,6 +2,7 @@
 name: frontend-state-management
 description: Frontend state management patterns for React Query (server state), Zustand (client state), nuqs (URL state), Supabase broadcast (cross-client invalidation), TanStack Form + Zod (forms), and TanStack Virtual (virtualization). Use when working with data fetching, caching, mutations, URL params, stores, forms, or virtualized lists.
 ---
+
 # Frontend State Management: Zustand + TanStack Query + nuqs
 
 This skill covers **frontend-only** state management in the Next.js app (`frontend/`).
@@ -14,19 +15,19 @@ If a child needs server data, it calls the React Query hook directly. React Quer
 
 ## Quick Reference
 
-| Data | Where | Why |
-|---|---|---|
-| API responses, DB rows | React Query (`useQuery`) | Cached, deduped, auto-refetched |
-| Loading/error states for API calls | React Query (built-in) | Comes free with the query |
-| Active tab, sort mode, filter, pagination | nuqs (`useQueryState`) | URL-persisted, shareable, bookmarkable |
-| UI state not worth putting in URL | Zustand store | Shared across components but not URL-worthy |
-| Deep-linkable overlay (`?open=<id>`) | nuqs | Survives refresh, shareable URL |
-| Ephemeral overlay (modal, confirm, drawer, sheet) | `overlay.open` (see `frontend-overlays`) | Imperative API over a private Zustand store — no open-flag state, no Provider |
-| Toasts / snackbars | `sonner` `toast()` global API | Same imperative pattern, specialized for auto-dismiss + stacking |
-| Anchored popups (tooltip, popover, dropdown) | Radix primitives (shadcn `<Tooltip>`, `<Popover>`, `<DropdownMenu>`) | Anchored positioning belongs in Floating UI / Radix, not this pattern |
-| Expanded rows, hover state | `useState` | Scoped to one component |
-| Form input values | TanStack Form + Zod | Schema-driven validation, type-safe fields |
-| Optimistic updates after mutation | React Query (`setQueryData`) | Keep cache as source of truth |
+| Data                                              | Where                                                                | Why                                                                           |
+| ------------------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| API responses, DB rows                            | React Query (`useQuery`)                                             | Cached, deduped, auto-refetched                                               |
+| Loading/error states for API calls                | React Query (built-in)                                               | Comes free with the query                                                     |
+| Active tab, sort mode, filter, pagination         | nuqs (`useQueryState`)                                               | URL-persisted, shareable, bookmarkable                                        |
+| UI state not worth putting in URL                 | Zustand store                                                        | Shared across components but not URL-worthy                                   |
+| Deep-linkable overlay (`?open=<id>`)              | nuqs                                                                 | Survives refresh, shareable URL                                               |
+| Ephemeral overlay (modal, confirm, drawer, sheet) | `overlay.open` (see `frontend-overlays`)                             | Imperative API over a private Zustand store — no open-flag state, no Provider |
+| Toasts / snackbars                                | `sonner` `toast()` global API                                        | Same imperative pattern, specialized for auto-dismiss + stacking              |
+| Anchored popups (tooltip, popover, dropdown)      | Radix primitives (shadcn `<Tooltip>`, `<Popover>`, `<DropdownMenu>`) | Anchored positioning belongs in Floating UI / Radix, not this pattern         |
+| Expanded rows, hover state                        | `useState`                                                           | Scoped to one component                                                       |
+| Form input values                                 | TanStack Form + Zod                                                  | Schema-driven validation, type-safe fields                                    |
+| Optimistic updates after mutation                 | React Query (`setQueryData`)                                         | Keep cache as source of truth                                                 |
 
 ## File Organization
 
@@ -124,7 +125,7 @@ Primary pattern: **nuqs (client) → React Query keys → automatic refetch**. A
 **Single param:**
 
 ```typescript
-const [sort, setSort] = useQueryState('sort', parseAsString.withDefault('date'));
+const [sort, setSort] = useQueryState('sort', parseAsString.withDefault('date'))
 ```
 
 **Multiple related params** (batched into one URL update):
@@ -134,10 +135,10 @@ const [params, setParams] = useQueryStates({
   sort: parseAsString.withDefault('date'),
   page: parseAsInteger.withDefault(1),
   filter: parseAsStringEnum(['all', 'active', 'archived']).withDefault('all'),
-});
+})
 
 // Reset page when sort changes — single URL update
-setParams({ sort: 'name', page: 1 });
+setParams({ sort: 'name', page: 1 })
 ```
 
 ### The Primary Pattern: nuqs → React Query
@@ -148,13 +149,13 @@ nuqs params as React Query keys. When the URL changes, the query key changes, Re
 const [params] = useQueryStates({
   sort: parseAsString.withDefault('date'),
   page: parseAsInteger.withDefault(1),
-});
+})
 
 const { data } = useQuery({
   queryKey: entityKeys.list(scopeId, params),
   queryFn: () => fetchEntities({ scopeId, ...params }),
   staleTime: 2 * 60 * 1000,
-});
+})
 ```
 
 ### Rules
@@ -174,16 +175,16 @@ Canonical example: `frontend/lib/nuqs/active-inbox.ts` (Active Inbox route).
 
 **Feature module vs. shared parser.** Two kinds of file live in `lib/nuqs/`:
 
-| | Shared parser (`parse-<thing>.ts`) | Feature module (`<feature>.ts`) |
-|---|---|---|
-| Encodes | one value's wire format | a route's full URL shape |
-| Main export | `parseAsX` from `createParser` | `xSearchParams` config + `urlTo*` / `*ToUrl` helpers |
-| Imports | `nuqs`, primitive/shared utils | parsers + the route's domain types |
-| Reusable across routes? | yes — that's the point | no — one route owns it |
+|                         | Shared parser (`parse-<thing>.ts`) | Feature module (`<feature>.ts`)                      |
+| ----------------------- | ---------------------------------- | ---------------------------------------------------- |
+| Encodes                 | one value's wire format            | a route's full URL shape                             |
+| Main export             | `parseAsX` from `createParser`     | `xSearchParams` config + `urlTo*` / `*ToUrl` helpers |
+| Imports                 | `nuqs`, primitive/shared utils     | parsers + the route's domain types                   |
+| Reusable across routes? | yes — that's the point             | no — one route owns it                               |
 
 **Litmus test:** could a second route import this file and be useful as-is? If yes → parser. If it'd have to ignore half the exports or rewrite the helpers → feature module, and any reusable piece should be extracted into its own `parse-*.ts`.
 
-Concrete: `parse-date-range.ts` encodes `OP:DATE` / `BETWEEN:START:END` and is reusable by any route with date filtering. `active-inbox.ts` decides that *this route* exposes `dueDate`/`recDate` as `history: 'push'` params and folds them into `ContractFilter[]` via `urlToFilters` — none of that is reusable by forecast inbox because forecast has different filter types and history decisions. It imports the parser and composes its own feature module.
+Concrete: `parse-date-range.ts` encodes `OP:DATE` / `BETWEEN:START:END` and is reusable by any route with date filtering. `active-inbox.ts` decides that _this route_ exposes `dueDate`/`recDate` as `history: 'push'` params and folds them into `ContractFilter[]` via `urlToFilters` — none of that is reusable by forecast inbox because forecast has different filter types and history decisions. It imports the parser and composes its own feature module.
 
 **Shape of a feature module:**
 
@@ -218,28 +219,28 @@ export const CLEAR_FILTERS_PATCH: ActiveInboxUrlPatch = { agency: null, /* ... *
 **Consumer code collapses to one hook call plus direct helper invocations:**
 
 ```typescript
-const [urlState, setUrlState] = useQueryStates(activeInboxSearchParams);
-const filters = urlToFilters(urlState, products, pendingTypes);
-const sortMode = urlToSortMode(urlState);
+const [urlState, setUrlState] = useQueryStates(activeInboxSearchParams)
+const filters = urlToFilters(urlState, products, pendingTypes)
+const sortMode = urlToSortMode(urlState)
 
 // Handlers are one-liners
 const handleFiltersChange = (next: ContractFilter[]) => {
-  const { urlPatch, pendingTypes: p } = filtersToUrl(next);
-  setPendingTypes(p);
-  setUrlState(urlPatch);
-};
+  const { urlPatch, pendingTypes: p } = filtersToUrl(next)
+  setPendingTypes(p)
+  setUrlState(urlPatch)
+}
 ```
 
 **Naming convention** (directional, symmetric):
 
-| Purpose | Name |
-|---|---|
-| Config object | `<feature>SearchParams` |
-| State type | `<Feature>UrlState` |
-| Patch type (optional, mutable, nullable) | `<Feature>UrlPatch` |
-| URL → domain | `urlTo<Concept>(url, ...deps)` |
-| Domain → URL patch | `<concept>ToUrl(value, ...)` |
-| Pre-built reset | `CLEAR_<CONCEPT>_PATCH` |
+| Purpose                                  | Name                           |
+| ---------------------------------------- | ------------------------------ |
+| Config object                            | `<feature>SearchParams`        |
+| State type                               | `<Feature>UrlState`            |
+| Patch type (optional, mutable, nullable) | `<Feature>UrlPatch`            |
+| URL → domain                             | `urlTo<Concept>(url, ...deps)` |
+| Domain → URL patch                       | `<concept>ToUrl(value, ...)`   |
+| Pre-built reset                          | `CLEAR_<CONCEPT>_PATCH`        |
 
 Adding a new URL param is then one line in the config object. Derivation that can't live in a parser (cache rehydration, multi-param ↔ single-value bridging, cross-field dependencies) goes in a named directional helper — never inline in a component.
 
@@ -257,11 +258,11 @@ Reach for these when a server component needs to pre-filter data, or when buildi
 
 ### When to Use nuqs vs Zustand vs useState
 
-| Question | If yes → |
-|---|---|
-| Should this state survive a page refresh or be shareable via URL? | **nuqs** |
-| Do multiple components need this but it's not URL-worthy? | **Zustand** |
-| Is it scoped to one component and ephemeral? | **`useState`** |
+| Question                                                          | If yes →       |
+| ----------------------------------------------------------------- | -------------- |
+| Should this state survive a page refresh or be shareable via URL? | **nuqs**       |
+| Do multiple components need this but it's not URL-worthy?         | **Zustand**    |
+| Is it scoped to one component and ephemeral?                      | **`useState`** |
 
 ### Gotchas
 
@@ -284,12 +285,12 @@ All Supabase channels MUST include their scope identifier in the channel name. S
 
 Segments are ordered broadest → narrowest. The scope ID always comes immediately after the scope label so channels for the same workspace/user sort together and are easy to grep.
 
-| Scope | Pattern | Example |
-|---|---|---|
-| Workspace list | `workspace-${workspaceId}-{entity}` | `workspace-${workspaceId}-inbox-solicitation` |
-| Workspace detail | `workspace-${workspaceId}-{entity}-${entityId}` | `workspace-${workspaceId}-sol-detail-${contractId}` |
-| User | `user-${userId}-{entity}` | `user-${userId}-profile` |
-| Global (shared config) | `global-{entity}` | `global-solicitation-sources` |
+| Scope                  | Pattern                                         | Example                                             |
+| ---------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| Workspace list         | `workspace-${workspaceId}-{entity}`             | `workspace-${workspaceId}-inbox-solicitation`       |
+| Workspace detail       | `workspace-${workspaceId}-{entity}-${entityId}` | `workspace-${workspaceId}-sol-detail-${contractId}` |
+| User                   | `user-${userId}-{entity}`                       | `user-${userId}-profile`                            |
+| Global (shared config) | `global-{entity}`                               | `global-solicitation-sources`                       |
 
 Rules:
 
@@ -320,12 +321,12 @@ Forms use TanStack Form with Zod validation. Zod is the single source of truth �
 ```typescript
 const form = useForm({
   defaultValues: { email: '', name: '' },
-  validators: { onChange: UserSchema },  // Zod schema
+  validators: { onChange: UserSchema }, // Zod schema
   onSubmit: async ({ value }) => {
-    await mutation.mutateAsync(value);    // TanStack Query mutation
+    await mutation.mutateAsync(value) // TanStack Query mutation
     // invalidateQueries happens in mutation's onSettled
   },
-});
+})
 ```
 
 See `frontend-design` skill for component styling, CVA variants, and DataTable patterns.
@@ -351,8 +352,10 @@ See `frontend-design` skill for component styling, CVA variants, and DataTable p
 When the scroll container can unmount/remount (Radix tabs, conditional rendering, dialogs), use a **callback ref + state** instead of `useRef`. A fresh `useRef` starts as `null` and mutating it doesn't trigger a re-render, so the virtualizer sees no scroll element and renders 0 items. Setting state forces the re-render.
 
 ```typescript
-const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
-const scrollRef = useCallback((node: HTMLDivElement | null) => { setScrollElement(node); }, []);
+const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
+const scrollRef = useCallback((node: HTMLDivElement | null) => {
+  setScrollElement(node)
+}, [])
 // <div ref={scrollRef}> ... getScrollElement: () => scrollElement
 ```
 
@@ -401,19 +404,19 @@ Pass `HTMLDivElement | null` as the prop type — not `RefObject`.
 
 Refer to these files as working references for each pattern:
 
-| Pattern | File(s) |
-|---|---|
-| Query key factory | `frontend/lib/hooks/queries/query-keys.ts` |
-| Standalone React Query hook | `useInboxCounts.ts`, `useSolDetail.ts` |
-| Consolidated multi-fetch endpoint | `useSolDetail.ts` • `sol-detail/route.ts` |
-| Optimistic mutation + rollback | `useInboxMutations.ts` |
-| Broadcast sender (server) | `frontend/src/app/api/_lib/broadcast.ts` |
-| List broadcast listener (client) | `useInboxRecommendations.ts` |
-| Per-entity detail broadcast | `useSolDetail.ts` (subscriber), API status routes (senders) |
-| Focused Zustand store | `useInboxStore.ts`, `useInboxBulkStore.ts` |
-| Callback ref + virtualizer | `ActiveInboxContent.tsx` → `ContractList.tsx` |
-| Server-side prefetch (HydrationBoundary) | `prefetch-*.ts` files + page/layout server components |
-| Centralized nuqs feature module | `frontend/lib/nuqs/active-inbox.ts` (consumed by `ActiveInbox.tsx`) |
-| Custom nuqs parser | `frontend/lib/nuqs/parse-date-range.ts` (`createParser` with compact string encoding) |
+| Pattern                                  | File(s)                                                                               |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| Query key factory                        | `frontend/lib/hooks/queries/query-keys.ts`                                            |
+| Standalone React Query hook              | `useInboxCounts.ts`, `useSolDetail.ts`                                                |
+| Consolidated multi-fetch endpoint        | `useSolDetail.ts` • `sol-detail/route.ts`                                             |
+| Optimistic mutation + rollback           | `useInboxMutations.ts`                                                                |
+| Broadcast sender (server)                | `frontend/src/app/api/_lib/broadcast.ts`                                              |
+| List broadcast listener (client)         | `useInboxRecommendations.ts`                                                          |
+| Per-entity detail broadcast              | `useSolDetail.ts` (subscriber), API status routes (senders)                           |
+| Focused Zustand store                    | `useInboxStore.ts`, `useInboxBulkStore.ts`                                            |
+| Callback ref + virtualizer               | `ActiveInboxContent.tsx` → `ContractList.tsx`                                         |
+| Server-side prefetch (HydrationBoundary) | `prefetch-*.ts` files + page/layout server components                                 |
+| Centralized nuqs feature module          | `frontend/lib/nuqs/active-inbox.ts` (consumed by `ActiveInbox.tsx`)                   |
+| Custom nuqs parser                       | `frontend/lib/nuqs/parse-date-range.ts` (`createParser` with compact string encoding) |
 
 NOTE: The Notion doc also has a very long "Detailed Reference" section after the main content with full code examples for React Query Patterns, Zustand Patterns, nuqs Patterns, Supabase Broadcast Full Flow, Form State patterns, TanStack Virtual patterns, and more codebase examples. However, the codebase SKILL.md already has this detailed reference section. Read the current file first and keep the detailed reference section if it exists. If the current file already has the detailed content, just ensure the summary sections above match exactly.

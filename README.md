@@ -18,7 +18,7 @@ docs explain *why* the template is shaped this way.
 | Tool | Version | Install |
 |---|---|---|
 | Docker | 24+ (with `docker compose`) | https://docs.docker.com/get-docker/ |
-| pnpm | 10+ | `corepack enable && corepack prepare pnpm@latest --activate` |
+| pnpm | 11.3.0 (pinned) | `corepack enable && corepack prepare pnpm@11.3.0 --activate` |
 | uv | 0.11+ | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | Python 3.13 | (managed by uv; optional locally) | `uv python install 3.13` |
 
@@ -243,7 +243,7 @@ Hatchet SDK (durable workflows), gunicorn for prod.
 primitives, TanStack Query / Router / Form / Table, Zod schemas,
 ESLint + Prettier, `openapi-typescript` for generated types.
 
-**Infra** — Docker Compose orchestrating Postgres 16 (with two roles),
+**Infra** — Docker Compose orchestrating Postgres 17 (with two roles),
 Django + worker, Hatchet Lite, Vite (dev) or static build (prod), nginx
 reverse proxy. Pre-push git hook auto-fixes lint + blocks broken pushes.
 

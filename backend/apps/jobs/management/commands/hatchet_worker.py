@@ -7,6 +7,7 @@ Reads HATCHET_CLIENT_TOKEN / HATCHET_CLIENT_HOST_PORT from the environment
 (populated from .env). Workers can be scaled horizontally — Hatchet
 distributes work across them automatically.
 """
+
 from django.core.management.base import BaseCommand
 
 
@@ -33,8 +34,7 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Starting Hatchet worker '{options['name']}' "
-                f"(max_runs={options['max_runs']})"
+                f"Starting Hatchet worker '{options['name']}' (max_runs={options['max_runs']})"
             )
         )
         worker.start()

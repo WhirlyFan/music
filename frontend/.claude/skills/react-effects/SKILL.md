@@ -30,15 +30,15 @@ The default for any in-render computation is **write it inline, no `useMemo`**. 
 
 ## What counts as external
 
-| External system | Pattern | Where to find it |
-|---|---|---|
-| Supabase realtime broadcast | `.channel(...).subscribe()` + `removeChannel` cleanup | grep `supabase.channel(` |
-| PostHog one-shot capture on mount | `posthog.capture(...)` with empty deps | analytics hooks |
-| DOM measurement after render | `ref.current.getBoundingClientRect()` | virtualizer, popover positioning |
-| Window/document event listeners | `keydown`, `resize`, `visibilitychange` | grep `window.addEventListener` |
-| Focus management | `inputRef.current?.focus()` | dialog open → focus first field |
-| Third-party widget setup/teardown | imperative library APIs (Mapbox, Stripe Elements) | rare |
-| Syncing imperative non-React state to React | no React API for it | rare; usually a smell |
+| External system                             | Pattern                                               | Where to find it                 |
+| ------------------------------------------- | ----------------------------------------------------- | -------------------------------- |
+| Supabase realtime broadcast                 | `.channel(...).subscribe()` + `removeChannel` cleanup | grep `supabase.channel(`         |
+| PostHog one-shot capture on mount           | `posthog.capture(...)` with empty deps                | analytics hooks                  |
+| DOM measurement after render                | `ref.current.getBoundingClientRect()`                 | virtualizer, popover positioning |
+| Window/document event listeners             | `keydown`, `resize`, `visibilitychange`               | grep `window.addEventListener`   |
+| Focus management                            | `inputRef.current?.focus()`                           | dialog open → focus first field  |
+| Third-party widget setup/teardown           | imperative library APIs (Mapbox, Stripe Elements)     | rare                             |
+| Syncing imperative non-React state to React | no React API for it                                   | rare; usually a smell            |
 
 If "what external system?" answers as "the rest of the app" / "the URL" / "the cache", it's not external — go back to the decision tree.
 
@@ -53,21 +53,21 @@ Consequence: `useEffect(() => setX(deriveFromY(y)), [y])` has zero valid uses he
 
 ## Anti-patterns
 
-| Anti-pattern | Replace with |
-|---|---|
-| `useEffect` + `setState` from props/state | Inline computation |
-| `useEffect` to filter/sort/group | Inline computation |
-| `useEffect` for click/submit handlers | Event handler |
-| `useEffect` calling `onChange`/`onSelect` to notify parent | Call callback in the handler that caused the change |
-| `useEffect` with empty deps to "init" data | React Query, server prefetch, or module-level constant |
-| `useEffect(() => fetch(...).then(setData), [])` | `useQuery` |
-| `useEffect` mirroring URL params into local state | Read nuqs directly |
-| `useEffect` mirroring server state into Zustand | Read React Query directly |
-| `useEffect(() => { ref.current = ... })` to read during render | `useState` |
-| `useEffect` resetting child state on prop change | `<Child key={...} />` |
-| `useEffect` + `setInterval` polling server | `refetchInterval` on the query |
-| `useEffect` adding `visibilitychange`/`online` listeners to refetch | `refetchOnWindowFocus` / `refetchOnReconnect` |
-| `useEffect` syncing query string with `useSearchParams` + `router.push` | nuqs |
+| Anti-pattern                                                            | Replace with                                           |
+| ----------------------------------------------------------------------- | ------------------------------------------------------ |
+| `useEffect` + `setState` from props/state                               | Inline computation                                     |
+| `useEffect` to filter/sort/group                                        | Inline computation                                     |
+| `useEffect` for click/submit handlers                                   | Event handler                                          |
+| `useEffect` calling `onChange`/`onSelect` to notify parent              | Call callback in the handler that caused the change    |
+| `useEffect` with empty deps to "init" data                              | React Query, server prefetch, or module-level constant |
+| `useEffect(() => fetch(...).then(setData), [])`                         | `useQuery`                                             |
+| `useEffect` mirroring URL params into local state                       | Read nuqs directly                                     |
+| `useEffect` mirroring server state into Zustand                         | Read React Query directly                              |
+| `useEffect(() => { ref.current = ... })` to read during render          | `useState`                                             |
+| `useEffect` resetting child state on prop change                        | `<Child key={...} />`                                  |
+| `useEffect` + `setInterval` polling server                              | `refetchInterval` on the query                         |
+| `useEffect` adding `visibilitychange`/`online` listeners to refetch     | `refetchOnWindowFocus` / `refetchOnReconnect`          |
+| `useEffect` syncing query string with `useSearchParams` + `router.push` | nuqs                                                   |
 
 ## Cleanup
 
@@ -75,9 +75,11 @@ Every effect that subscribes, listens, sets a timer, or starts a fetch returns a
 
 ```typescript
 useEffect(() => {
-  const channel = supabase.channel(name).subscribe();
-  return () => { supabase.removeChannel(channel); };
-}, [name]);
+  const channel = supabase.channel(name).subscribe()
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}, [name])
 ```
 
 Non-React Query fetches need an `ignore` flag in cleanup to avoid race conditions on rapid prop changes.

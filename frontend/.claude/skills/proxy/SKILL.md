@@ -7,12 +7,12 @@ description: The `proxy.ts` auth gate for the Next.js frontend — Next.js 16's 
 
 `frontend/src/proxy.ts` is the single server-side chokepoint that runs before every non-static request. In this repo it does four things: refresh the Supabase session, allow public paths through, reject unauthenticated requests, and do role checks for admin routes.
 
-This skill covers what the file is, what it's allowed to do, what it must *not* be the only place checking, and the conventions for editing it safely.
+This skill covers what the file is, what it's allowed to do, what it must _not_ be the only place checking, and the conventions for editing it safely.
 
 ## Related Skills
 
 - `frontend-conventions` — error handling, PostHog capture (the proxy catches throw errors and returns JSON/redirects — no PostHog capture today; any logging improvements go through `getPostHogServer`)
-- `frontend-routing-and-layouts` — layouts read session data *after* proxy has run; layouts are not a security boundary
+- `frontend-routing-and-layouts` — layouts read session data _after_ proxy has run; layouts are not a security boundary
 - `frontend-state-management` — the `useUser()` / `useWorkspace()` React Query hooks read the authenticated session that proxy has refreshed
 
 ---
@@ -75,14 +75,17 @@ Public paths live in one array and only one array:
 
 ```ts
 const PUBLIC_PATH_PREFIXES = [
-  '/login', '/signup', '/set-password',
-  '/auth/',              // /auth/confirm, /auth/callback, /auth/sso-complete, ...
+  '/login',
+  '/signup',
+  '/set-password',
+  '/auth/', // /auth/confirm, /auth/callback, /auth/sso-complete, ...
   '/oauth/consent',
   '/api/public/',
-  '/docs-login', '/docs-access',
-  '/opp/',               // public solicitation share links
-  '/industry-days/',     // public industry day share links
-];
+  '/docs-login',
+  '/docs-access',
+  '/opp/', // public solicitation share links
+  '/industry-days/', // public industry day share links
+]
 ```
 
 ### ✅ Correct: add to the array
@@ -91,14 +94,14 @@ const PUBLIC_PATH_PREFIXES = [
 const PUBLIC_PATH_PREFIXES = [
   // ...existing...
   '/my-new-public-route',
-];
+]
 ```
 
 `isPublicPath()` matches either exact equality or `startsWith(prefix)`, so a trailing slash on the prefix restricts to children (`/auth/` matches `/auth/callback` but not `/authorize`). Pick based on intent.
 
 ### ❌ Wrong: edit the matcher
 
-The matcher in `export const config` is a coarse inclusion filter — "run on almost everything except static files." It is **not** the public/private list. Editing the matcher to exclude a route silently bypasses *all* of proxy's logic (session refresh, role checks, legacy redirects), not just the auth gate. That's almost always a bug.
+The matcher in `export const config` is a coarse inclusion filter — "run on almost everything except static files." It is **not** the public/private list. Editing the matcher to exclude a route silently bypasses _all_ of proxy's logic (session refresh, role checks, legacy redirects), not just the auth gate. That's almost always a bug.
 
 ### ❌ Wrong: `startsWith('/api')` for unauth'd APIs
 
@@ -114,17 +117,14 @@ The matcher in `export const config` is a coarse inclusion filter — "run on al
 
 ## 4. Adding a role-gated route
 
-Role checks sit *after* the deny-by-default gate, so `user` is already non-null. Reuse the `supabase` client returned by `updateSession()` — don't re-create one.
+Role checks sit _after_ the deny-by-default gate, so `user` is already non-null. Reuse the `supabase` client returned by `updateSession()` — don't re-create one.
 
 ```ts
 // ✅ correct — reuse the client, check the RPC, return the right error shape
 if (pathname.startsWith('/api/finance/')) {
-  const { data: isFinance } = await supabase.rpc('is_finance_member');
+  const { data: isFinance } = await supabase.rpc('is_finance_member')
   if (!isFinance) {
-    return NextResponse.json(
-      { error: 'Unauthorized - requires finance role' },
-      { status: 403 },
-    );
+    return NextResponse.json({ error: 'Unauthorized - requires finance role' }, { status: 403 })
   }
 }
 ```
@@ -132,8 +132,8 @@ if (pathname.startsWith('/api/finance/')) {
 ```ts
 // ❌ wrong — creating a second client doubles the request cost and can
 // get out of sync with the session refresh in step 1
-const { supabase: anotherClient } = await updateSession(req);  // re-refreshes!
-const { data } = await anotherClient.rpc('is_finance_member');
+const { supabase: anotherClient } = await updateSession(req) // re-refreshes!
+const { data } = await anotherClient.rpc('is_finance_member')
 ```
 
 ### Why reuse matters
@@ -142,9 +142,9 @@ There was a real bug in this codebase where `proxy.ts` duplicated `is_super_admi
 
 ### Error shape per route type
 
-| Route | If role check fails |
-|---|---|
-| `/api/*` | `NextResponse.json({ error: '...' }, { status: 403 })` |
+| Route      | If role check fails                                                                    |
+| ---------- | -------------------------------------------------------------------------------------- |
+| `/api/*`   | `NextResponse.json({ error: '...' }, { status: 403 })`                                 |
 | Page route | `NextResponse.redirect(new URL('/workspaces', url), 307)` — or `/login` if appropriate |
 
 ---
@@ -156,9 +156,9 @@ The deny-by-default branch:
 ```ts
 if (!user) {
   if (pathname.startsWith('/api/')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  return NextResponse.redirect(new URL('/login', url), 307);
+  return NextResponse.redirect(new URL('/login', url), 307)
 }
 ```
 
@@ -178,7 +178,7 @@ The session refresh is isolated in `frontend/utils/supabase/middleware.ts` as `u
 
 ```ts
 // utils/supabase/middleware.ts
-const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
 ```
 
 `getClaims()` validates the JWT via JWKS (ES256, cached). **Sub-millisecond, no network call, no token refresh.** This matters because:
@@ -191,28 +191,26 @@ const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
 `getClaims()` returns one of three states. The logic has to fork on `claimsData` **first**, then on `claimsError`. Skipping the `claimsData` guard would return `user: null` for every authenticated user with a valid session.
 
 ```ts
-const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+const { data: claimsData, error: claimsError } = await supabase.auth.getClaims()
 
 if (claimsData) {
   // 1. Valid JWT — extract identity from claims (sub-ms, no network)
   const user: MiddlewareUser = {
     id: claimsData.claims.sub,
     email: claimsData.claims.email as string | undefined,
-  };
-  return { response, user, supabase };
+  }
+  return { response, user, supabase }
 }
 
 if (!claimsError) {
   // 2. getClaims returned { data: null, error: null } — no session cookie at all (anonymous visitor)
-  return { response, user: null, supabase };
+  return { response, user: null, supabase }
 }
 
 // 3. claimsError set — JWT exists but is expired/invalid. Fall back to network refresh.
-const { data } = await supabase.auth.getUser();
-const user: MiddlewareUser | null = data.user
-  ? { id: data.user.id, email: data.user.email }
-  : null;
-return { response, user, supabase };
+const { data } = await supabase.auth.getUser()
+const user: MiddlewareUser | null = data.user ? { id: data.user.id, email: data.user.email } : null
+return { response, user, supabase }
 ```
 
 The third branch only fires for returning users whose session has actually expired. No race condition because the browser client hasn't loaded yet — the page hasn't started rendering, so there's nobody to collide with on a refresh.
@@ -248,7 +246,7 @@ export const config = {
   matcher: [
     '/((?!_next/static|_next/image|ingest(?:/|$)|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
-};
+}
 ```
 
 **Intent:** run proxy on everything except Next internals, static assets, and the PostHog `/ingest` rewrite.
@@ -295,24 +293,24 @@ Anything excluded from the matcher doesn't just skip the auth gate — it skips 
 Next.js 15.1+ ships `next/experimental/testing/server` utilities. `unstable_doesProxyMatch` asserts whether proxy runs for a URL; you can also invoke the proxy function directly and assert on rewrite/redirect/response shape.
 
 ```ts
-import { unstable_doesProxyMatch } from 'next/experimental/testing/server';
-import { proxy, config } from '@/proxy';
-import nextConfig from '../next.config.mjs';
+import { unstable_doesProxyMatch } from 'next/experimental/testing/server'
+import { proxy, config } from '@/proxy'
+import nextConfig from '../next.config.mjs'
 
 // Matcher coverage
-expect(unstable_doesProxyMatch({ config, nextConfig, url: '/ingest/e/' })).toBe(false);
-expect(unstable_doesProxyMatch({ config, nextConfig, url: '/workspaces' })).toBe(true);
+expect(unstable_doesProxyMatch({ config, nextConfig, url: '/ingest/e/' })).toBe(false)
+expect(unstable_doesProxyMatch({ config, nextConfig, url: '/workspaces' })).toBe(true)
 
 // Public path allowlist
-const req = new NextRequest('https://x/login');
-const res = await proxy(req);
-expect(res.status).toBe(200);
+const req = new NextRequest('https://x/login')
+const res = await proxy(req)
+expect(res.status).toBe(200)
 
 // API 401 shape for unauth'd /api/*
-const apiReq = new NextRequest('https://x/api/workspace');
-const apiRes = await proxy(apiReq);
-expect(apiRes.status).toBe(401);
-expect(await apiRes.json()).toEqual({ error: 'Unauthorized' });
+const apiReq = new NextRequest('https://x/api/workspace')
+const apiRes = await proxy(apiReq)
+expect(apiRes.status).toBe(401)
+expect(await apiRes.json()).toEqual({ error: 'Unauthorized' })
 ```
 
 Any non-trivial change to `PUBLIC_PATH_PREFIXES` or the matcher should add a test. Matcher regressions are the most common class of proxy bug and they ship silently.
@@ -331,7 +329,7 @@ Any non-trivial change to `PUBLIC_PATH_PREFIXES` or the matcher should add a tes
 ### Don't use proxy for
 
 - **Per-resource authorization.** "User A can view workspace X" is row-level authorization that only the DB / RLS / the page's server component can answer. Proxy checks route prefixes, not resource ownership.
-- **Feature flags that affect rendering.** Feature-gate inside the layout or page so React Query / PostHog client SDK is loaded. Proxy can flag-gate *access* (return 403) but not UI.
+- **Feature flags that affect rendering.** Feature-gate inside the layout or page so React Query / PostHog client SDK is loaded. Proxy can flag-gate _access_ (return 403) but not UI.
 - **A/B test assignment that needs analytics identity.** Do it in a Route Handler or client-side so PostHog distinct_id is already known.
 - **Expensive DB queries per request.** Use a layout's prefetch (server-component `await`) instead — that runs once per navigation into the segment, not on every asset request.
 - **Anything that must run only for the HTML request, not RSC.** Next strips flight headers from `request.headers` in proxy (see below); proxy can't distinguish RSC from HTML reliably.
@@ -391,19 +389,19 @@ The codemod renames the file and the exported function. Everything else (matcher
 
 ## 14. Anti-patterns
 
-| Anti-pattern | Fix | See |
-|---|---|---|
-| Adding a public route by editing `config.matcher` to exclude it | Add to `PUBLIC_PATH_PREFIXES` | §3 |
-| Re-creating a Supabase client for a role check instead of reusing the one from `updateSession` | Destructure `supabase` from `updateSession(req)` and reuse | §4 |
-| `/api/*` branch returning a redirect instead of JSON | Branch on `pathname.startsWith('/api/')`, return `NextResponse.json` | §5 |
-| Unanchored matcher exclusions (e.g. bare `/ingest`) | Anchor with `(?:/|$)` | §7 |
-| Using `auth.getUser()` in the proxy hot path (forces a network round-trip on every request) | Rely on `getClaims()` in `updateSession`; `getUser()` is the fallback it already does | §6 |
-| Only checking auth in proxy, assuming Server Components are covered | Verify auth inside each layout prefetch, Route Handler, and Server Function | §10 |
-| Setting `runtime: 'edge'` or `runtime: 'nodejs'` in proxy's config | Remove it — Next.js 16 proxy rejects the option (defaults to Node) | §1 |
-| Module-level caches or singletons in `proxy.ts` | Keep proxy stateless — it may run on a CDN edge | §1 |
-| Swallowing errors and returning `NextResponse.next()` on failure | Fail closed — 500 JSON for `/api/*`, redirect to `/login` for pages | §8 |
-| Adding new auth logic directly in `proxy.ts` instead of inside `updateSession` | If it's about the session, put it in `updateSession`; proxy is for routing decisions | §6 |
-| `console.log` for proxy debugging left in | Remove before merge; `no-console` is enforced and proxy runs on every request | `frontend-conventions` |
+| Anti-pattern                                                                                   | Fix                                                                                   | See                    |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ---------------------- | --- |
+| Adding a public route by editing `config.matcher` to exclude it                                | Add to `PUBLIC_PATH_PREFIXES`                                                         | §3                     |
+| Re-creating a Supabase client for a role check instead of reusing the one from `updateSession` | Destructure `supabase` from `updateSession(req)` and reuse                            | §4                     |
+| `/api/*` branch returning a redirect instead of JSON                                           | Branch on `pathname.startsWith('/api/')`, return `NextResponse.json`                  | §5                     |
+| Unanchored matcher exclusions (e.g. bare `/ingest`)                                            | Anchor with `(?:/                                                                     | $)`                    | §7  |
+| Using `auth.getUser()` in the proxy hot path (forces a network round-trip on every request)    | Rely on `getClaims()` in `updateSession`; `getUser()` is the fallback it already does | §6                     |
+| Only checking auth in proxy, assuming Server Components are covered                            | Verify auth inside each layout prefetch, Route Handler, and Server Function           | §10                    |
+| Setting `runtime: 'edge'` or `runtime: 'nodejs'` in proxy's config                             | Remove it — Next.js 16 proxy rejects the option (defaults to Node)                    | §1                     |
+| Module-level caches or singletons in `proxy.ts`                                                | Keep proxy stateless — it may run on a CDN edge                                       | §1                     |
+| Swallowing errors and returning `NextResponse.next()` on failure                               | Fail closed — 500 JSON for `/api/*`, redirect to `/login` for pages                   | §8                     |
+| Adding new auth logic directly in `proxy.ts` instead of inside `updateSession`                 | If it's about the session, put it in `updateSession`; proxy is for routing decisions  | §6                     |
+| `console.log` for proxy debugging left in                                                      | Remove before merge; `no-console` is enforced and proxy runs on every request         | `frontend-conventions` |
 
 ---
 

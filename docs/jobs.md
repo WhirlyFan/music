@@ -33,7 +33,7 @@ Five moving parts:
 | `hatchet` | `hatchet-dev/hatchet-lite` | Workflow engine. gRPC :7077, admin UI :8080 |
 | `worker` | local backend Dockerfile | Runs `manage.py hatchet_worker`. Subscribes to Hatchet, executes step functions |
 | `backend` | local backend Dockerfile | Triggers workflows via `hatchet.client.admin.run_workflow(...)` |
-| `db` (`hatchetdb`) | postgres:16-alpine | Hatchet's internal state (separate from `appdb`) |
+| `db` (`hatchetdb`) | postgres:17.10-alpine | Hatchet's internal state (separate from `appdb`) |
 | `WorkflowRun` model in `appdb` | — | Lightweight tracking row — owner, status, hatchet_run_id |
 
 ## The `WorkflowRun` tracking model

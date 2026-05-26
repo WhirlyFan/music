@@ -1,4 +1,5 @@
 """ASGI config (ready for future Channels)."""
+
 import os
 
 from django.core.asgi import get_asgi_application

@@ -9,13 +9,13 @@ Two easings, three durations, all in CSS. No `framer-motion` / `motion`. Set up 
 
 ## Tokens (`frontend/src/app/globals.css` `@theme`)
 
-| Token | Value | Use for |
-|---|---|---|
-| `--ease-entrance` | `cubic-bezier(0.23, 1, 0.32, 1)` | Mounts, content reveals, slide+fade |
-| `--ease-interaction` | `cubic-bezier(0.32, 0.72, 0, 1)` | Hover, press, dropdowns, sliding indicators |
-| `--duration-fast` | `160ms` | Hover, focus, button press |
-| `--duration-base` | `220ms` | Tab indicators, dropdowns, popovers, tooltips, Radix `slide*AndFade` |
-| `--duration-content` | `480ms` | Large content reveals — hero banners, full-panel slide-ins (no current consumers; reserved) |
+| Token                | Value                            | Use for                                                                                     |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `--ease-entrance`    | `cubic-bezier(0.23, 1, 0.32, 1)` | Mounts, content reveals, slide+fade                                                         |
+| `--ease-interaction` | `cubic-bezier(0.32, 0.72, 0, 1)` | Hover, press, dropdowns, sliding indicators                                                 |
+| `--duration-fast`    | `160ms`                          | Hover, focus, button press                                                                  |
+| `--duration-base`    | `220ms`                          | Tab indicators, dropdowns, popovers, tooltips, Radix `slide*AndFade`                        |
+| `--duration-content` | `480ms`                          | Large content reveals — hero banners, full-panel slide-ins (no current consumers; reserved) |
 
 `@media (prefers-reduced-motion: reduce)` zeros the duration tokens globally. Anything using `var(--duration-*)` is automatically compliant — don't write per-component reduced-motion blocks.
 
@@ -51,8 +51,8 @@ In `@theme` keyframes, just use `var(--duration-content) var(--ease-entrance)`.
 // Gate the transition until first measurement so it doesn't slide in from (0,0)
 <div
   className={cn(
-    'absolute h-0.5 bg-foreground',
-    width > 0 && 'transition-[width,left] duration-(--duration-base) ease-interaction',
+    'bg-foreground absolute h-0.5',
+    width > 0 && 'ease-interaction transition-[width,left] duration-(--duration-base)',
   )}
   style={{ width, left }}
 />
@@ -68,7 +68,9 @@ Examples in repo: `components/ui/sliding-badge-tabs.tsx`, `WorkspacesPanel.tsx`,
 .toast {
   opacity: 1;
   transition: opacity var(--duration-content) var(--ease-entrance);
-  @starting-style { opacity: 0; }
+  @starting-style {
+    opacity: 0;
+  }
 }
 ```
 
@@ -80,10 +82,11 @@ Next.js 16 has native View Transitions. Enable once:
 
 ```ts
 // next.config.ts
-const nextConfig: NextConfig = { experimental: { viewTransition: true } };
+const nextConfig: NextConfig = { experimental: { viewTransition: true } }
 ```
 
 Common patterns ([guide](https://nextjs.org/docs/app/guides/view-transitions)):
+
 - **Shared morph**: same `name="photo-${id}"` on the source and destination element
 - **Suspense reveal**: `<ViewTransition exit="..."><Skeleton/></ViewTransition>` + `<ViewTransition enter="..." default="none">` on resolved content
 - **Directional slide**: `<Link transitionTypes={['nav-forward']} />` + map types in `<ViewTransition enter={{ 'nav-forward': '...', default: 'none' }} />`. ~60px offset is the sweet spot.
@@ -107,6 +110,7 @@ Don't use `<ViewTransition>` for hover/press feedback — it's for route or stat
 ## When this system isn't enough
 
 The token set is intentionally minimal. If a future feature needs:
+
 - **An "expressive" tier** (slow, attention-grabbing marketing motion) — add `--ease-expressive` + `--duration-expressive` (cf. [IBM Carbon's productive/expressive split](https://carbondesignsystem.com/elements/motion/overview/))
 - **Distance-aware durations** (longer moves use longer durations) — Material 3 / View Transitions handle this; don't try to encode it in tokens
 - **Drag, gesture, or physics-spring** — bring back `motion` (the renamed `framer-motion`) for that feature only, with sign-off

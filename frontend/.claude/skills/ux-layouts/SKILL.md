@@ -11,13 +11,13 @@ Every layout rule below is **mandatory**. Violations cause real breakage on mobi
 
 **Related skills:**
 
-* `frontend-component-design` — Design tokens, CVA variants, `cn()`, `<Card>`, PageShell scaffold
-* `frontend-accessibility` — Touch targets (min 44x44px), viewport zoom, focus management
-* `frontend-composition` — Compound components, `asChild`, polymorphism
+- `frontend-component-design` — Design tokens, CVA variants, `cn()`, `<Card>`, PageShell scaffold
+- `frontend-accessibility` — Touch targets (min 44x44px), viewport zoom, focus management
+- `frontend-composition` — Compound components, `asChild`, polymorphism
 
 **Prerequisite:** All `className` values in this codebase go through `cn()` (see `frontend-component-design`). Examples below show raw strings for clarity, but in practice always wrap with `cn()`.
 
-***
+---
 
 ### 1. Mobile-First Responsive — The Core Rule
 
@@ -42,7 +42,7 @@ Write base styles for mobile (smallest screen). Override upward with breakpoint 
 | `xl:`    | 1280 px   | Desktops                        |
 | `2xl:`   | 1536 px   | Wide monitors                   |
 
-***
+---
 
 ### 2. `useIsMobile()` — Strict Usage Rules
 
@@ -50,12 +50,12 @@ Write base styles for mobile (smallest screen). Override upward with breakpoint 
 
 #### When `useIsMobile()` is FORBIDDEN
 
-* Showing/hiding elements → use `hidden md:block` / `md:hidden`
-* Changing flex direction → use `flex-col md:flex-row`
-* Adjusting grid columns → use responsive `grid-cols-*`
-* Changing widths/padding/margins → use breakpoint prefixes
-* Changing text sizes → use responsive typography classes
-* Swapping variants of the same component → use breakpoint classes or CSS
+- Showing/hiding elements → use `hidden md:block` / `md:hidden`
+- Changing flex direction → use `flex-col md:flex-row`
+- Adjusting grid columns → use responsive `grid-cols-*`
+- Changing widths/padding/margins → use breakpoint prefixes
+- Changing text sizes → use responsive typography classes
+- Swapping variants of the same component → use breakpoint classes or CSS
 
 #### When `useIsMobile()` is ALLOWED (rare)
 
@@ -63,8 +63,8 @@ Only use it when you render **entirely different component trees** where CSS can
 
 ```tsx
 // ALLOWED — completely different components, not just style differences
-const isMobile = useIsMobile();
-return isMobile ? <MobileKanbanView /> : <DesktopTableView />;
+const isMobile = useIsMobile()
+return isMobile ? <MobileKanbanView /> : <DesktopTableView />
 ```
 
 Even in allowed cases, prefer a CSS-based approach first. If the two trees share >50% of their markup, use CSS breakpoints instead.
@@ -73,26 +73,26 @@ Even in allowed cases, prefer a CSS-based approach first. If the two trees share
 
 ```tsx
 // BEFORE — JS layout switching
-const isMobile = useIsMobile();
+const isMobile = useIsMobile()
 return (
-  <div className={isMobile ? "flex-col p-2" : "flex-row p-6"}>
+  <div className={isMobile ? 'flex-col p-2' : 'flex-row p-6'}>
     {!isMobile && <Sidebar />}
     <Main />
   </div>
-);
+)
 
 // AFTER — CSS breakpoints
 return (
-  <div className={cn("flex flex-col md:flex-row p-2 md:p-6")}>
+  <div className={cn('flex flex-col p-2 md:flex-row md:p-6')}>
     <div className="hidden md:block">
       <Sidebar />
     </div>
     <Main />
   </div>
-);
+)
 ```
 
-***
+---
 
 ### 3. Width Rules — No Unguarded Fixed Widths
 
@@ -142,7 +142,7 @@ Small internal elements (icons, avatars, color pickers in popovers) can use fixe
 | Page container          | No — use responsive             |
 | Select trigger          | No — use `w-full` or responsive |
 
-***
+---
 
 ### 4. Grid Layouts — Always Responsive
 
@@ -167,7 +167,9 @@ Color pickers and small menus inside popovers with constrained width are accepta
 ```tsx
 // OK — inside a w-[200px] popover
 <div className="grid grid-cols-6 gap-1">
-  {colors.map(c => <ColorSwatch key={c} />)}
+  {colors.map((c) => (
+    <ColorSwatch key={c} />
+  ))}
 </div>
 ```
 
@@ -175,11 +177,13 @@ Color pickers and small menus inside popovers with constrained width are accepta
 
 ```tsx
 <div className="grid grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] gap-4">
-  {items.map(item => <ItemCard key={item.id} />)}
+  {items.map((item) => (
+    <ItemCard key={item.id} />
+  ))}
 </div>
 ```
 
-***
+---
 
 ### 5. Flexbox Patterns
 
@@ -205,7 +209,7 @@ Color pickers and small menus inside popovers with constrained width are accepta
 
 ```tsx
 <div className="flex items-center justify-between">
-  <h2 className="text-lg md:text-xl font-semibold">Title</h2>
+  <h2 className="text-lg font-semibold md:text-xl">Title</h2>
   <Button variant="outline">Action</Button>
 </div>
 ```
@@ -213,8 +217,8 @@ Color pickers and small menus inside popovers with constrained width are accepta
 #### Responsive direction switch
 
 ```tsx
-<div className="flex flex-col md:flex-row gap-4">
-  <div className="w-full md:w-[30%] shrink-0">
+<div className="flex flex-col gap-4 md:flex-row">
+  <div className="w-full shrink-0 md:w-[30%]">
     <Sidebar />
   </div>
   <div className="w-full md:w-[70%]">
@@ -281,11 +285,9 @@ Without this, flex children default to `min-height: auto` / `min-width: auto` an
 #### Rule: Constrained scrollable layouts — the standard pattern
 
 ```tsx
-<div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-  <div className="flex-1 min-h-0">
-    <ScrollArea className="h-full">
-      {/* Scrollable content */}
-    </ScrollArea>
+<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+  <div className="min-h-0 flex-1">
+    <ScrollArea className="h-full">{/* Scrollable content */}</ScrollArea>
   </div>
 </div>
 ```
@@ -294,9 +296,9 @@ Without this, flex children default to `min-height: auto` / `min-width: auto` an
 
 An `overflow-auto` without a height boundary does nothing — the element just grows. Always pair with one of:
 
-* Explicit height: `h-[400px]`, `max-h-[600px]`
-* Flex constraint: `flex-1 min-h-0`
-* Viewport: `h-screen`, `h-dvh`
+- Explicit height: `h-[400px]`, `max-h-[600px]`
+- Flex constraint: `flex-1 min-h-0`
+- Viewport: `h-screen`, `h-dvh`
 
 ```tsx
 // WRONG — no height constraint, overflow has no effect
@@ -315,7 +317,7 @@ An `overflow-auto` without a height boundary does nothing — the element just g
 </ScrollArea>
 ```
 
-***
+---
 
 ### 6. Responsive Typography — Standard Sizes
 
@@ -338,7 +340,7 @@ Use these responsive patterns for text. Never use `text-2xl`+ without a smaller 
 <h1 className="text-xl md:text-2xl lg:text-3xl font-bold">Dashboard</h1>
 ```
 
-***
+---
 
 ### 7. Responsive Spacing — Standard Scales
 
@@ -369,7 +371,7 @@ Use these responsive patterns for text. Never use `text-2xl`+ without a smaller 
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 ```
 
-***
+---
 
 ### 8. Dialog, Sheet & Modal Sizing
 
@@ -417,7 +419,7 @@ Use these responsive patterns for text. Never use `text-2xl`+ without a smaller 
 <DialogContent className="w-[95vw] md:max-w-[calc(100vw-5rem)] lg:max-w-[calc(100vw-10rem)]">
 ```
 
-***
+---
 
 ### 9. `min-h-[X]` and `min-w-[X]` — Must Be Responsive
 
@@ -433,14 +435,14 @@ Fixed minimum dimensions force excessive scrolling or horizontal overflow on mob
 <div className="min-w-full md:min-w-[800px]">
 ```
 
-***
+---
 
 ### 10. `hidden` — Always Pair with Responsive Restore
 
 Every `hidden` class used for responsive layout **must** have a breakpoint restore (`md:block`, `md:flex`, `lg:block`, etc.) unless the element is:
 
-* **Unconditionally hidden** (e.g., `sr-only` for screen readers)
-* **Controlled by JavaScript** (e.g., `{isOpen && <div>...</div>}` where visibility is toggled by state, not CSS)
+- **Unconditionally hidden** (e.g., `sr-only` for screen readers)
+- **Controlled by JavaScript** (e.g., `{isOpen && <div>...</div>}` where visibility is toggled by state, not CSS)
 
 ```tsx
 // WRONG — hidden forever, probably a bug
@@ -477,7 +479,7 @@ Every `hidden` class used for responsive layout **must** have a breakpoint resto
 <DownloadIcon className="md:hidden h-4 w-4" />
 ```
 
-***
+---
 
 ### 11. Scroll Containers — Use `ScrollArea`
 
@@ -495,7 +497,7 @@ Prefer shadcn `<ScrollArea>` over raw `overflow-auto` for styled, consistent scr
 </ScrollArea>
 ```
 
-***
+---
 
 ### 12. Color & Styling — Follow Design Token Rules
 
@@ -514,7 +516,7 @@ See `frontend-component-design` for the full token reference, `cn()` usage rules
 
 For styled containers, prefer shadcn `<Card>` over manually applying `border`, `rounded`, `shadow`, and `padding` to a raw `<div>`. See the Dual API and Product-Aware Wrappers sections in `frontend-component-design`.
 
-***
+---
 
 ### 13. Common Layout Patterns
 
@@ -523,7 +525,7 @@ For styled containers, prefer shadcn `<Card>` over manually applying `border`, `
 For pages that follow the standard heading + actions + content pattern, use the `PageShell` scaffold (see `frontend-component-design`). For simpler wrappers:
 
 ```tsx
-<div className="pt-4 px-4 md:px-6 lg:px-8">
+<div className="px-4 pt-4 md:px-6 lg:px-8">
   <PageContent />
 </div>
 ```
@@ -531,12 +533,12 @@ For pages that follow the standard heading + actions + content pattern, use the 
 #### Two-panel layout
 
 ```tsx
-<div className="flex flex-col md:flex-row gap-4">
-  <div className="w-full md:w-[30%] shrink-0">
+<div className="flex flex-col gap-4 md:flex-row">
+  <div className="w-full shrink-0 md:w-[30%]">
     <LegendPanel />
   </div>
   <div className="w-full md:w-[70%]">
-    <div className="border border-dashed min-h-[300px] md:min-h-[500px] rounded-md border-border-muted p-4">
+    <div className="border-border-muted min-h-[300px] rounded-md border border-dashed p-4 md:min-h-[500px]">
       <MainContent />
     </div>
   </div>
@@ -546,15 +548,13 @@ For pages that follow the standard heading + actions + content pattern, use the 
 #### Full-height layout with sidebar
 
 ```tsx
-<div className="h-screen w-full flex flex-col overflow-hidden">
-  <div className="flex-1 flex overflow-hidden min-h-0">
+<div className="flex h-screen w-full flex-col overflow-hidden">
+  <div className="flex min-h-0 flex-1 overflow-hidden">
     <div className="hidden md:block">
       <Sidebar />
     </div>
-    <main className="flex-1 min-w-0 overflow-hidden">
-      <div className="w-full h-full overflow-auto pb-16 md:pb-0">
-        {children}
-      </div>
+    <main className="min-w-0 flex-1 overflow-hidden">
+      <div className="h-full w-full overflow-auto pb-16 md:pb-0">{children}</div>
     </main>
   </div>
   <div className="md:hidden">
@@ -567,8 +567,10 @@ For pages that follow the standard heading + actions + content pattern, use the 
 
 ```tsx
 <div className="flex flex-wrap gap-2">
-  {filters.map(filter => (
-    <Badge key={filter.id} variant="outline">{filter.label}</Badge>
+  {filters.map((filter) => (
+    <Badge key={filter.id} variant="outline">
+      {filter.label}
+    </Badge>
   ))}
 </div>
 ```
@@ -577,8 +579,8 @@ For pages that follow the standard heading + actions + content pattern, use the 
 
 ```tsx
 <div className="flex gap-4 overflow-x-auto pb-2">
-  {cards.map(card => (
-    <Card key={card.id} className="flex-shrink-0 w-[280px] sm:w-[320px]">
+  {cards.map((card) => (
+    <Card key={card.id} className="w-[280px] flex-shrink-0 sm:w-[320px]">
       <CardContent>{card.title}</CardContent>
     </Card>
   ))}
@@ -625,7 +627,7 @@ For pages that follow the standard heading + actions + content pattern, use the 
 </div>
 ```
 
-***
+---
 
 ### 14. Complete Anti-Pattern Reference
 
