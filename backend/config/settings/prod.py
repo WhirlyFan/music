@@ -1,7 +1,11 @@
 """Production settings."""
 
 from .base import *  # noqa: F401,F403
-from .base import env
+from .base import INSTALLED_APPS, env
+
+# anymail must be in INSTALLED_APPS for the backend to load.
+# Append in prod only — dev uses Mailpit via plain SMTP backend.
+INSTALLED_APPS = [*INSTALLED_APPS, "anymail"]
 
 DEBUG = False
 
@@ -34,5 +38,21 @@ X_FRAME_OPTIONS = "DENY"
 #   DJANGO_CSRF_TRUSTED_ORIGINS=https://app.example.com,https://www.example.com
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
-# Email: configure via django-anymail provider env vars in real deploys.
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# --- Email (Resend via django-anymail) ---
+#
+# Why Resend specifically: free tier (3K/mo, 100/day, no card) covers
+# template/hobby traffic forever; clean Django integration via Anymail
+# (already a dep). Swapping providers later is a 1-line backend change
+# plus matching ANYMAIL key — see docs/ops/email.md.
+#
+# DEFAULT_FROM_EMAIL must either match a verified sender on Resend OR be
+# a domain you've verified DKIM+SPF for. Defaults to Resend's shared
+# `onboarding@resend.dev` so this template works out-of-box for testing
+# — point your real domain at it once you verify one via the Resend
+# dashboard, then update DEFAULT_FROM_EMAIL via env (no code change).
+EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
+ANYMAIL = {
+    "RESEND_API_KEY": env("RESEND_API_KEY", default=""),
+}
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="onboarding@resend.dev")
+SERVER_EMAIL = DEFAULT_FROM_EMAIL  # for Django's error emails to admins

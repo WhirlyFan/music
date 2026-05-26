@@ -87,73 +87,56 @@ Pick one. All five work fine with `django-anymail` (already in our deps).
 - 5-minute setup (no DNS unless you want a custom domain)
 - Honest pricing if you scale ($0.40/1K vs SendGrid's similar pricing but more friction)
 
-## Production: wiring Resend (recommended)
+## Production: enabling Resend
 
-Free tier: **3,000 emails/month, 100/day, no credit card**. Generous
-enough that a template-scale app will likely never exceed it.
+Resend is **already wired in code** — `prod.py` uses
+`anymail.backends.resend.EmailBackend`, and `render.yaml` declares two
+`sync: false` env var slots ready for you to fill in. Your remaining
+work is two manual steps in the Resend + Render dashboards.
 
-The steps below take ~10 minutes if you skip the custom domain, or
-~30 minutes including DNS verification for prod-grade deliverability.
+Free tier: **3,000 emails/month, 100/day, no credit card**. Plenty for
+template-scale traffic.
 
 ### Step 1: Sign up at [resend.com](https://resend.com)
 
-No card required. Skip the optional onboarding survey if you want.
+No card required. Skip the optional onboarding survey.
 
-### Step 2: Decide on a sender
+### Step 2: Pick a sender
 
-| Option | What you get | When to use |
+The template defaults to Resend's shared `onboarding@resend.dev`, which
+works *immediately* once you have an API key. Switching to your own
+verified domain later is a single env var update — no code change.
+
+| Option | What it costs you | When to switch |
 |---|---|---|
-| **Shared sender** `onboarding@resend.dev` | Works instantly. From: address shows `resend.dev`. | Quick prototype, internal dev, staging |
-| **Your own domain** (e.g. `noreply@yourdomain.com`) | Looks legit, much better deliverability | Production-facing app |
+| **`onboarding@resend.dev`** (default) | 0 setup, From: shows resend.dev | Template / testing / internal demo |
+| **Your verified domain** (`noreply@yourdomain.com`) | ~10 min DNS (DKIM + SPF) | Real users — much better deliverability |
 
-**To use your own domain:**
-1. Resend dashboard → Domains → Add Domain → enter `yourdomain.com`
-2. Resend gives you 3 DNS records (DKIM + SPF + MX-style)
-3. Add them in your DNS provider (Cloudflare, Namecheap, Route 53, etc.)
-4. Resend dashboard verifies within ~5 minutes (often instant)
+To verify a domain later:
+1. Resend dashboard → Domains → Add Domain
+2. Add the 3 DNS records Resend gives you (Cloudflare / your provider)
+3. Set `DEFAULT_FROM_EMAIL=noreply@yourdomain.com` in the Render dashboard
+4. Done — no code redeploy needed
 
-### Step 3: Get an API key
+### Step 3: Create an API key
 
 Resend dashboard → API Keys → "Create API Key"
 - Name it (e.g. `react-django-template-prod`)
 - Permission: **Sending access** (don't grant full access)
-- Copy the key — it starts with `re_`. You can't see it again.
+- Copy the key — it starts with `re_`. You can't view it again.
 
-### Step 4: Update `prod.py`
+### Step 4: Paste it into Render
 
-```python
-# backend/config/settings/prod.py
-from .base import *  # noqa: F401,F403
-from .base import env
+Render dashboard → **backend** service → **Environment** → find the existing slots:
 
-# ...existing prod settings...
-
-# Replace the default SMTP backend with Anymail's Resend backend.
-EMAIL_BACKEND = "anymail.backends.resend.EmailBackend"
-
-ANYMAIL = {
-    "RESEND_API_KEY": env("RESEND_API_KEY"),
-}
-
-# This is the From: address allauth uses for password reset, email
-# verification, etc. Must match a verified sender on Resend OR be a
-# domain you've verified DKIM/SPF for above.
-DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="onboarding@resend.dev")
-SERVER_EMAIL = DEFAULT_FROM_EMAIL  # used by Django for error emails to admins
-```
-
-### Step 5: Add the env vars to Render
-
-Render dashboard → backend service → Environment → Add Environment Variable:
-
-| Key | Value | Notes |
+| Key | Paste here | Notes |
 |---|---|---|
-| `RESEND_API_KEY` | the `re_...` key from step 3 | **Mark as Secret.** Never paste API keys into `render.yaml`. |
-| `DEFAULT_FROM_EMAIL` | `noreply@yourdomain.com` or `onboarding@resend.dev` | Match whatever you set up in step 2. |
+| `RESEND_API_KEY` | the `re_...` key from step 3 | Already exists as `sync: false`. Render encrypts it. |
+| `DEFAULT_FROM_EMAIL` | `onboarding@resend.dev` (or your verified address) | Optional override — defaults to the shared sender |
 
-Save → Render redeploys the backend with the new env vars.
+Save → Render redeploys the backend automatically.
 
-### Step 6: Verify
+### Step 5: Verify
 
 Trigger a password reset against the real prod URL:
 
@@ -175,7 +158,7 @@ status `delivered` (or `bounced`, `complained`, etc. if there's a problem).
 Check your inbox. Click the link. Confirm it lands on the frontend's
 `/account/password/reset/key/<key>` route and works end-to-end.
 
-### Step 7: confirm `FRONTEND_ORIGIN` is set
+### Step 6: confirm `FRONTEND_ORIGIN` is set
 
 The reset link URL is built from `HEADLESS_FRONTEND_URLS` in
 `config/settings/base.py`, which is already env-driven via `FRONTEND_ORIGIN`.

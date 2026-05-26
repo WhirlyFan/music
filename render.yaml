@@ -142,6 +142,19 @@ services:
       - key: WEB_CONCURRENCY
         value: "2"
 
+      # ── Email (Resend via Anymail) ──────────────────────────────────────
+      # Paste your Resend API key into the dashboard — never into this file.
+      # Sign up at https://resend.com (free tier: 3K/mo, no card required).
+      # Without a key, allauth's password-reset + signup-verification flows
+      # silently fail; with one, they deliver through Resend.
+      - key: RESEND_API_KEY
+        sync: false                # dashboard-managed; encrypted at rest
+      # Override to your own verified-domain sender (e.g. noreply@yourdomain.com)
+      # when you've verified DKIM/SPF in Resend. Until then, the default
+      # `onboarding@resend.dev` in settings/prod.py works for testing.
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.
       # Left unset here so the file doesn't leak secrets if forked.
