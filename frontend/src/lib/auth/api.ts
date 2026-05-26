@@ -80,6 +80,29 @@ export const auth = {
 
   logout: () => call('DELETE', '/auth/session'),
 
+  // --- Password reset (two-step) ---
+  /**
+   * Step 1: user submits their email; allauth sends a reset link if the
+   * account exists. Always returns 200 — we don't leak which emails are
+   * registered. The link lands at HEADLESS_FRONTEND_URLS.account_reset_password_from_key,
+   * which is /account/password/reset/key/<key> per our settings.
+   */
+  requestPasswordReset: (email: string) => call('POST', '/auth/password/request', { email }),
+
+  /**
+   * Step 2: GET to validate the key (used by the reset page to fail-fast
+   * if the link is expired/invalid before the user types a new password).
+   */
+  getPasswordResetInfo: (key: string) =>
+    call('GET', `/auth/password/reset?key=${encodeURIComponent(key)}`),
+
+  /**
+   * Step 3: submit the new password with the key. allauth verifies the
+   * key, applies the password validators (incl. HIBP), and logs the user in.
+   */
+  completePasswordReset: (key: string, password: string) =>
+    call('POST', '/auth/password/reset', { key, password }),
+
   // --- MFA challenge step (post-password) ---
   /** Submit a TOTP/recovery code mid-login to finish authenticating. */
   mfaAuthenticate: (code: string) => call('POST', '/auth/2fa/authenticate', { code }),

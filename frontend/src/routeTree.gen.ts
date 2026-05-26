@@ -15,9 +15,11 @@ import { Route as NotesRouteImport } from './routes/notes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as Account2faRouteImport } from './routes/account/2fa'
+import { Route as AccountPasswordForgotRouteImport } from './routes/account/password/forgot'
 import { Route as Account2faWebauthnRouteImport } from './routes/account/2fa/webauthn'
 import { Route as Account2faTotpRouteImport } from './routes/account/2fa/totp'
 import { Route as Account2faRecoveryCodesRouteImport } from './routes/account/2fa/recovery-codes'
+import { Route as AccountPasswordResetKeyKeyRouteImport } from './routes/account/password/reset/key/$key'
 
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
@@ -49,6 +51,11 @@ const Account2faRoute = Account2faRouteImport.update({
   path: '/account/2fa',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountPasswordForgotRoute = AccountPasswordForgotRouteImport.update({
+  id: '/account/password/forgot',
+  path: '/account/password/forgot',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Account2faWebauthnRoute = Account2faWebauthnRouteImport.update({
   id: '/webauthn',
   path: '/webauthn',
@@ -64,6 +71,12 @@ const Account2faRecoveryCodesRoute = Account2faRecoveryCodesRouteImport.update({
   path: '/recovery-codes',
   getParentRoute: () => Account2faRoute,
 } as any)
+const AccountPasswordResetKeyKeyRoute =
+  AccountPasswordResetKeyKeyRouteImport.update({
+    id: '/account/password/reset/key/$key',
+    path: '/account/password/reset/key/$key',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +88,8 @@ export interface FileRoutesByFullPath {
   '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
   '/account/2fa/totp': typeof Account2faTotpRoute
   '/account/2fa/webauthn': typeof Account2faWebauthnRoute
+  '/account/password/forgot': typeof AccountPasswordForgotRoute
+  '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,6 +101,8 @@ export interface FileRoutesByTo {
   '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
   '/account/2fa/totp': typeof Account2faTotpRoute
   '/account/2fa/webauthn': typeof Account2faWebauthnRoute
+  '/account/password/forgot': typeof AccountPasswordForgotRoute
+  '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,6 +115,8 @@ export interface FileRoutesById {
   '/account/2fa/recovery-codes': typeof Account2faRecoveryCodesRoute
   '/account/2fa/totp': typeof Account2faTotpRoute
   '/account/2fa/webauthn': typeof Account2faWebauthnRoute
+  '/account/password/forgot': typeof AccountPasswordForgotRoute
+  '/account/password/reset/key/$key': typeof AccountPasswordResetKeyKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,6 +130,8 @@ export interface FileRouteTypes {
     | '/account/2fa/recovery-codes'
     | '/account/2fa/totp'
     | '/account/2fa/webauthn'
+    | '/account/password/forgot'
+    | '/account/password/reset/key/$key'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -122,6 +143,8 @@ export interface FileRouteTypes {
     | '/account/2fa/recovery-codes'
     | '/account/2fa/totp'
     | '/account/2fa/webauthn'
+    | '/account/password/forgot'
+    | '/account/password/reset/key/$key'
   id:
     | '__root__'
     | '/'
@@ -133,6 +156,8 @@ export interface FileRouteTypes {
     | '/account/2fa/recovery-codes'
     | '/account/2fa/totp'
     | '/account/2fa/webauthn'
+    | '/account/password/forgot'
+    | '/account/password/reset/key/$key'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -142,6 +167,8 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   Account2faRoute: typeof Account2faRouteWithChildren
+  AccountPasswordForgotRoute: typeof AccountPasswordForgotRoute
+  AccountPasswordResetKeyKeyRoute: typeof AccountPasswordResetKeyKeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -188,6 +215,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Account2faRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account/password/forgot': {
+      id: '/account/password/forgot'
+      path: '/account/password/forgot'
+      fullPath: '/account/password/forgot'
+      preLoaderRoute: typeof AccountPasswordForgotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account/2fa/webauthn': {
       id: '/account/2fa/webauthn'
       path: '/webauthn'
@@ -208,6 +242,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/account/2fa/recovery-codes'
       preLoaderRoute: typeof Account2faRecoveryCodesRouteImport
       parentRoute: typeof Account2faRoute
+    }
+    '/account/password/reset/key/$key': {
+      id: '/account/password/reset/key/$key'
+      path: '/account/password/reset/key/$key'
+      fullPath: '/account/password/reset/key/$key'
+      preLoaderRoute: typeof AccountPasswordResetKeyKeyRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -235,6 +276,8 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   Account2faRoute: Account2faRouteWithChildren,
+  AccountPasswordForgotRoute: AccountPasswordForgotRoute,
+  AccountPasswordResetKeyKeyRoute: AccountPasswordResetKeyKeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

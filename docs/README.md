@@ -34,6 +34,7 @@ snapshot*; everything in this folder is the *current truth*.
 | [frontend.md](frontend.md) | Vite + TanStack stack, theming, auth integration, type codegen |
 | [ops.md](ops.md) | Compose, env vars, migrations, seed, health checks |
 | [ops/deploy-render.md](ops/deploy-render.md) | First production deploy on Render (Phase A) |
+| [ops/email.md](ops/email.md) | Transactional email — providers, wiring, deliverability |
 
 ## Architecture Decision Records (ADRs)
 

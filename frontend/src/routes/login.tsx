@@ -1,5 +1,6 @@
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { z } from 'zod'
 
@@ -59,6 +60,20 @@ function LoginPage() {
   return (
     <div className="mx-auto max-w-sm space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
+
+      {/* Form-level error banner — assertive aria-live so screen readers
+          interrupt with the message. Inline field errors below still
+          appear under the specific input that caused the failure. */}
+      {summary ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border p-3 text-sm"
+          id="login-form-error"
+        >
+          {summary}
+        </div>
+      ) : null}
 
       <form
         onSubmit={(e) => {
@@ -125,17 +140,38 @@ function LoginPage() {
           }}
         </form.Field>
 
+        <div className="flex items-center justify-end">
+          <Link
+            to="/account/password/forgot"
+            className="text-muted-foreground hover:text-foreground text-xs hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </div>
+
         <Button
           type="submit"
           aria-busy={login.isPending || undefined}
           aria-disabled={login.isPending || undefined}
           className={`w-full ${login.isPending ? 'pointer-events-none opacity-60' : ''}`}
         >
-          {login.isPending ? 'Logging in…' : 'Log in'}
+          {login.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              Logging in…
+            </>
+          ) : (
+            'Log in'
+          )}
         </Button>
-
-        <FormError id="login-form-error" message={summary} />
       </form>
+
+      <p className="text-muted-foreground text-center text-sm">
+        Don&apos;t have an account?{' '}
+        <Link to="/signup" className="text-primary hover:underline">
+          Sign up
+        </Link>
+      </p>
     </div>
   )
 }
@@ -211,7 +247,14 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
           aria-disabled={mfa.isPending || undefined}
           className={`w-full ${mfa.isPending ? 'pointer-events-none opacity-60' : ''}`}
         >
-          {mfa.isPending ? 'Verifying…' : 'Verify'}
+          {mfa.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              Verifying…
+            </>
+          ) : (
+            'Verify'
+          )}
         </Button>
 
         <Button

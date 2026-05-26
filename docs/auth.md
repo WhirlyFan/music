@@ -172,8 +172,20 @@ SAML adds cleanly later:
 | Staff user redirected to `/account/2fa` and back | Enrollment route was gated by mistake | Verify `_EXEMPT_PREFIXES` in `apps/core/middleware.py` |
 | `axes` locks out a real user during dev | Hit 5 failed logins | `python manage.py axes_reset` |
 
+## Password reset
+
+Two-step flow wired today:
+
+1. **Request** — `POST /_allauth/browser/v1/auth/password/request` with `{email}`. Always returns 200 (no signal about whether the email exists). Triggers an email with a reset link.
+2. **Complete** — link lands at `/account/password/reset/key/<key>` (set by `HEADLESS_FRONTEND_URLS.account_reset_password_from_key`). The page POSTs `{key, password}` to `/_allauth/browser/v1/auth/password/reset`, which validates the key, applies password validators (including HIBP), and logs the user in.
+
+Frontend routes: `routes/account/password/forgot.tsx`, `routes/account/password/reset/key/$key.tsx`. Hooks: `useRequestPasswordReset`, `useCompletePasswordReset`. "Forgot password?" link on `/login`.
+
+**Heads-up:** the *delivery* of the reset email requires a real email provider in production. See [ops/email.md](ops/email.md) for setup. Locally, emails print to `docker compose logs backend`.
+
 ## See also
 
+- [ops/email.md](ops/email.md) — wiring a transactional email provider (Resend / Postmark / SES)
 - [decisions/0003-allauth-headless.md](decisions/0003-allauth-headless.md) — why allauth over djoser
 - [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional-staff-required.md) — the MFA policy choice
 - [permissions.md](permissions.md) — is_staff vs is_superuser
