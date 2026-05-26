@@ -105,6 +105,18 @@ wheels = [
 ]
 
 [[package]]
+name = "anyio"
+version = "4.13.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/14/2c5dd9f512b66549ae92767a9c7b330ae88e1932ca57876909410251fe13/anyio-4.13.0.tar.gz", hash = "sha256:334b70e641fd2221c1505b3890c69882fe4a2df910cba14d97019b90b24439dc", size = 231622, upload-time = "2026-03-24T12:59:09.671Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/42/e921fccf5015463e32a3cf6ee7f980a6ed0f395ceeaa45060b61d86486c2/anyio-4.13.0-py3-none-any.whl", hash = "sha256:08b310f9e24a9594186fd75b4f73f4a4152069e3853f1ed8bfbf58369f4ad708", size = 114353, upload-time = "2026-03-24T12:59:08.246Z" },
+]
+
+[[package]]
 name = "asgiref"
 version = "3.11.1"
 source = { registry = "https://pypi.org/simple" }
@@ -187,6 +199,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "hatchet-sdk" },
     { name = "psycopg", extra = ["binary"] },
+    { name = "pwned-passwords-django" },
     { name = "sentry-sdk", extra = ["django"] },
     { name = "whitenoise" },
 ]
@@ -226,6 +239,7 @@ requires-dist = [
     { name = "gunicorn", specifier = ">=23.0" },
     { name = "hatchet-sdk", specifier = ">=0.40" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pwned-passwords-django", specifier = ">=5.2.0" },
     { name = "sentry-sdk", extras = ["django"], specifier = ">=2.0" },
     { name = "whitenoise", specifier = ">=6.7" },
 ]
@@ -949,6 +963,15 @@ wheels = [
 ]
 
 [[package]]
+name = "h11"
+version = "0.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz", hash = "sha256:4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1", size = 101250, upload-time = "2025-04-24T03:35:25.427Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl", hash = "sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86", size = 37515, upload-time = "2025-04-24T03:35:24.344Z" },
+]
+
+[[package]]
 name = "hatchet-sdk"
 version = "1.33.5"
 source = { registry = "https://pypi.org/simple" }
@@ -968,6 +991,34 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e6/3b/75c527bbe9ddcca0991b5f48c7abedebfb2418df0b0f5b054519af05ac54/hatchet_sdk-1.33.5.tar.gz", hash = "sha256:b53d49514bf9d49ca727e1610776cdf86a7c3e9d05b519b0218cd2bb8c648551", size = 4555, upload-time = "2026-05-12T15:12:26.926Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/2c/cc26b351842de55441e113a6e622f749cbcd1329ceff1cd3de0650f86904/hatchet_sdk-1.33.5-py3-none-any.whl", hash = "sha256:7cde10c1d475219fe8a91e68a639c3c5cd3c70df53bbcc24a9e4789246800f51", size = 622032, upload-time = "2026-05-12T15:12:28.83Z" },
+]
+
+[[package]]
+name = "httpcore"
+version = "1.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "h11" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz", hash = "sha256:6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8", size = 85484, upload-time = "2025-04-24T22:06:22.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl", hash = "sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55", size = 78784, upload-time = "2025-04-24T22:06:20.566Z" },
+]
+
+[[package]]
+name = "httpx"
+version = "0.28.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "certifi" },
+    { name = "httpcore" },
+    { name = "idna" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz", hash = "sha256:75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc", size = 141406, upload-time = "2024-12-06T15:37:23.222Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl", hash = "sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad", size = 73517, upload-time = "2024-12-06T15:37:21.509Z" },
 ]
 
 [[package]]
@@ -1379,6 +1430,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4e/2c/c1547871be3790676e8868b38655496422f94f0978dfb66b74bdba2f1676/psycopg_binary-3.3.4-cp314-cp314-musllinux_1_2_riscv64.whl", hash = "sha256:6b9016b1714da4dd5ecaaa75b82098aa5a0b87854ce9b092e21c27c4ae23e014", size = 3946204, upload-time = "2026-05-01T23:31:39.626Z" },
     { url = "https://files.pythonhosted.org/packages/c4/b1/f6670f00fa7ea601584623f6c11602ab92117d83eaff885e0210f6de7418/psycopg_binary-3.3.4-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:47c656a8a7ba6eb0cff1801a4caaa9c8bdc12d03080e273aff1c8ac39971a77e", size = 4255811, upload-time = "2026-05-01T23:31:44.986Z" },
     { url = "https://files.pythonhosted.org/packages/eb/e6/5fff07a70d1f945ed90ae131c3bd76cab32beff7c58c6db15ad5820b6d1f/psycopg_binary-3.3.4-cp314-cp314-win_amd64.whl", hash = "sha256:c37e024c07308cd06cf3ec51bfd0e7f6157585a4d84d1bce4a7f5f7913719bf8", size = 3666849, upload-time = "2026-05-01T23:31:51.165Z" },
+]
+
+[[package]]
+name = "pwned-passwords-django"
+version = "5.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ae/f5/242f5ceb391832d284c815135f99872ad2f109aaa8b398bcf9cbe3665bd6/pwned_passwords_django-5.2.0.tar.gz", hash = "sha256:dfa7c4fc8879396b8304759260c5fb8b6055c07ed9241010e5bc319f195d5197", size = 43089, upload-time = "2025-04-06T07:58:17.973Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/9b/dbbeb3e72501190584847e5d6b119b5e4f1e15b11a804c4e2ccbca438f2f/pwned_passwords_django-5.2.0-py3-none-any.whl", hash = "sha256:a8666fb427479796ee9940e92df834a188ca7246905e4b9dc7be6248415ff5df", size = 11712, upload-time = "2025-04-06T07:58:16.599Z" },
 ]
 
 [[package]]

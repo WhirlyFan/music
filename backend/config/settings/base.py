@@ -124,18 +124,39 @@ AUTHENTICATION_BACKENDS = [
 
 SITE_ID = 1
 
+# Password policy follows NIST SP 800-63B Rev. 4 (2025):
+#   - Length over complexity (min 12 chars — no special-char / mixed-case rules)
+#   - Screen against known-breached passwords via haveibeenpwned
+#   - No forced rotation
+#
+# `pwned-passwords-django` uses k-anonymity: only the first 5 chars of the
+# password's SHA-1 hash leave the server. Network call adds ~50-200ms to
+# signup/password-change — acceptable for those flows. Falls open on
+# network failure (don't lock users out if HIBP is down).
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": 12},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "pwned_passwords_django.validators.PwnedPasswordsValidator"},
 ]
 
 # --- allauth (headless mode) ---
+# Sign in with either email or username. allauth detects which one based on
+# whether the input looks like an email; both flows hit the same endpoint.
+# REQUIRES django-allauth >= 65.16 (April 2026) — earlier versions had a
+# 400 invalid_login bug when both methods were enabled in headless mode.
 ACCOUNT_EMAIL_VERIFICATION = "optional"
-ACCOUNT_LOGIN_METHODS = {"email"}
-ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]
+ACCOUNT_LOGIN_METHODS = {"email", "username"}
+# Signup collects username + email + password (+ confirm). The `*` suffix
+# marks required fields.
+ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
+# Case-insensitive uniqueness for usernames: 'Foo' collides with 'foo'.
+ACCOUNT_PRESERVE_USERNAME_CASING = False
 
 HEADLESS_ONLY = True
 HEADLESS_FRONTEND_URLS = {
@@ -158,6 +179,19 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
+    # Rate limiting. AnonRateThrottle keys on IP; UserRateThrottle keys on user ID.
+    # Override per-view with `throttle_classes = [...]` when an endpoint is more
+    # sensitive (login, signup, password reset → tighter; bulk read → looser).
+    # Backed by Django's default cache (LocMem in dev; Redis once we add it).
+    # NOTE per docs: misspelling these keys silently disables throttling.
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",
+        "user": "1000/hour",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -194,6 +228,49 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# --- Logging ---
+# Single stdout sink with a CorrelationId filter from django-guid. Every log
+# line carries the request id so a single user request can be traced across
+# Django, gunicorn access logs, and the worker. In prod, container runtime
+# (docker/k8s/Render/Fly) captures stdout — no file rotation in-process.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "correlation_id": {
+            "()": "django_guid.log_filters.CorrelationId",
+        },
+    },
+    "formatters": {
+        "standard": {
+            "format": "%(asctime)s %(levelname)-5s [%(correlation_id)s] %(name)s: %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "filters": ["correlation_id"],
+            "formatter": "standard",
+        },
+    },
+    "loggers": {
+        # Root — catch-all
+        "": {
+            "handlers": ["console"],
+            "level": env("DJANGO_LOG_LEVEL", default="INFO"),
+        },
+        # Django itself is chatty at DEBUG; keep at INFO unless overridden
+        "django": {
+            "handlers": ["console"],
+            "level": env("DJANGO_LOG_LEVEL", default="INFO"),
+            "propagate": False,
+        },
+        # Quiet noisy 3rd parties unless explicitly turned up
+        "django.utils.autoreload": {"level": "INFO"},
+        "django_guid": {"level": "WARNING"},
+    },
+}
 
 # --- Defaults ---
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

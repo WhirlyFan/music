@@ -2,6 +2,15 @@
 # `react-django-template_*` regardless of which directory the file lives in.
 name: react-django-template
 
+# Shared logging config — applied to every long-running service so logs
+# never fill the host disk. The container runtime captures stdout/stderr;
+# 10 MB × 3 files per service is plenty for local + small prod.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
@@ -18,9 +27,15 @@ services:
       - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
+      # Postgres can be slow to come up on first boot (running init.sql,
+      # then user-creation, then becoming ready). Skip the healthcheck
+      # retry counter during this warm-up so the container isn't marked
+      # unhealthy before it finishes starting.
+      start_period: 30s
+    logging: *default-logging
 
   hatchet:
     image: ghcr.io/hatchet-dev/hatchet/hatchet-lite:latest
@@ -45,6 +60,7 @@ services:
       - "7077:7077"  # gRPC
     volumes:
       - hatchet_config:/config
+    logging: *default-logging
 
   backend:
     build:
@@ -74,6 +90,7 @@ services:
     ports:
       - "8000:8000"
     command: python manage.py runserver 0.0.0.0:8000
+    logging: *default-logging
 
   worker:
     build:
@@ -97,6 +114,7 @@ services:
       - ./backend:/app
       - /app/.venv
     command: python manage.py hatchet_worker
+    logging: *default-logging
 
   frontend:
     build:
@@ -105,13 +123,14 @@ services:
       target: dev   # multi-stage Dockerfile defaults to the last stage (prod/nginx) without this
     restart: unless-stopped
     environment:
-      VITE_API_BASE: ${VITE_API_BASE:-/api}
+      VITE_API_BASE: ${VITE_API_BASE:-/api/v1}
     volumes:
       - ./frontend:/app
       - /app/node_modules
     ports:
       - "5173:5173"
     command: pnpm dev --host
+    logging: *default-logging
 
   nginx:
     image: nginx:alpine
@@ -123,6 +142,7 @@ services:
       - ./nginx/nginx.dev.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "80:80"
+    logging: *default-logging
 
 volumes:
   postgres_data:

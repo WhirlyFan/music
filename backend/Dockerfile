@@ -46,9 +46,37 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=config.settings.prod
 
+# --- Collect static files into STATIC_ROOT so WhiteNoise can serve them.
+#     Runs at build time (Django admin assets, DRF browsable API CSS, etc.).
+#     Uses dev settings just for this — collectstatic only reads STATIC_*
+#     settings and never touches the DB, but prod settings demand a bunch
+#     of secrets we don't have at build time.
+USER root
+RUN DJANGO_SETTINGS_MODULE=config.settings.dev \
+    DJANGO_DEBUG=false \
+    DJANGO_SECRET_KEY=collectstatic-build-time-only \
+    DATABASE_URL=postgres://collectstatic@invalid/db \
+    /app/.venv/bin/python manage.py collectstatic --noinput && \
+    chown -R app:app /app/staticfiles
+
 USER app
 EXPOSE 8000
 
 # Migrate-then-exec wrapper. Runs on every container start; idempotent.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+
+# Gunicorn flags chosen to match the standard production checklist:
+#   --workers $WEB_CONCURRENCY    Env-overridable worker count.
+#   --max-requests / --jitter     Recycle workers periodically so any slow
+#                                 memory creep self-heals.
+#   --timeout 30                  Kill long-running workers before they pile up.
+#   --access-logfile - / --error-logfile -  stdout; orchestrator captures it.
+ENV WEB_CONCURRENCY=3
+CMD ["sh", "-c", "gunicorn config.wsgi:application \
+    --bind 0.0.0.0:8000 \
+    --workers ${WEB_CONCURRENCY} \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
+    --timeout 30 \
+    --access-logfile - \
+    --error-logfile -"]

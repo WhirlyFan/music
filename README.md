@@ -45,7 +45,7 @@ make up
 open http://localhost                     # routed through nginx → frontend + backend
 ```
 
-**Default dev login:** `dev@example.com` / `password` (seeded automatically).
+**Default dev login:** `dev@example.com` (or username `dev`) / `password1234` (seeded automatically).
 
 ### Deploying to production
 
