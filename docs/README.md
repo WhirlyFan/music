@@ -9,14 +9,14 @@ PRs, versioned with git. These pages are the source of truth.
 |---|---|---|
 | The set of services in compose | `architecture.md` | `ops.md` if env vars change |
 | Anything about nginx (proxy, routes, role) | `architecture/nginx.md` | `architecture.md` topology section |
-| Login flow, sessions, CSRF, social, MFA | `auth.md` | new ADR if it's an architectural shift |
+| Login flow, sessions, CSRF, social, MFA | `auth.md` | revise the Auth section of `decisions.md` if it's an architectural shift |
 | RLS policies, two-role Postgres setup | `rls.md` | tests in `apps/notes/tests/test_rls.py` |
 | Who can do what (staff vs superuser vs groups) | `permissions.md` | |
 | Hatchet workflow topology, DAG patterns | `jobs.md` | |
 | TanStack stack, theming, FE auth wrapper | `frontend.md` | |
 | Compose, env vars, migrations, seed | `ops.md` | `architecture.md` if a service is added |
-| Render / GCP deploy mechanics | `ops/deploy-*.md` | new ADR if changing target |
-| A **one-way-door choice** (rename, swap, drop) | new `decisions/000N-*.md` | the affected topic doc |
+| Render / GCP deploy mechanics | `ops/deploy-*.md` | revise the Deploy section of `decisions.md` if changing target |
+| A **one-way-door choice** (rename, swap, drop) | a new section (or revision) in [`decisions.md`](decisions.md) | the affected topic doc |
 
 ## Topic docs
 
@@ -34,22 +34,23 @@ PRs, versioned with git. These pages are the source of truth.
 | [ops/email.md](ops/email.md) | Transactional email — providers, wiring, deliverability |
 | [ops/storage.md](ops/storage.md) | File storage — deferred design, R2 → GCS migration story |
 
-## Architecture Decision Records (ADRs)
+## Foundational decisions
 
-Short, immutable records of one-way-door choices. To revisit a decision, write
-a **new** ADR that *supersedes* the old one — never edit accepted ADRs.
+The load-bearing choices — RLS, auth, jobs, routing, deploy, workflow — live in
+one cohesive doc rather than a chronological ADR log: [decisions.md](decisions.md).
+Revise it in place when a decision changes, keeping a short note of what we tried
+and why it failed (the failure is part of the rationale).
 
-| ID | Title |
+| Topic | Decision |
 |---|---|
-| [0001](decisions/0001-rls-day-one.md) | Row-Level Security enforced at the database layer, day one |
-| [0002](decisions/0002-hatchet-lite-over-celery.md) | Hatchet Lite as the workflow engine, over Celery / Procrastinate |
-| [0003](decisions/0003-allauth-headless.md) | django-allauth headless mode for auth (over djoser / dj-rest-auth) |
-| [0004](decisions/0004-tanstack-router.md) | TanStack Router over React Router |
-| [0005](decisions/0005-render-first-deploy.md) | Deploy to Render first; GCP/k8s when the project justifies it |
-| [0006](decisions/0006-mfa-optional-staff-required.md) | 2FA optional for users, mandatory for `/admin/` access |
-| [0007](decisions/0007-dev-branch-staging.md) | ~~`dev` branch as integration target~~ — superseded by 0009 |
-| [0008](decisions/0008-email-verification-optional-plus-gate.md) | Email verification: `optional` allauth mode + middleware/route gate |
-| [0009](decisions/0009-trunk-based-main-only.md) | Trunk-based flow: branch off `main`, no long-lived `dev` (supersedes 0007) |
+| [Data layer](decisions.md#data-layer--row-level-security-day-one) | Row-Level Security enforced at the DB, day one |
+| [Auth](decisions.md#auth--django-allauth-headless) | allauth headless; MFA optional (required for `/admin/`); email verification `optional` + gate |
+| [Background jobs](decisions.md#background-jobs--hatchet-lite) | Hatchet Lite over Celery / Procrastinate |
+| [Frontend routing](decisions.md#frontend-routing--tanstack-router) | TanStack Router over React Router |
+| [Deploy](decisions.md#deploy--render-first-gcp-when-its-justified) | Render first; GCP/k8s when the project justifies it |
+| [Workflow](decisions.md#workflow--trunk-based-main-only) | Trunk-based, `main` only (no long-lived `dev`) |
+| [Platform versions](decisions.md#platform-versions--track-latest-stable-pin-django-to-its-lts) | Latest stable everywhere; Django pinned to its LTS |
+| [Security headers](decisions.md#security-headers--csp--permissions-policy-report-only) | CSP + Permissions-Policy in prod, report-only |
 
 ## House rules
 

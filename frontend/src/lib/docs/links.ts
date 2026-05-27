@@ -5,7 +5,7 @@
  *   - A passthrough for anything we don't recognize
  *
  * Markdown docs link to each other with relative paths like
- * `[auth.md](auth.md)` or `[ADR 0008](decisions/0008-...md)`. Naive
+ * `[auth.md](auth.md)` or `[decisions.md](decisions.md)`. Naive
  * rendering would produce broken `/auth.md` requests; we resolve those
  * relative to the *current* doc's directory and prepend `/docs/`.
  */

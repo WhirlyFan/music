@@ -32,7 +32,7 @@ frontend.
 | Frontend build | **Vite + pnpm** | Fast HMR, lockfile-driven, modern TS |
 | Frontend UI | **shadcn/ui + Tailwind v4** | Copy-paste components we own |
 | Frontend data | **TanStack Query** | Caching/refetching layer |
-| Frontend routing | **TanStack Router** | File-based, typed routes ([decision 0004](decisions/0004-tanstack-router.md)) |
+| Frontend routing | **TanStack Router** | File-based, typed routes ([decision](decisions.md#frontend-routing--tanstack-router)) |
 | Frontend forms | **TanStack Form + Zod** | Type-safe, schema-driven |
 | Frontend tables | **TanStack Table** | Headless table primitives |
 | FE API client | **openapi-typescript** | Reads OpenAPI → TS types; `fetch` wrapper, no runtime client |
@@ -181,5 +181,5 @@ rewrite — because the foundations were laid day one.
 
 ## Out-of-scope
 
-- **SAML / SCIM** — see [auth.md](auth.md) and ADR 0005. Defer until a B2B customer asks.
+- **SAML / SCIM** — see [auth.md](auth.md) and [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin) (SAML compatibility). Defer until a B2B customer asks.
 - **GCP / k8s** — see [ops/deploy-render.md](ops/deploy-render.md) "Migration notes." Same images, different orchestration.

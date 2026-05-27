@@ -6,8 +6,8 @@ import { getDoc } from '@/lib/docs/registry'
 
 /**
  * `/docs/<path...>` — splat route. The `_splat` param holds anything after
- * `/docs/`, so `/docs/auth.md` → `auth.md`, `/docs/decisions/0008-x.md` →
- * `decisions/0008-x.md`. Looks up the markdown in the build-time-bundled
+ * `/docs/`, so `/docs/auth.md` → `auth.md`, `/docs/architecture/nginx.md` →
+ * `architecture/nginx.md`. Looks up the markdown in the build-time-bundled
  * registry and renders it.
  */
 export const Route = createFileRoute('/docs/$')({

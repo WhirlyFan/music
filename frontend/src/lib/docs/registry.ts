@@ -28,7 +28,7 @@ export const docs: Record<string, string> = Object.fromEntries(
 )
 
 export type DocEntry = {
-  /** Path relative to `docs/`, e.g. `auth.md`, `decisions/0008-...md`. */
+  /** Path relative to `docs/`, e.g. `auth.md`, `decisions.md`. */
   path: string
   /** First `# Heading` of the file, or the filename as a fallback. */
   title: string
@@ -60,7 +60,7 @@ export type DocGroup = {
 
 /**
  * Group the doc list into sidebar sections. Top-level files first, then
- * one section per subdirectory (architecture/, ops/, decisions/, …).
+ * one section per subdirectory (architecture/, ops/, …).
  *
  * `README.md` is special-cased to be the first entry under "Getting started"
  * so the docs landing page is obvious.
@@ -95,9 +95,8 @@ export function groupDocs(entries: DocEntry[]): DocGroup[] {
   const subdirLabels: Record<string, string> = {
     architecture: 'Architecture',
     ops: 'Operations',
-    decisions: 'Decisions',
   }
-  const orderedDirs = ['architecture', 'ops', 'decisions']
+  const orderedDirs = ['architecture', 'ops']
   for (const dir of orderedDirs) {
     const dirEntries = bySubdir.get(dir)
     if (dirEntries) {

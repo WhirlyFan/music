@@ -5,7 +5,7 @@ with first-class DAG primitives. Day-one decision because the LLM use
 case requires fan-out parallel calls with per-step durability, retries,
 and timeouts.
 
-ADR: [decisions/0002-hatchet-lite-over-celery.md](decisions/0002-hatchet-lite-over-celery.md).
+Decision + rationale: [decisions.md → Background jobs](decisions.md#background-jobs--hatchet-lite).
 
 ## Topology
 
@@ -178,7 +178,7 @@ Deployment. Same image, different orchestration.
 
 ## See also
 
-- [decisions/0002-hatchet-lite-over-celery.md](decisions/0002-hatchet-lite-over-celery.md)
+- [decisions.md → Background jobs](decisions.md#background-jobs--hatchet-lite) — the decision + engine comparison
 - [architecture.md](architecture.md) — system overview
 - [Hatchet DAG docs](https://docs.hatchet.run/v1/directed-acyclic-graphs)
 - [Hatchet self-hosting (Lite)](https://docs.hatchet.run/self-hosting)

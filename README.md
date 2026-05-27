@@ -67,7 +67,7 @@ change them in `/admin/` for local testing — `make seed` brings them back.
 freshly-signed-up user from `/signup` lands on `/account/verify-email`
 (the holding page) and stays there until they click the link in their
 email. In dev, that email lands in Mailpit (`http://localhost:8025`).
-See [docs/auth.md](docs/auth.md) and [ADR 0008](docs/decisions/0008-email-verification-optional-plus-gate.md)
+See [docs/auth.md](docs/auth.md) and [decisions.md → Email verification](docs/decisions.md#email-verification-optional-mode--a-gate-not-mandatory)
 for the full flow.
 
 ### Deploying to production

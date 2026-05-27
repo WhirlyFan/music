@@ -31,8 +31,7 @@ Trunk-based / GitHub Flow — `main` is the single long-lived branch.
 - Risky change that needs validation before prod? Use a feature flag or a
   Render preview deploy — not a shared staging branch.
 
-See [decisions/0009-trunk-based-main-only.md](decisions/0009-trunk-based-main-only.md)
-(supersedes 0007).
+See [decisions.md → Workflow](decisions.md#workflow--trunk-based-main-only).
 
 ## Makefile targets
 
@@ -143,8 +142,9 @@ enrolling TOTP, every fresh `make seed` leaves admin unable to reach
 `/admin/`. The fixed secret means devs can keep one authenticator-app
 entry across reseeds.
 
-The DEBUG guard ensures this can never run in prod. See ADR 0006 and
-[auth.md](auth.md).
+The DEBUG guard ensures this can never run in prod. See
+[decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin)
+and [auth.md](auth.md).
 
 ## Health check
 

@@ -1,7 +1,9 @@
 """Production settings."""
 
+from csp.constants import NONE, SELF
+
 from .base import *  # noqa: F401,F403
-from .base import INSTALLED_APPS, env
+from .base import INSTALLED_APPS, MIDDLEWARE, env
 
 # anymail must be in INSTALLED_APPS for the backend to load.
 # Append in prod only — dev uses Mailpit via plain SMTP backend.
@@ -23,13 +25,70 @@ SECURE_HSTS_PRELOAD = True
 
 # --- Misc browser-side hardening ---
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SECURE_REFERRER_POLICY = "same-origin"
+SECURE_REFERRER_POLICY = "same-origin"  # Referrer-Policy header (Django built-in)
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = "Lax"
 X_FRAME_OPTIONS = "DENY"
+
+# --- Response security headers (prod only) ---
+# CSP + Permissions-Policy aren't wired in dev: Vite's HMR uses inline scripts,
+# eval, and ws: connections that a strict policy would flag as noise that
+# doesn't reflect prod. Both middlewares only emit a response header, so we
+# slot them right after SecurityMiddleware.
+_security_idx = MIDDLEWARE.index("django.middleware.security.SecurityMiddleware")
+MIDDLEWARE = [
+    *MIDDLEWARE[: _security_idx + 1],
+    "csp.middleware.CSPMiddleware",
+    "django_permissions_policy.PermissionsPolicyMiddleware",
+    *MIDDLEWARE[_security_idx + 1 :],
+]
+
+# --- Content Security Policy (django-csp 4.0) ---
+# Shipped in REPORT-ONLY: the browser logs violations to the console (and to
+# report-uri, once you wire a collector) but blocks nothing. This lets you
+# observe what a real policy would break — Django admin, the drf-spectacular
+# Swagger UI, allauth's pages — before promoting it to enforcing. To enforce:
+# rename the setting to CONTENT_SECURITY_POLICY and confirm the report log is
+# clean first.
+CONTENT_SECURITY_POLICY_REPORT_ONLY = {
+    "DIRECTIVES": {
+        "default-src": [SELF],
+        "script-src": [SELF],
+        "style-src": [SELF, "'unsafe-inline'"],  # admin + Swagger inline styles
+        "img-src": [SELF, "data:"],
+        "font-src": [SELF],
+        "connect-src": [SELF],
+        "object-src": [NONE],
+        "base-uri": [SELF],
+        "frame-ancestors": [NONE],  # defense-in-depth alongside X-Frame-Options
+        "form-action": [SELF],
+        # "report-uri": "https://<your-collector>",  # wire a Sentry/report endpoint
+    },
+}
+
+# --- Permissions-Policy (django-permissions-policy) ---
+# Disable powerful browser features the app doesn't use. An empty list means
+# "deny for all origins, including self." We deliberately omit the
+# publickey-credentials-* features so WebAuthn / passkey enrollment keeps
+# working (they default to allowing `self`).
+PERMISSIONS_POLICY = {
+    "accelerometer": [],
+    "autoplay": [],
+    "camera": [],
+    "display-capture": [],
+    "encrypted-media": [],
+    "fullscreen": [],
+    "geolocation": [],
+    "gyroscope": [],
+    "magnetometer": [],
+    "microphone": [],
+    "midi": [],
+    "payment": [],
+    "usb": [],
+}
 
 # --- CSRF trusted origins ---
 # When Django sits behind a reverse proxy (nginx, Cloudflare, etc.), CSRF

@@ -1,6 +1,6 @@
 ---
 name: docs-maintenance
-description: How to keep docs/ in sync with code. Covers the mental model (README vs docs vs Notion vs ADRs), the per-topic update matrix, ADR rules, style conventions, and the verification checklist. Use whenever you change architecture, auth, RLS, permissions, jobs, frontend stack, ops, or deploy targets — and any time a new long-form doc would be useful.
+description: How to keep docs/ in sync with code. Covers the mental model (README vs docs vs the cohesive decisions doc), the per-topic update matrix, decisions-doc rules, style conventions, and the verification checklist. Use whenever you change architecture, auth, RLS, permissions, jobs, frontend stack, ops, or deploy targets — and any time a new long-form doc would be useful.
 ---
 
 # docs-maintenance
@@ -17,7 +17,7 @@ Three docs surfaces, each with a distinct job. Don't conflate them.
 | `README.md` (root) | **How** — install, run, day-to-day commands | Update whenever commands change |
 | `docs/` (this repo) | **Why** — design, trade-offs, constraints, current truth | Update with every architecture-affecting PR |
 | Notion plan | **Original intent** — frozen snapshot of the day-one design | Read-only history. **Never** sync back. |
-| `docs/decisions/` (ADRs) | **One-way doors** — single accepted decisions w/ reasoning | Immutable once accepted; supersede via new ADR |
+| `docs/decisions.md` | **Foundational choices** — the load-bearing decisions + reasoning, one cohesive doc | Revise in place when a decision changes; keep a note of what failed |
 
 If you find yourself wanting to write a how-to that's longer than a paragraph
 and not in code, it almost certainly belongs in `docs/`, not the README.
@@ -30,50 +30,42 @@ Before merging a PR, check this against your diff:
 |---|---|---|
 | The set of services in compose | `docs/architecture.md` | `docs/ops.md` if env vars change |
 | Anything nginx-related | `docs/architecture/nginx.md` | `docs/architecture.md` topology section |
-| Login / sessions / CSRF / social | `docs/auth.md` | new ADR if the change is one-way |
-| MFA policy / staff gate | `docs/auth.md` + `docs/permissions.md` | possibly supersede ADR 0006 |
+| Login / sessions / CSRF / social | `docs/auth.md` | revise the Auth section of `docs/decisions.md` if the choice is one-way |
+| MFA policy / staff gate | `docs/auth.md` + `docs/permissions.md` | revise the MFA policy in `docs/decisions.md` |
 | RLS policy shape / roles / middleware | `docs/rls.md` | tests in `apps/notes/tests/test_rls.py` |
 | `is_staff` / `is_superuser` / Groups / object-level | `docs/permissions.md` | |
-| Hatchet workflow topology, DAG patterns | `docs/jobs.md` | possibly supersede ADR 0002 |
+| Hatchet workflow topology, DAG patterns | `docs/jobs.md` | revise the Background jobs section of `docs/decisions.md` |
 | TanStack stack, theming, FE auth wrapper | `docs/frontend.md` | |
 | Compose / env vars / migrations / seed | `docs/ops.md` | `docs/architecture.md` if a service appears |
-| Render / GCP deploy mechanics | `docs/ops/deploy-*.md` | new ADR if changing target |
-| **One-way-door choice** (rename, swap, drop) | new `docs/decisions/000N-*.md` | the affected topic doc(s) |
+| Render / GCP deploy mechanics | `docs/ops/deploy-*.md` | revise the Deploy section of `docs/decisions.md` if changing target |
+| **One-way-door choice** (rename, swap, drop) | a section in [`docs/decisions.md`](../../../docs/decisions.md) | the affected topic doc(s) |
 
 If your change touches code but you skipped the docs row above — that's a
 signal to revisit before merging.
 
-## ADR rules (non-negotiable)
+## Decisions doc rules
 
-ADRs in `docs/decisions/` capture *immutable* decisions. They are not
-living docs. The rules:
+The load-bearing choices live in **one cohesive doc**, [`docs/decisions.md`](../../../docs/decisions.md),
+organized by layer (Data, Auth, Jobs, Frontend, Deploy, Workflow) — not a
+chronological ADR log. The rules:
 
-1. **One decision per ADR.** Don't bundle "auth + permissions" — split.
-2. **Accepted ADRs are never edited.** To change your mind, write a new
-   ADR that explicitly says "Supersedes 000N." The old one stays as
-   historical record.
-3. **Number sequentially.** `0001-`, `0002-`, … never skip.
-4. **Filename = kebab-case slug.** `0006-mfa-optional-staff-required.md`.
-5. **Required sections:**
-   - `**Status:**` Accepted | Superseded by 000N | Deprecated
-   - `**Date:**` ISO date
-   - `## Context` — the forces in tension, options surveyed
-   - `## Decision` — what we chose, in one paragraph
-   - `## Consequences` — what we gain, what we give up, what becomes harder
-6. **Lead with why, not what.** The codebase shows *what*; the ADR
-   captures the reasoning future-you needs.
+1. **Group by topic, not by date.** A new decision joins the section it
+   belongs to (or adds a section). Related sub-decisions live together — Auth
+   holds the allauth, MFA, and email-verification choices as one cohesive story.
+2. **Revise in place; don't append a superseding record.** When a decision
+   changes, edit its section to state the *current* choice. Don't leave a
+   stale "Superseded by…" trail — the doc is *current truth*, not history.
+3. **Keep the failure as rationale.** If we tried something and reversed it
+   (e.g. the `dev` branch → trunk-based), fold a short "what we tried and why
+   it failed" into the *Why* — that's the most valuable part, not separate
+   history to be archived away.
+4. **Each section's shape:** state the **Decision**, the **alternatives weighed**
+   (an "Option A vs B" table is gold), and the **tradeoff accepted**. Lead with
+   *why*, not *what* — the codebase shows what.
+5. **Cross-link to the topic doc** for runtime mechanics. `decisions.md` is
+   *why*; the topic docs are *how*.
 
-When an ADR is superseded:
-- Old ADR: change `Status:` to `Superseded by 000N`
-- New ADR: include `Supersedes 00M` in the Status line, link to it
-
-Currently accepted ADRs:
-- [0001 — RLS day one](../../../docs/decisions/0001-rls-day-one.md)
-- [0002 — Hatchet Lite over Celery](../../../docs/decisions/0002-hatchet-lite-over-celery.md)
-- [0003 — allauth headless](../../../docs/decisions/0003-allauth-headless.md)
-- [0004 — TanStack Router](../../../docs/decisions/0004-tanstack-router.md)
-- [0005 — Render-first deploy](../../../docs/decisions/0005-render-first-deploy.md)
-- [0006 — MFA optional + staff required](../../../docs/decisions/0006-mfa-optional-staff-required.md)
+Git history is the immutable record. The doc is the curated, cohesive present.
 
 ## Style conventions
 
@@ -101,8 +93,8 @@ Link liberally between docs. The web of internal links is what makes
 `docs/` navigable. Patterns:
 
 - Topic doc → topic doc: `[auth.md](auth.md)`
-- Topic doc → ADR: `[decisions/0001-rls-day-one.md](decisions/0001-rls-day-one.md)`
-- ADR → topic doc: `[../auth.md](../auth.md)`
+- Topic doc → decision: `[decisions.md → Data layer](decisions.md#data-layer--row-level-security-day-one)`
+- decisions.md → topic doc: `[auth.md](auth.md)`
 - Topic doc → source code: `[apps/core/middleware.py](../backend/apps/core/middleware.py)`
 
 If you write a doc that doesn't link to or from any other doc, you've
@@ -167,7 +159,7 @@ Updated:
   - docs/X.md — <one-line summary>
   - docs/Y.md — <one-line summary>
 Added:
-  - docs/decisions/000N-foo.md — Accepted
+  - docs/decisions.md → <section> — <one-line summary of the decision>
 
 Verified:
   - Internal links resolve
@@ -181,12 +173,12 @@ This lets the user spot stale claims without re-reading every diff.
 | PR scope | Files touched in `docs/` |
 |---|---|
 | Add a new RLS-scoped model | `rls.md` (extend "Extending the policy" if novel) |
-| Swap from gunicorn to uvicorn | `architecture.md`, `ops.md`, possibly new ADR |
-| Add "Sign in with Google" | `auth.md`, possibly new ADR if Google is the first social provider |
-| Drop nginx in favor of Vite proxy | `architecture/nginx.md`, `architecture.md`, **new ADR** (one-way door) |
+| Swap from gunicorn to uvicorn | `architecture.md`, `ops.md`, possibly a `decisions.md` revision |
+| Add "Sign in with Google" | `auth.md`, possibly revise the Auth section of `decisions.md` if Google is the first social provider |
+| Drop nginx in favor of Vite proxy | `architecture/nginx.md`, `architecture.md`, **a new `decisions.md` section** (one-way door) |
 | Rename `Note` to `Document` | nothing — that's a rename, not an architectural change |
-| Change pre-push hook to use lefthook | `ops.md`, possibly new ADR |
-| Move from Render to Cloud Run | `ops/deploy-cloudrun.md` (new), `ops/deploy-render.md` (update status), supersede ADR 0005 |
-| Add CI on GitHub Actions | `ops.md`, possibly new ADR if a tool choice was non-obvious |
+| Change pre-push hook to use lefthook | `ops.md`, possibly a `decisions.md` revision |
+| Move from Render to Cloud Run | `ops/deploy-cloudrun.md` (new), `ops/deploy-render.md` (update status), revise the Deploy section of `decisions.md` |
+| Add CI on GitHub Actions | `ops.md`, possibly a `decisions.md` revision if a tool choice was non-obvious |
 
 If your PR doesn't fit any row above, the diff probably doesn't need a docs change.

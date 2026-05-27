@@ -4,44 +4,50 @@ version = "0.1.0"
 description = "Django backend for react-django-template project"
 requires-python = ">=3.13"
 dependencies = [
-    "django>=5.1,<6.0",
-    "djangorestframework>=3.15",
-    "django-allauth[socialaccount,mfa]>=65.0",
-    "fido2>=1.1",
-    "qrcode>=7.4",
-    "django-rls>=0.2",
-    "drf-spectacular>=0.27",
-    "django-filter>=24.0",
-    "django-anymail>=11.0",
-    "django-extensions>=3.2",
-    "django-guid>=3.5",
-    "django-axes>=7.0",
+    # Django 5.2 is the current LTS — security + data-loss fixes through
+    # April 2028. We pin to the LTS line (not the latest feature release)
+    # because a template gets cloned and left alone; the LTS maximizes the
+    # patch window for everything built on it. See docs/decisions.md.
+    "django>=5.2,<6.0",
+    "djangorestframework>=3.16",
+    "django-allauth[socialaccount,mfa]>=65.17",
+    "fido2>=1.2",
+    "qrcode>=8.0",
+    "django-rls>=0.4",
+    "drf-spectacular>=0.28",
+    "django-filter>=25.1",
+    "django-anymail>=13.0",
+    "django-extensions>=4.1",
+    "django-guid>=3.6",
+    "django-axes>=8.0",
     "django-ratelimit>=4.1",
-    "django-health-check>=3.18",
-    "django-pghistory>=3.4",
-    "django-pgtrigger>=4.11",
+    "django-health-check>=4.4",
+    "django-pghistory>=3.5",
+    "django-pgtrigger>=4.13",
+    "django-csp>=4.0",
+    "django-permissions-policy>=4.25",
     "hatchet-sdk>=0.40",
     "sentry-sdk[django]>=2.0",
     "psycopg[binary]>=3.2",
-    "dj-database-url>=2.2",
-    "django-environ>=0.11",
-    "django-cors-headers>=4.4",
-    "whitenoise>=6.7",
+    "dj-database-url>=2.3",
+    "django-environ>=0.12",
+    "django-cors-headers>=4.9",
+    "whitenoise>=6.8",
     "gunicorn>=23.0",
     "pwned-passwords-django>=5.2.0",
 ]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "pytest-django>=4.9",
-    "pytest-cov>=5.0",
-    "ruff>=0.7",
-    "django-debug-toolbar>=4.4",
-    "django-stubs[compatible-mypy]>=5.0",
-    "djangorestframework-stubs>=3.15",
+    "pytest>=8.3",
+    "pytest-django>=4.11",
+    "pytest-cov>=6.0",
+    "ruff>=0.13",
+    "django-debug-toolbar>=6.0",
+    "django-stubs[compatible-mypy]>=5.2",
+    "djangorestframework-stubs>=3.16",
     "factory-boy>=3.3",
-    "Faker>=30.0",
+    "Faker>=37.0",
 ]
 
 [tool.ruff]

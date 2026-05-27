@@ -71,7 +71,7 @@ Signup creates a real authenticated session; access to anything past the
 holding page is gated by middleware (backend) + a root-route guard
 (frontend) until `EmailAddress.verified = True`.
 
-Full rationale + alternatives in [ADR 0008](decisions/0008-email-verification-optional-plus-gate.md).
+Full rationale + alternatives in [decisions.md → Email verification](decisions.md#email-verification-optional-mode--a-gate-not-mandatory).
 
 ### Flow
 
@@ -173,7 +173,7 @@ See [`frontend/src/lib/auth/api.ts`](../frontend/src/lib/auth/api.ts) —
 | Three methods: TOTP, recovery codes, WebAuthn (passkeys) | TOTP covers most users; recovery codes are the backup; passkeys are modern |
 | When SAML/SSO lands, the IdP's MFA policy applies — app-level stays opt-in | Re-prompting in-app after IdP-MFA is the textbook SSO anti-pattern |
 
-ADR: [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional-staff-required.md).
+Decision + rationale: [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin).
 
 UI naming: user-facing copy uses "Multi-factor authentication" / "MFA"
 consistently (no "2FA" in user-visible strings). The `/auth/2fa/*` URL
@@ -388,7 +388,8 @@ A "social user" is not a different user model.
 
 ## Future: SAML / SCIM
 
-See ADR 0005 (deferred). Three architectural invariants Phase 1 + 2 preserve so
+See [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin)
+(SAML compatibility, deferred). Three architectural invariants Phase 1 + 2 preserve so
 SAML adds cleanly later:
 
 1. `AUTHENTICATION_BACKENDS` is a list — SAML backend appends without rewrites
@@ -424,8 +425,6 @@ Frontend routes: `routes/account/password/forgot.tsx`, `routes/account/password/
 ## See also
 
 - [ops/email.md](ops/email.md) — wiring a transactional email provider (Resend / Postmark / SES)
-- [decisions/0003-allauth-headless.md](decisions/0003-allauth-headless.md) — why allauth over djoser
-- [decisions/0006-mfa-optional-staff-required.md](decisions/0006-mfa-optional-staff-required.md) — the MFA policy choice
-- [decisions/0008-email-verification-optional-plus-gate.md](decisions/0008-email-verification-optional-plus-gate.md) — email verification pattern
+- [decisions.md → Auth](decisions.md#auth--django-allauth-headless) — allauth choice, MFA policy, email verification (all three)
 - [permissions.md](permissions.md) — is_staff vs is_superuser
 - [rls.md](rls.md) — how `request.user.id` flows into the DB

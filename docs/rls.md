@@ -4,7 +4,7 @@ Access control enforced at the database layer, not just in views. A
 forgotten `.filter(owner=user)` can't leak data across users — the
 Postgres role we connect as cannot escape its policies.
 
-ADR: [decisions/0001-rls-day-one.md](decisions/0001-rls-day-one.md).
+Decision + rationale: [decisions.md → Data layer](decisions.md#data-layer--row-level-security-day-one).
 
 ## The architecture
 
@@ -178,4 +178,4 @@ DB-layer RLS change.
 
 - [permissions.md](permissions.md) — `is_staff` bypass, future object-level perms
 - [auth.md](auth.md) — how `request.user.id` flows in
-- [decisions/0001-rls-day-one.md](decisions/0001-rls-day-one.md) — original decision
+- [decisions.md → Data layer](decisions.md#data-layer--row-level-security-day-one) — the decision + alternatives

@@ -12,7 +12,7 @@ transparent.
 | Compiler | **React Compiler 1.0** | Auto-memoizes pure components/hooks — no manual `useMemo`/`useCallback`/`memo`. Wired via `@vitejs/plugin-react` v6 + `@rolldown/plugin-babel` + `reactCompilerPreset()` |
 | Package manager | **pnpm 11** | Disk-efficient, fast, strict |
 | Language | **TypeScript ~6** | `tsc --noEmit` on every push via hook |
-| Routing | **TanStack Router** (file-based) | Typed `Link`, `useParams`, search params ([decision 0004](decisions/0004-tanstack-router.md)). Route `loader`s preferred over `useEffect` for "fetch on arrival" |
+| Routing | **TanStack Router** (file-based) | Typed `Link`, `useParams`, search params ([decision](decisions.md#frontend-routing--tanstack-router)). Route `loader`s preferred over `useEffect` for "fetch on arrival" |
 | Data | **TanStack Query** | Caching, refetching, optimistic updates |
 | Forms | **TanStack Form + Zod** | Type-safe, schema-driven, integrates with Query |
 | Tables | **TanStack Table** | Headless primitives; pairs with shadcn DataTable patterns |

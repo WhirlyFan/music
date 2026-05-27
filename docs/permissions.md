@@ -63,7 +63,7 @@ one enrolled MFA authenticator. See [auth.md](auth.md) +
 
 The MFA gate fires for any `is_staff` user regardless of how they
 authenticated — password, social, eventual SAML. It's a *role-scoped*
-policy, not an *auth-method* policy. See ADR 0006.
+policy, not an *auth-method* policy. See [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin).
 
 ## The conventional pattern
 
