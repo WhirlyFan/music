@@ -47,13 +47,19 @@ MIDDLEWARE = [
 ]
 
 # --- Content Security Policy (django-csp 4.0) ---
-# Shipped in REPORT-ONLY: the browser logs violations to the console (and to
-# report-uri, once you wire a collector) but blocks nothing. This lets you
-# observe what a real policy would break — Django admin, the drf-spectacular
-# Swagger UI, allauth's pages — before promoting it to enforcing. To enforce:
-# rename the setting to CONTENT_SECURITY_POLICY and confirm the report log is
-# clean first.
-CONTENT_SECURITY_POLICY_REPORT_ONLY = {
+# ENFORCED. We audited every HTML surface Django serves under this exact policy:
+#   - /admin/             — all assets same-origin /static/, no inline scripts ✓
+#   - DRF browsable API   — same-origin /static/, no inline scripts ✓
+#   - /api/docs/ Swagger  — made CSP-clean by serving assets from /static/
+#                           (drf-spectacular-sidecar) + the bootstrap as an
+#                           external file (SpectacularSwaggerSplitView), so no
+#                           CDN and no inline <script>. See base.py + urls.py.
+# `style-src` keeps 'unsafe-inline' because admin/Swagger widgets use inline
+# style attributes (styles can't run code, so this is low-risk). Everything
+# else is locked to 'self'. If you add a surface that needs an external script
+# or connects to another origin, widen the specific directive — or scope it to
+# that view with csp.decorators.csp_update rather than loosening the global.
+CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": [SELF],
         "script-src": [SELF],

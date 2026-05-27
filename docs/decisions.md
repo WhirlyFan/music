@@ -274,36 +274,52 @@ re-lock, run the suite, and at that point migrate CSP to the built-in
 
 ---
 
-## Security headers — CSP + Permissions-Policy, report-only
+## Security headers — CSP + Permissions-Policy (enforced)
 
 **Decision.** Emit a Content-Security-Policy and a Permissions-Policy header in
 **production only**, via `django-csp` 4.0 (`CSPMiddleware`) and
 `django-permissions-policy`, both slotted right after `SecurityMiddleware`. CSP
-ships in **report-only** mode; Permissions-Policy disables powerful browser
-features the app doesn't use. Referrer-Policy is already covered by Django's
-built-in `SECURE_REFERRER_POLICY = "same-origin"`.
+is **enforced** (`default-src 'self'`, `script-src 'self'`), not report-only.
+Permissions-Policy disables powerful browser features the app doesn't use.
+Referrer-Policy is already covered by Django's built-in
+`SECURE_REFERRER_POLICY = "same-origin"`.
 
 **Why this shape.**
-- **Report-only first.** A real CSP almost always breaks something subtle the
-  first time — Django admin's inline styles, the drf-spectacular Swagger UI,
-  allauth's pages. Report-only logs violations without blocking, so you observe
-  what an enforcing policy *would* break before flipping it on. Promote by
-  renaming `CONTENT_SECURITY_POLICY_REPORT_ONLY` → `CONTENT_SECURITY_POLICY`
-  once the report stream is clean.
+- **Enforced, because we made every Django-served surface compatible first.**
+  A strict CSP normally breaks something the first time, so the usual advice is
+  to start report-only. We instead audited the three HTML surfaces Django
+  serves under the exact policy and fixed the one that broke:
+  - **Django admin** (5.2) and the **DRF browsable API** load all assets from
+    same-origin `/static/` with no inline scripts — clean under `'self'`.
+  - **Swagger UI** (`/api/docs/`) was the only offender: it loaded JS/CSS from
+    `cdn.jsdelivr.net` and bootstrapped via an inline `<script>`. Fixed by
+    serving the assets from `/static/` (`drf-spectacular-sidecar`) and the
+    bootstrap as an external same-origin file (`SpectacularSwaggerSplitView`).
+    No CDN, no inline script → no policy relaxation needed.
 - **Prod only.** Vite's dev server uses inline scripts, `eval`, and `ws:` HMR
   connections that a strict policy floods with violations that don't reflect
   prod — pure noise. So, like `SECURE_SSL_REDIRECT` and HSTS, these live in
   `prod.py`, not `base.py`.
+- **`style-src` keeps `'unsafe-inline'`.** Admin and Swagger widgets use inline
+  `style=` attributes. Styles can't execute code, so this is the low-risk
+  concession; scripts stay locked to `'self'`.
 - **Passkeys stay working.** Permissions-Policy deliberately omits the
   `publickey-credentials-get` / `-create` features. Listing them with `[]` would
   *disable* WebAuthn; omitting them keeps the browser default (allow `self`), so
   passkey enrollment is unaffected. This is the one easy-to-get-wrong footgun.
 
-**Tradeoff accepted.** Report-only protects nothing until promoted — it's a
-staging step, not a shield. The default policy is also conservative
-(`default-src 'self'`); a real app that loads a CDN, analytics, or third-party
-fonts must widen the relevant directives (and watching the report stream is how
-you discover which). No report collector is wired by default — there's a
-commented `report-uri` line to point at Sentry or a similar endpoint.
+**Tradeoff accepted.** The policy is deliberately tight (`default-src 'self'`).
+The day you add a surface that loads an external script, embeds a third-party
+iframe, or calls another origin's API, the browser *will* block it until you
+widen the matching directive — prefer scoping the loosening to that one view
+(`csp.decorators.csp_update`) over weakening the global policy. No violation
+collector is wired by default; there's a commented `report-uri` line to point
+at Sentry or similar if you want field reports of attempted violations.
+
+> **Scope note.** This protects only the *Django-served* surfaces (admin,
+> Swagger, browsable API, allauth JSON). The user-facing SPA is served by the
+> frontend host (Render static site in prod, nginx locally), which sets its own
+> response headers — a SPA CSP belongs there, not in Django, and is not yet
+> configured in this template.
 
 The wiring lives in [`backend/config/settings/prod.py`](../backend/config/settings/prod.py).

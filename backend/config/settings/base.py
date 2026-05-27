@@ -35,6 +35,7 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "django_guid",
     "drf_spectacular",
+    "drf_spectacular_sidecar",  # self-hosted Swagger UI assets (CSP-friendly)
     "axes",
     "pghistory",
     "pgtrigger",
@@ -296,6 +297,13 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Backend API for the react-django-template project.",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    # Serve Swagger UI's JS/CSS + favicon from /static/ (via drf-spectacular-
+    # sidecar) instead of jsdelivr. Combined with SpectacularSwaggerSplitView
+    # in urls.py — which serves the init script as an external same-origin file
+    # rather than inline — this lets a strict `script-src 'self'` CSP enforce
+    # cleanly with no per-view relaxation. See docs/decisions.md.
+    "SWAGGER_UI_DIST": "SIDECAR",
+    "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
 }
 
 # --- django-axes ---

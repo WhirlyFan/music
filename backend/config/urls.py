@@ -11,7 +11,7 @@ codegen path doesn't need to know about API versions.
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerSplitView
 from health_check.views import HealthCheckView
 
 
@@ -49,7 +49,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("_allauth/", include("allauth.headless.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    # Split view (not SpectacularSwaggerView): serves the Swagger bootstrap as
+    # an external same-origin script instead of an inline <script>, so a strict
+    # CSP needs no 'unsafe-inline'. Assets come from /static/ via sidecar.
+    path("api/docs/", SpectacularSwaggerSplitView.as_view(url_name="schema"), name="swagger-ui"),
     path("health/", AppHealthCheckView.as_view(), name="health-check"),
     path("api/v1/", include((api_v1, "v1"))),
 ]
