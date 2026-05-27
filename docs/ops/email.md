@@ -23,7 +23,7 @@ in prod until a provider is configured.
 | Environment | Email backend | What you'll see |
 |---|---|---|
 | **Local dev** | SMTP → **Mailpit** container at `mailpit:1025` | Emails captured locally; rendered HTML viewable at **http://localhost:8025**. No internet calls. No signup. |
-| **Render Phase A** | `smtp.EmailBackend` with no provider configured | Emails fail silently or with stack traces. **Reset flow is dead-on-arrival until configured.** |
+| **Render (prod)** | `anymail.backends.resend.EmailBackend` | Works once `RESEND_API_KEY` is set. With the default `onboarding@resend.dev` sender, only your Resend account email receives mail — verify a domain (below) to reach everyone. |
 | **CI** | Backend tests don't touch real email | Not used |
 
 ## Local dev: Mailpit
@@ -104,19 +104,55 @@ No card required. Skip the optional onboarding survey.
 ### Step 2: Pick a sender
 
 The template defaults to Resend's shared `onboarding@resend.dev`, which
-works *immediately* once you have an API key. Switching to your own
-verified domain later is a single env var update — no code change.
+works *immediately* once you have an API key — **but with a critical
+restriction.**
 
-| Option | What it costs you | When to switch |
+> ⚠️ **`onboarding@resend.dev` only delivers to the email address that owns
+> your Resend account.** Every other recipient is silently dropped —
+> Resend accepts the API call (your app sees no error, the signup
+> "succeeds") but the message never arrives. This is Resend's
+> unverified-sender guard, NOT disposable-email filtering: it drops
+> `someone-else@gmail.com` exactly the same way it drops
+> `x@10minutemail.com`. The symptom is "email only arrives for *me*,
+> nobody else gets anything." The fix is to verify your own domain.
+
+| Option | What it costs you | When to use |
 |---|---|---|
-| **`onboarding@resend.dev`** (default) | 0 setup, From: shows resend.dev | Template / testing / internal demo |
-| **Your verified domain** (`noreply@yourdomain.com`) | ~10 min DNS (DKIM + SPF) | Real users — much better deliverability |
+| **`onboarding@resend.dev`** (default) | 0 setup. Only delivers to *your* Resend account email | First smoke-test that the wiring works. Useless for real users. |
+| **Your verified domain** (`noreply@mail.yourdomain.com`) | ~10 min DNS (DKIM + SPF + DMARC) | Anything with real users — delivers to anyone, much better inbox placement |
 
-To verify a domain later:
-1. Resend dashboard → Domains → Add Domain
-2. Add the 3 DNS records Resend gives you (Cloudflare / your provider)
-3. Set `DEFAULT_FROM_EMAIL=noreply@yourdomain.com` in the Render dashboard
-4. Done — no code redeploy needed
+#### Verifying your own domain (the real setup)
+
+1. **Resend dashboard → Domains → Add Domain.** Enter a **subdomain**, not
+   the root — e.g. `mail.yourdomain.com`. A subdomain isolates
+   transactional-email reputation from your normal mail and is Resend's
+   recommendation. The "Advanced" options (region, return-path) can stay
+   at defaults.
+2. **Click Add** — Resend now reveals the DNS records to publish:
+   - **MX** — routes bounces for the sending subdomain
+   - **TXT (SPF)** — `v=spf1 include:amazonses.com ~all` (Resend sends via SES)
+   - **TXT (DKIM)** — 1–3 `resend._domainkey…` records (the signing public key)
+   - **TXT (DMARC)** — start at `v=DMARC1; p=none;` (monitor only)
+3. **Add the records at your DNS provider** exactly as shown.
+   - TTL: `3600` (1 hour) is the set-and-forget default. Use `300` while
+     iterating so fixes propagate in ~5 min, then raise it.
+   - **Cloudflare:** set each record to **DNS only** (grey cloud), never
+     proxied (orange cloud) — proxying breaks MX/TXT verification.
+4. **Wait for Resend to show the domain `Verified`** (minutes, sometimes
+   up to a few hours). Don't proceed until then — sending earlier still
+   hits the account-owner-only restriction.
+5. **Set `DEFAULT_FROM_EMAIL`** in the Render backend service's
+   Environment to an address on the verified subdomain, e.g.
+   `noreply@mail.yourdomain.com`. The mailbox doesn't need to exist for
+   *sending* — only the domain needs verification. Save → Render
+   redeploys. No code change.
+6. **Confirm** with [mail-tester.com](https://www.mail-tester.com): send
+   their test address a signup, aim for 10/10 (SPF + DKIM + DMARC all
+   pass). A failing DKIM = spam folder.
+
+DMARC progression: leave `p=none` for a week or two (it already satisfies
+Gmail/Yahoo's 2024 bulk-sender requirement), then tighten to
+`p=quarantine` once you've confirmed all your real mail passes alignment.
 
 ### Step 3: Create an API key
 
@@ -212,6 +248,7 @@ covers 3,000 (100/day × 30). Postmark has no free tier and starts at $15.
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Email arrives for *me* but nobody else gets anything | Using `onboarding@resend.dev`, which only delivers to the Resend account owner | Verify your own domain (Step 2) + set `DEFAULT_FROM_EMAIL` to a sender on it |
 | Reset email never arrives | EMAIL_BACKEND still `smtp` with no SMTP_HOST | Switch backend in prod.py, set provider env vars |
 | Goes to spam | No DKIM/SPF on the From: domain | Verify domain in provider dashboard, add DNS records |
 | "Sender not verified" error from provider | DEFAULT_FROM_EMAIL doesn't match a verified sender | Use the shared sender, or verify the domain |

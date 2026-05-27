@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { useSignup } from '@/lib/auth/hooks'
+import { isEmailVerificationPending, useSignup } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/signup')({
   component: SignupPage,
@@ -52,12 +52,16 @@ function SignupPage() {
         username: value.username,
         password: value.password,
       })
-      // With ACCOUNT_EMAIL_VERIFICATION="optional", signup creates a real
-      // authenticated session. Send to home; the root-route guard bounces
-      // unverified users to /account/verify-email (one source of truth for
-      // the gate, mirrors backend's RequireVerifiedEmailMiddleware).
+      // Success in allauth's headless flow takes two shapes:
+      //   - 200 + authenticated session (rare; only when verification is
+      //     genuinely disabled)
+      //   - 401 + verify_email pending flow (the common case — allauth
+      //     created the user, sent the email, and is waiting for the
+      //     verification click). Both are successful signups.
       if (result.status === 200) {
         navigate({ to: '/' })
+      } else if (isEmailVerificationPending(result)) {
+        navigate({ to: '/account/verify-email' })
       } else {
         // Form-level errors (rate limit, server error, etc.) — field-bound
         // errors stay inline.

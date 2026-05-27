@@ -18,12 +18,10 @@ export const Route = createFileRoute('/account/verify-email/')({
 })
 
 /**
- * "Awaiting verification" holding page. The user is authenticated (allauth
- * is in "optional" mode) but their EmailAddress.verified is False. The
- * root-route guard puts them here whenever they try to reach a protected
- * route, and the backend's RequireVerifiedEmailMiddleware blocks API calls
- * until they verify. Two ways out: click the link in the email, or use
- * the footer "Log in" link to switch accounts.
+ * "Awaiting verification" holding page. The user has signed up (or logged
+ * in as an unverified existing user) and allauth is holding the session
+ * in a `verify_email` pending flow. Two ways out: click the link in the
+ * email (which we wired to /account/verify-email/$key), or hit "Resend".
  */
 function VerifyEmailWaitingPage() {
   const navigate = useNavigate()
@@ -31,10 +29,10 @@ function VerifyEmailWaitingPage() {
   const emails = useEmails()
   const resend = useResendEmailVerification()
 
-  // Self-healing: if the user verifies in another tab and the email-list
-  // cache refetches into "verified" (we invalidate it on verify), this tab
-  // notices and navigates home. Without this, the signup tab would sit on
-  // the waiting page forever after the user completed verification elsewhere.
+  // Self-healing: if the user verifies in another tab (or just clicks the
+  // link in the email and gets fully authenticated), the email list flips
+  // to "verified" — this tab notices and goes home so the user isn't
+  // stuck on the waiting page after the side trip succeeded.
   const verified = hasVerifiedPrimaryEmail(emails.data)
   useEffect(() => {
     if (verified) {
@@ -42,16 +40,15 @@ function VerifyEmailWaitingPage() {
     }
   }, [verified, navigate])
 
-  // Pull the in-progress email from the session payload — it carries
-  // `data.user.email` for both verified and unverified users in optional mode.
+  // The email might come from either the session (fully-authenticated user)
+  // or from the pending-verification flow's user object. Both shapes carry
+  // `data.user.email`. Used for display only — the resend endpoint takes
+  // no body; allauth resends to whichever address is in the pending entry.
   const email = (session.data?.data as { user?: { email?: string } } | undefined)?.user?.email
 
   const handleResend = async () => {
     if (resend.isPending) return
     if (!email) {
-      // Defensive — should never happen because the root guard only sends
-      // authenticated users here, and authenticated users always have an
-      // email on the session.
       toast.error('Could not determine which email to resend to.')
       return
     }

@@ -10,6 +10,7 @@ import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
 import {
+  isEmailVerificationPending,
   isMfaChallenge,
   isMfaTrustPending,
   useLogin,
@@ -45,12 +46,14 @@ function LoginPage() {
       if (login.isPending) return
       const result = await login.mutateAsync(value)
       if (result.status === 200) {
-        // Always send to home. The root-route guard handles the
-        // authenticated-but-unverified case by bouncing to the holding
-        // page — one source of truth for the verification gate.
         navigate({ to: '/' })
       } else if (isMfaChallenge(result)) {
         setMfaRequired(true)
+      } else if (isEmailVerificationPending(result)) {
+        // An existing user who never verified is logging in. allauth puts
+        // them in the same pending-verification flow as a fresh signup —
+        // route to the holding page so they can resend if needed.
+        navigate({ to: '/account/verify-email' })
       } else {
         // Form-level failure (wrong credentials, account locked by axes, etc.)
         // Field-bound errors stay inline; this toast catches the rest.

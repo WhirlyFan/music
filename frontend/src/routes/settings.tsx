@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ShieldCheck } from 'lucide-react'
+import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
 
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { buttonVariants } from '@/components/ui/button'
+import { useSession } from '@/lib/auth/hooks'
 import { useAuthenticators } from '@/lib/auth/mfa'
 
 export const Route = createFileRoute('/settings')({
@@ -14,9 +15,11 @@ type AuthenticatorEntry = { type?: string }
 
 function SettingsPage() {
   const authenticators = useAuthenticators()
+  const session = useSession()
   const data = (authenticators.data?.data as AuthenticatorEntry[] | undefined) ?? []
   const types = new Set(data.map((a) => a.type))
   const mfaEnrolled = types.has('totp') || types.has('webauthn')
+  const email = (session.data?.data as { user?: { email?: string } } | undefined)?.user?.email
 
   return (
     // No breadcrumbs on the top-level settings page — a single-item trail
@@ -26,6 +29,35 @@ function SettingsPage() {
       title="Settings"
       description="Manage your account, security, and preferences."
     >
+      <Section title="Account" description="Your sign-in identity.">
+        <SettingsRow
+          icon={<Mail className="h-5 w-5" aria-hidden="true" />}
+          title="Email"
+          description={email ?? 'The address you sign in and receive mail at.'}
+          action={
+            <Link
+              to="/account/email"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Change
+            </Link>
+          }
+        />
+        <SettingsRow
+          icon={<KeyRound className="h-5 w-5" aria-hidden="true" />}
+          title="Password"
+          description="Set a new password. At least 12 characters."
+          action={
+            <Link
+              to="/account/password/change"
+              className={buttonVariants({ variant: 'outline', size: 'sm' })}
+            >
+              Change
+            </Link>
+          }
+        />
+      </Section>
+
       <Section title="Security" description="How you sign in to your account.">
         <SettingsRow
           icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}

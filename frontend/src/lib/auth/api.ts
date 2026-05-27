@@ -90,16 +90,36 @@ export const auth = {
   verifyEmail: (key: string) => call('POST', '/auth/email/verify', { key }),
 
   /**
-   * Resend the verification email for an authenticated user's unverified
-   * address. Endpoint is the email-management surface
-   * (`PUT /account/email`), NOT `/auth/email/verify` — the latter is for
-   * the mid-signup flow with `ACCOUNT_EMAIL_VERIFICATION = "mandatory"`,
-   * which we don't use. With our `"optional"` mode the user is properly
-   * authenticated, so we use the authenticated email-management endpoint.
-   * Body: `{ email }` — required, identifies which of the user's emails
-   * to resend (we only ever have one).
+   * Resend the verification email for the authenticated user's address.
+   * Hits the email-management surface (`PUT /account/email`) — the
+   * authenticated equivalent of `/auth/email/verify/resend`. With
+   * `ACCOUNT_EMAIL_VERIFICATION = "optional"` the user IS fully
+   * authenticated after signup, so this is the correct endpoint.
+   * Body `{ email }` identifies which of their emails to resend (we only
+   * ever have one).
    */
   resendEmailVerification: (email: string) => call('PUT', '/account/email', { email }),
+
+  /**
+   * Request an email change. With `ACCOUNT_CHANGE_EMAIL = True`, allauth
+   * adds the new address (unverified) and sends a verification link to it.
+   * The old address stays primary until the new one is verified, then
+   * swaps. POST /account/email, body `{ email }`.
+   */
+  changeEmail: (email: string) => call('POST', '/account/email', { email }),
+
+  // --- Password change (authenticated) ---
+  /**
+   * Change the password for the logged-in user. `current_password` is
+   * required when the account has a usable password (always, for our
+   * password-based signups). On success allauth keeps the session alive.
+   * POST /account/password/change.
+   */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    call('POST', '/account/password/change', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
 
   // --- Password reset (two-step) ---
   /**

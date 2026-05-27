@@ -47,8 +47,9 @@ a **new** ADR that *supersedes* the old one — never edit accepted ADRs.
 | [0004](decisions/0004-tanstack-router.md) | TanStack Router over React Router |
 | [0005](decisions/0005-render-first-deploy.md) | Deploy to Render first; GCP/k8s when the project justifies it |
 | [0006](decisions/0006-mfa-optional-staff-required.md) | 2FA optional for users, mandatory for `/admin/` access |
-| [0007](decisions/0007-dev-branch-staging.md) | `dev` branch as integration target; `main` as deploy line |
+| [0007](decisions/0007-dev-branch-staging.md) | ~~`dev` branch as integration target~~ — superseded by 0009 |
 | [0008](decisions/0008-email-verification-optional-plus-gate.md) | Email verification: `optional` allauth mode + middleware/route gate |
+| [0009](decisions/0009-trunk-based-main-only.md) | Trunk-based flow: branch off `main`, no long-lived `dev` (supersedes 0007) |
 
 ## House rules
 

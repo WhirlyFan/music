@@ -184,6 +184,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # The seed command bakes admin@example.com + dev@example.com with verified
 # email rows so local /admin/ access + dev login keep working out-of-box.
 ACCOUNT_EMAIL_VERIFICATION = "optional"
+# Allow the frontend to re-send the verification email during the signup
+# flow (POST /auth/email/verify/resend). Without this, allauth returns
+# 409 and the user can't recover from a missed / lost email.
+ACCOUNT_EMAIL_VERIFICATION_SUPPORTS_RESEND = True
 # Historically this would auto-login a user on email confirmation. As of
 # django-allauth 65.x (2024) it is effectively a no-op — verifying via link
 # NEVER mints a session, even with this set to True. The change closed an
@@ -193,6 +197,12 @@ ACCOUNT_EMAIL_VERIFICATION = "optional"
 # variant of the behavior, but the frontend assumes no auto-login: clicks
 # from a fresh browser land on a "verified, please log in" screen.
 ACCOUNT_LOGIN_ON_EMAIL_CONFIRMATION = True
+# Single-email semantics: "change email" replaces the address rather than
+# accumulating multiple. allauth adds the new email + sends verification;
+# once verified, it becomes primary and the old address is removed. Until
+# then the old email stays active so the account isn't locked out if the
+# new address was a typo.
+ACCOUNT_CHANGE_EMAIL = True
 ACCOUNT_LOGIN_METHODS = {"email", "username"}
 # Signup collects username + email + password (+ confirm). The `*` suffix
 # marks required fields.

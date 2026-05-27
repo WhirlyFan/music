@@ -77,6 +77,24 @@ export function isMfaChallenge(response: { status: number; data?: unknown } | un
 }
 
 /**
+ * Detect the "you just signed up, please verify your email" pending flow.
+ *
+ * allauth's `signup` and `login` endpoints both return 401 + a pending
+ * `verify_email` flow when the user has signed up but not yet clicked
+ * the link in their email. The frontend treats this as a successful
+ * signup/login (the session IS tracked by allauth even though
+ * `meta.is_authenticated` is false) and routes the user to the holding
+ * page where they can resend.
+ */
+export function isEmailVerificationPending(
+  response: { status?: number; data?: unknown } | undefined,
+): boolean {
+  if (!response) return false
+  const flows = (response.data as { flows?: Array<{ id?: string; is_pending?: boolean }> })?.flows
+  return Boolean(flows?.some((f) => f.id === 'verify_email' && f.is_pending))
+}
+
+/**
  * Detect the "remember this browser" stage. After a successful MFA code
  * submit (when MFA_TRUST_ENABLED on the backend) the session response carries
  * a `mfa_trust` flow with `is_pending: true`. UI then prompts the user to
@@ -123,14 +141,41 @@ export function useVerifyEmail() {
 }
 
 /**
- * Resend the verification email for the authenticated user's primary
- * email. Takes the address as input — allauth needs it to identify which
- * email to resend (the underlying endpoint is the multi-email management
- * surface, even though we only ever have one address per user).
+ * Resend the verification email to the authenticated user's address.
+ * Caller passes the email (read from the session payload).
  */
 export function useResendEmailVerification() {
   return useMutation({
     mutationFn: (email: string) => auth.resendEmailVerification(email),
+  })
+}
+
+/**
+ * Request an email change. allauth adds the new (unverified) address and
+ * sends it a verification link; the swap completes when the user clicks it.
+ * Invalidate the email list so the pending address shows up in the UI.
+ */
+export function useChangeEmail() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (email: string) => auth.changeEmail(email),
+    onSuccess: () => qc.invalidateQueries({ queryKey: emailKeys.all() }),
+  })
+}
+
+/**
+ * Change the logged-in user's password. Requires the current password.
+ * allauth keeps the session alive on success — no re-login needed.
+ */
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: ({
+      currentPassword,
+      newPassword,
+    }: {
+      currentPassword: string
+      newPassword: string
+    }) => auth.changePassword(currentPassword, newPassword),
   })
 }
 

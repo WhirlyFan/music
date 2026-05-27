@@ -7,7 +7,9 @@ dependency.
 
 **See [`docs/`](docs/README.md) for architecture, design decisions, and ops
 walkthroughs** — the README covers installation and day-to-day commands; the
-docs explain *why* the template is shaped this way.
+docs explain *why* the template is shaped this way. Those same docs are also
+browsable in-app at `/docs` (a "Docs" tab in the header renders every
+markdown file under `docs/` with a sidebar).
 
 ---
 
@@ -176,7 +178,7 @@ Before deploying, set these in your deploy target's env (Render dashboard / k8s 
 
 | Integration | How | Cost | Why |
 |---|---|---|---|
-| **Email delivery** (password reset, signup verification) | Mailpit wired in dev. Resend wired in prod via Anymail — just paste `RESEND_API_KEY` into Render dashboard. See [docs/ops/email.md](docs/ops/email.md) | Free (3K/mo on Resend) | Without the API key, reset emails fail silently |
+| **Email delivery** (password reset, signup verification) | Mailpit in dev. Resend in prod via Anymail — paste `RESEND_API_KEY` into Render. **For real users you must verify a domain + set `DEFAULT_FROM_EMAIL`** — the default `onboarding@resend.dev` only delivers to your own Resend account email. See [docs/ops/email.md](docs/ops/email.md) | Free (3K/mo on Resend) | No key → emails fail silently; default sender → only you get them |
 | **Sentry error monitoring** | Set `SENTRY_DSN` env var | Free tier generous | Backend + frontend both auto-report |
 | **Social login** (Google etc.) | Add provider to `INSTALLED_APPS` + config — see [docs/auth.md](docs/auth.md) | Free | `allauth.socialaccount` is already installed |
 | **Custom domain** | Render dashboard or your DNS provider | Free on Render | Replace `*.onrender.com` URLs throughout |

@@ -1,7 +1,12 @@
 # 0007 — `dev` branch as the integration target; `main` as the deploy target
 
-**Status:** Accepted
+**Status:** Superseded by [0009](0009-trunk-based-main-only.md) (2026-05-26)
 **Date:** 2026-05-26
+
+> ⚠️ **Superseded.** The `dev` integration branch caused recurring
+> squash-merge ghost conflicts and didn't earn its keep as a staging buffer.
+> We moved to trunk-based flow (branch off `main`, no `dev`). See
+> [ADR 0009](0009-trunk-based-main-only.md). This record is kept for history.
 
 ## Context
 

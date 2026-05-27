@@ -21,14 +21,18 @@ Visit `http://localhost`. Login: `dev@example.com` / `password1234`.
 
 ## Branching
 
-- **Feature PRs target `dev`.** That's the integration branch — CI gates it,
-  same as `main`, so nothing untested lands.
-- **`main` is the deploy line.** Render auto-deploys whatever's on `main`.
-  Promote `dev → main` when ready to ship: open a PR `dev → main` and merge.
-- Hotfixes can branch from `main` directly when a prod issue needs an
-  immediate fix — PR to `main`, then sync `dev` from `main` to avoid drift.
+Trunk-based / GitHub Flow — `main` is the single long-lived branch.
 
-See [decisions/0007-dev-branch-staging.md](decisions/0007-dev-branch-staging.md).
+- **Branch off `main` for everything** (feature, fix, hotfix).
+- **PR → `main`.** CI gates it (Backend, Frontend, Security). Squash merge.
+- **Merging to `main` deploys to prod** — Render auto-deploys `main`. Keep
+  branches small so each merge is a low-risk increment.
+- **No `dev` branch.** One trunk = no squash-merge hash divergence.
+- Risky change that needs validation before prod? Use a feature flag or a
+  Render preview deploy — not a shared staging branch.
+
+See [decisions/0009-trunk-based-main-only.md](decisions/0009-trunk-based-main-only.md)
+(supersedes 0007).
 
 ## Makefile targets
 
