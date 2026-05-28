@@ -50,7 +50,7 @@ and why it failed (the failure is part of the rationale).
 | [Deploy](decisions.md#deploy--render-first-gcp-when-its-justified) | Render first; GCP/k8s when the project justifies it |
 | [Workflow](decisions.md#workflow--trunk-based-main-only) | Trunk-based, `main` only (no long-lived `dev`) |
 | [Platform versions](decisions.md#platform-versions--track-latest-stable-pin-django-to-its-lts) | Latest stable everywhere; Django pinned to its LTS |
-| [Security headers](decisions.md#security-headers--csp--permissions-policy-enforced) | CSP + Permissions-Policy enforced in prod (Django surfaces) |
+| [Security headers](decisions.md#security-headers--csp--permissions-policy-enforced-both-layers) | CSP + Permissions-Policy enforced in prod, on both Django and the SPA host |
 
 ## House rules
 

@@ -274,52 +274,74 @@ re-lock, run the suite, and at that point migrate CSP to the built-in
 
 ---
 
-## Security headers — CSP + Permissions-Policy (enforced)
+## Security headers — CSP + Permissions-Policy (enforced, both layers)
 
-**Decision.** Emit a Content-Security-Policy and a Permissions-Policy header in
-**production only**, via `django-csp` 4.0 (`CSPMiddleware`) and
-`django-permissions-policy`, both slotted right after `SecurityMiddleware`. CSP
-is **enforced** (`default-src 'self'`, `script-src 'self'`), not report-only.
-Permissions-Policy disables powerful browser features the app doesn't use.
-Referrer-Policy is already covered by Django's built-in
-`SECURE_REFERRER_POLICY = "same-origin"`.
+**Decision.** Emit a strict Content-Security-Policy and a Permissions-Policy
+header on **both** layers in production:
+
+- **Django layer** (`prod.py`): `django-csp` 4.0 + `django-permissions-policy`
+  middleware, slotted right after `SecurityMiddleware`. Covers admin, Swagger,
+  the browsable API, and any other HTML Django serves.
+- **Frontend layer** (`nginx/nginx.prod.conf` + `render.yaml` static-site
+  headers): the same baseline policy on the SPA shell + `/assets/`. nginx adds
+  nothing on backend-proxied paths so Django's headers come through clean.
+
+Same policy on both sides:
+`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';
+img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none';
+base-uri 'self'; frame-ancestors 'none'; form-action 'self'`. Plus
+`Referrer-Policy: same-origin`, `X-Content-Type-Options: nosniff`, and
+`X-Frame-Options: DENY`.
 
 **Why this shape.**
-- **Enforced, because we made every Django-served surface compatible first.**
-  A strict CSP normally breaks something the first time, so the usual advice is
-  to start report-only. We instead audited the three HTML surfaces Django
-  serves under the exact policy and fixed the one that broke:
+- **Enforced, because we made every surface compatible first** — not the usual
+  "ship report-only and tune for weeks" pattern. Real audits done under the
+  exact policy:
   - **Django admin** (5.2) and the **DRF browsable API** load all assets from
-    same-origin `/static/` with no inline scripts — clean under `'self'`.
-  - **Swagger UI** (`/api/docs/`) was the only offender: it loaded JS/CSS from
-    `cdn.jsdelivr.net` and bootstrapped via an inline `<script>`. Fixed by
-    serving the assets from `/static/` (`drf-spectacular-sidecar`) and the
-    bootstrap as an external same-origin file (`SpectacularSwaggerSplitView`).
-    No CDN, no inline script → no policy relaxation needed.
-- **Prod only.** Vite's dev server uses inline scripts, `eval`, and `ws:` HMR
-  connections that a strict policy floods with violations that don't reflect
-  prod — pure noise. So, like `SECURE_SSL_REDIRECT` and HSTS, these live in
-  `prod.py`, not `base.py`.
-- **`style-src` keeps `'unsafe-inline'`.** Admin and Swagger widgets use inline
-  `style=` attributes. Styles can't execute code, so this is the low-risk
+    same-origin `/static/` with no inline scripts — clean as-is.
+  - **Swagger UI** (`/api/docs/`) was the only Django offender: it loaded JS/CSS
+    from `cdn.jsdelivr.net` and bootstrapped via an inline `<script>`. Fixed by
+    self-hosting assets (`drf-spectacular-sidecar`) and serving the bootstrap as
+    an external same-origin file (`SpectacularSwaggerSplitView`).
+  - **The Vite SPA build** emits a single external module script with no inline
+    `<script>` — clean. As belt-and-suspenders against future code-splitting
+    silently reintroducing Vite's inline modulepreload polyfill, `vite.config.ts`
+    sets `build.modulePreload.resolveDependencies = () => []` (the working
+    workaround from [vitejs/vite#11889](https://github.com/vitejs/vite/issues/11889);
+    `polyfill: false` is documented but broken).
+- **Swagger UI + the OpenAPI schema are staff-only in prod.** A public Swagger
+  page hands attackers a complete map of the API. We gate both `/api/docs/`
+  and `/api/schema/` with `staff_member_required` whenever `DEBUG=False`. Dev
+  stays open so codegen (`make gen-api`) and iteration don't need a session.
+- **Prod only on the Django side.** Vite's dev server uses inline scripts,
+  `eval`, and `ws:` HMR — a strict policy floods with noise that doesn't reflect
+  prod. So, like `SECURE_SSL_REDIRECT` and HSTS, the Django CSP lives in
+  `prod.py`, not `base.py`. (The nginx and Render headers are inherently prod-
+  only — dev uses `nginx.dev.conf` / Vite directly.)
+- **`style-src` keeps `'unsafe-inline'`.** Admin, Swagger, and component
+  libraries (sonner toasts, Radix primitives, etc.) set inline `style=`
+  attributes at runtime. Styles can't execute code, so this is the low-risk
   concession; scripts stay locked to `'self'`.
 - **Passkeys stay working.** Permissions-Policy deliberately omits the
-  `publickey-credentials-get` / `-create` features. Listing them with `[]` would
-  *disable* WebAuthn; omitting them keeps the browser default (allow `self`), so
-  passkey enrollment is unaffected. This is the one easy-to-get-wrong footgun.
+  `publickey-credentials-get` / `-create` features. Listing them with `[]`
+  would *disable* WebAuthn; omitting them keeps the browser default (allow
+  `self`), so passkey enrollment is unaffected. This is the one easy-to-get-
+  wrong footgun.
 
-**Tradeoff accepted.** The policy is deliberately tight (`default-src 'self'`).
-The day you add a surface that loads an external script, embeds a third-party
-iframe, or calls another origin's API, the browser *will* block it until you
-widen the matching directive — prefer scoping the loosening to that one view
-(`csp.decorators.csp_update`) over weakening the global policy. No violation
-collector is wired by default; there's a commented `report-uri` line to point
-at Sentry or similar if you want field reports of attempted violations.
+**Tradeoff accepted.** The policy is deliberately tight. The day you add a
+feature that loads an external script, embeds a third-party iframe, calls
+another origin's API, or needs the camera/microphone, the browser *will* block
+it until you widen the matching directive — prefer **scoping the loosening to
+the one view that needs it** (`csp.decorators.csp_update` on the Django side; a
+narrower `path` on Render headers; a `location` block in nginx) over weakening
+the global. Two enforcement layers can drift; if the SPA needs to talk to a new
+origin, remember to widen `connect-src` on the *frontend* host config, not
+just Django. No violation collector is wired by default; there's a commented
+`report-uri` slot in the Django config to point at Sentry or similar.
 
-> **Scope note.** This protects only the *Django-served* surfaces (admin,
-> Swagger, browsable API, allauth JSON). The user-facing SPA is served by the
-> frontend host (Render static site in prod, nginx locally), which sets its own
-> response headers — a SPA CSP belongs there, not in Django, and is not yet
-> configured in this template.
-
-The wiring lives in [`backend/config/settings/prod.py`](../backend/config/settings/prod.py).
+**Where the wiring lives:**
+- Django: [`backend/config/settings/prod.py`](../backend/config/settings/prod.py)
+- Local prod nginx: [`nginx/nginx.prod.conf`](../nginx/nginx.prod.conf)
+- Render: [`render.yaml`](../render.yaml) (frontend static-site `headers`)
+- Vite polyfill guard: [`frontend/vite.config.ts`](../frontend/vite.config.ts)
+- Swagger/schema gate: [`backend/config/urls.py`](../backend/config/urls.py) (`_docs_gate`)

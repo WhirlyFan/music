@@ -20,6 +20,20 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] }),
     tailwindcss(),
   ],
+  build: {
+    // Disable the modulepreload polyfill so Vite never injects an inline
+    // <script> bootstrap into index.html. Without this, the moment we add
+    // code-splitting (route-based lazy load, dynamic import()), Vite would
+    // emit <link rel="modulepreload"> tags AND an inline polyfill script —
+    // which would trip the strict `script-src 'self'` CSP.
+    //
+    // `polyfill: false` is the documented option but historically broken
+    // (vitejs/vite#11889). The community-validated workaround is to override
+    // `resolveDependencies` to return no dependencies, which short-circuits
+    // the same code path. All evergreen browsers + Safari 16.4+ support
+    // modulepreload natively, so the polyfill is no longer load-bearing.
+    modulePreload: { resolveDependencies: () => [] },
+  },
   resolve: {
     alias: {
       // ESM-safe: __dirname is undefined in ESM, so derive the src dir from import.meta.url.

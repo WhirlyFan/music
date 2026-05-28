@@ -76,6 +76,10 @@ services:
         source: /*
         destination: /index.html
     # Long-cache the immutable hashed bundle, never cache the entry HTML.
+    # Security response headers mirror the Django side (settings/prod.py) so
+    # the SPA shell ships with the same CSP + Permissions-Policy baseline.
+    # Render only applies these to static responses — proxied `rewrite`s to
+    # the backend preserve Django's own headers, so they don't double up.
     headers:
       - path: /assets/*
         name: Cache-Control
@@ -83,6 +87,21 @@ services:
       - path: /index.html
         name: Cache-Control
         value: no-cache
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+      - path: /*
+        name: Permissions-Policy
+        value: "accelerometer=(), autoplay=(), camera=(), display-capture=(), encrypted-media=(), fullscreen=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), midi=(), payment=(), usb=()"
+      - path: /*
+        name: Referrer-Policy
+        value: same-origin
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
 
   # ─────────────────────────────────────────────────────────────────────────
   # Backend — Web Service (free tier sleeps after 15 min idle).
