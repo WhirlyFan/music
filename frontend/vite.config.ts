@@ -33,6 +33,18 @@ export default defineConfig({
     // the same code path. All evergreen browsers + Safari 16.4+ support
     // modulepreload natively, so the polyfill is no longer load-bearing.
     modulePreload: { resolveDependencies: () => [] },
+    // Raise Vite's default 500 KB warning. That threshold is the raw,
+    // pre-compression size — a heuristic that's tight for a modern React +
+    // TanStack + shadcn stack. The bundle today is ~693 KB raw / ~222 KB
+    // gzipped, which is well inside the "good first-load" range (industry
+    // benchmark: < 300 KB gzipped). The route splitter already pulls
+    // heavy deps (the markdown renderer, per-route components) into
+    // separate chunks — there's no accidental bloat to fix.
+    //
+    // 1 MB stays a useful tripwire (~320 KB gzipped — that's when "good"
+    // starts shading into "concerning"), so a future heavy dep that's
+    // imported eagerly will still warn.
+    chunkSizeWarningLimit: 1000,
   },
   resolve: {
     alias: {
