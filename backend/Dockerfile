@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build using uv. Final image contains only runtime deps.
 
-FROM python:3.13.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 
 # ---- Final runtime stage ----
-FROM python:3.13.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # libpq5: Postgres client lib needed by psycopg.
 # ffmpeg: required by yt-dlp to extract/convert audio (used by the worker).

@@ -26,7 +26,7 @@ class TrackAdmin(admin.ModelAdmin):
 
 @admin.register(SourceLink)
 class SourceLinkAdmin(admin.ModelAdmin):
-    list_display = ("source", "kind", "external_id", "is_active", "first_seen_at")
+    list_display = ("source", "kind", "external_id", "is_active", "created_at")
     list_filter = ("source", "kind", "is_active")
     search_fields = ("external_id", "url")
 
@@ -58,5 +58,5 @@ class PlaylistAdmin(admin.ModelAdmin):
 
 @admin.register(PlaylistImport)
 class PlaylistImportAdmin(admin.ModelAdmin):
-    list_display = ("playlist", "source", "track_count", "status", "imported_at")
+    list_display = ("playlist", "source", "track_count", "status", "created_at")
     list_filter = ("source", "status")

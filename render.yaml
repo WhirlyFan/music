@@ -214,4 +214,4 @@ databases:
     # in the dashboard so the blueprint re-provisions a fresh one at the
     # version below. Acceptable here because the dev/free DB is throwaway;
     # in a real prod migration you'd pg_dump + restore against a new DB.
-    postgresMajorVersion: "17"
+    postgresMajorVersion: "18"

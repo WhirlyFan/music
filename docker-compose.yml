@@ -13,7 +13,7 @@ x-logging: &default-logging
 
 services:
   db:
-    image: postgres:17.10-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     command: postgres -c 'max_connections=200'
     environment:
@@ -21,7 +21,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a major-version subdir under
+      # /var/lib/postgresql (NOT /data) — mount the parent, per the official image.
+      - postgres_data:/var/lib/postgresql
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"

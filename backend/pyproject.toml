@@ -2,7 +2,7 @@
 name = "backend"
 version = "0.1.0"
 description = "Django backend for react-django-template project"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     # Django 5.2 is the current LTS — security + data-loss fixes through
     # April 2028. We pin to the LTS line (not the latest feature release)
@@ -58,7 +58,7 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 line-length = 100
 extend-exclude = ["migrations"]
 

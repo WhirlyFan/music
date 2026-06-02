@@ -41,7 +41,7 @@ jobs:
     services:
       postgres:
         # Pinned exactly. Bump in lockstep with docker-compose.yml.
-        image: postgres:17.10-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -77,8 +77,8 @@ jobs:
           enable-cache: true
 
       - name: Install Python via uv
-        # Matches backend/.python-version (3.13). Latest 3.13 patch.
-        run: uv python install 3.13.13
+        # Matches backend/.python-version (3.14).
+        run: uv python install 3.14
 
       - name: Install Python deps (frozen)
         run: uv sync --frozen
