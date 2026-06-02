@@ -28,9 +28,10 @@ COPY . .
 # ---- Final runtime stage ----
 FROM python:3.13.13-slim AS runtime
 
-# Postgres client lib needed by psycopg
+# libpq5: Postgres client lib needed by psycopg.
+# ffmpeg: required by yt-dlp to extract/convert audio (used by the worker).
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq5 && \
+    apt-get install -y --no-install-recommends libpq5 ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 # Non-root user

@@ -1,0 +1,19 @@
+name: ingest-tests
+
+# Deterministic parser tests (fixture-based, no network) — safe to gate PRs on.
+on:
+  push:
+    paths: ["scripts/**", ".github/workflows/ingest-tests.yml"]
+  pull_request:
+    paths: ["scripts/**", ".github/workflows/ingest-tests.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pytest
+      - run: pytest scripts/tests -v
