@@ -39,6 +39,3 @@ media/
 
 # Docker volumes (shouldn't be committed, just in case)
 postgres_data/
-
-# Hatchet local
-hatchet-credentials/

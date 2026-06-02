@@ -1,15 +1,14 @@
--- Initial Postgres setup for the react-django-template project.
--- Runs on first container start (when postgres_data volume is empty).
+-- Initial Postgres setup for the music project.
+-- Runs on first container start (when the postgres data volume is empty).
 --
 -- Creates two roles:
---   app_user  — runtime role for Django + workers. NO BYPASSRLS.
---               RLS policies enforce isolation; this role cannot escape them.
+--   app_user  — runtime role for Django. NO BYPASSRLS. RLS policies enforce
+--               isolation; this role cannot escape them.
 --   app_admin — used for migrations, seed, and management commands that
 --               legitimately need to operate across owners (with BYPASSRLS).
 --
--- And two databases:
+-- And one database:
 --   appdb     — Django app data
---   hatchetdb — Hatchet Lite workflow engine state
 
 -- ---- Roles ----------------------------------------------------------------
 
@@ -27,8 +26,7 @@ GRANT app_user TO app_admin;
 
 -- ---- Databases ------------------------------------------------------------
 
-CREATE DATABASE appdb     OWNER app_admin;
-CREATE DATABASE hatchetdb OWNER app_admin;
+CREATE DATABASE appdb OWNER app_admin;
 
 -- ---- Privileges -----------------------------------------------------------
 
@@ -46,7 +44,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE app_admin IN SCHEMA public
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
 ALTER DEFAULT PRIVILEGES FOR ROLE app_admin IN SCHEMA public
     GRANT USAGE, SELECT ON SEQUENCES TO app_user;
-
--- hatchetdb is fully owned by app_admin; Hatchet manages its own schema.
-\connect hatchetdb
-GRANT ALL ON SCHEMA public TO app_admin;

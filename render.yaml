@@ -4,10 +4,7 @@
 # live infrastructure to match. New services are provisioned; changed services
 # are rebuilt; removed services are NOT auto-deleted (safety against typos).
 #
-# Phase A (this file): frontend static site + Django backend + Postgres.
-# Hatchet engine + worker are deliberately deferred — they require paid
-# background workers ($7/mo each), and the template has no workflows wired
-# to user-visible features yet.
+# This file: frontend static site + Django backend + Postgres.
 #
 # Docs: https://render.com/docs/blueprint-spec
 # Companion walkthrough: docs/ops/deploy-render.md

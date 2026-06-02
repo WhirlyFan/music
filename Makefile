@@ -1,4 +1,4 @@
-.PHONY: help bootstrap up down logs ps dev-backend dev-frontend mm migrate seed reset-db shell test lint format gen-api hatchet-token
+.PHONY: help bootstrap up down logs ps dev-backend dev-frontend mm migrate seed reset-db shell test lint format gen-api
 
 # Use admin role for migrations / seed; runtime uses app_user via .env.
 ADMIN_URL ?= postgres://app_admin:app_admin@localhost:5432/appdb
@@ -6,7 +6,7 @@ ADMIN_URL ?= postgres://app_admin:app_admin@localhost:5432/appdb
 help:
 	@echo "Targets:"
 	@echo "  bootstrap     First-time setup: up db, install deps, migrate, seed"
-	@echo "  up            docker compose up -d (db + backend + worker + hatchet + frontend + nginx)"
+	@echo "  up            docker compose up -d (db + backend + frontend + nginx)"
 	@echo "  down          docker compose down"
 	@echo "  logs          tail logs from all services"
 	@echo "  ps            show running services"
@@ -24,8 +24,6 @@ help:
 	@echo "  test          run pytest"
 	@echo "  lint          lint backend + frontend"
 	@echo "  format        format backend + frontend"
-	@echo ""
-	@echo "  hatchet-token Print instructions for creating a Hatchet API token"
 
 bootstrap:
 	docker compose up -d db
@@ -89,10 +87,3 @@ lint:
 format:
 	cd backend && uv run ruff check --fix && uv run ruff format
 	cd frontend && pnpm lint:fix && pnpm format
-
-hatchet-token:
-	@echo "1. docker compose up -d hatchet"
-	@echo "2. Open http://localhost:8888 — log in as admin@example.com / Admin123!!"
-	@echo "3. Settings → API Tokens → Create"
-	@echo "4. Copy the token into .env as HATCHET_CLIENT_TOKEN=..."
-	@echo "5. Restart: docker compose up -d worker backend"

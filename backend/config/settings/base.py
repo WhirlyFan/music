@@ -52,7 +52,6 @@ LOCAL_APPS = [
     "apps.users",
     "apps.core",
     "apps.notes",
-    "apps.jobs",
     "apps.catalog",
 ]
 

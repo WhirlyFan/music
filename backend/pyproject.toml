@@ -29,7 +29,6 @@ dependencies = [
     "django-pgtrigger>=4.13",
     "django-csp>=4.0",
     "django-permissions-policy>=4.25",
-    "hatchet-sdk>=0.40",
     "sentry-sdk[django]>=2.0",
     "psycopg[binary]>=3.2",
     "dj-database-url>=2.3",

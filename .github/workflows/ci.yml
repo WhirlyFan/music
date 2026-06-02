@@ -85,7 +85,7 @@ jobs:
 
       - name: Bootstrap Postgres roles + databases
         # init.sql creates app_user (no BYPASSRLS) and app_admin (BYPASSRLS),
-        # plus appdb and hatchetdb. Same script docker-compose mounts locally.
+        # plus appdb. Same script docker-compose mounts locally.
         run: |
           PGPASSWORD=postgres psql -h localhost -U postgres -d postgres \
             -v ON_ERROR_STOP=1 -f ../postgres/init.sql
