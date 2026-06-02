@@ -71,3 +71,34 @@ def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None
     best.status = PlaybackSource.Status.ACTIVE  # exactly one active (DB-enforced)
     PlaybackSource.objects.bulk_create([ps for _, ps in scored])
     return best
+
+
+@transaction.atomic
+def set_manual_youtube_source(track: Track, video_id: str, *, user=None) -> PlaybackSource:
+    """Correction: make `video_id` the track's active source (manual, sticky)."""
+    track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).update(
+        status=PlaybackSource.Status.REPLACED
+    )
+    return PlaybackSource.objects.create(
+        track=track,
+        source=Source.objects.get(code=Source.YOUTUBE),
+        locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
+        locator=video_id,
+        origin=PlaybackSource.Origin.MATCHED_MANUAL,
+        status=PlaybackSource.Status.ACTIVE,
+        selected_by=user,
+    )
+
+
+@transaction.atomic
+def promote_candidate(playback_source: PlaybackSource, *, user=None) -> PlaybackSource:
+    """Correction: promote an existing candidate row to active (manual)."""
+    track = playback_source.track
+    track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).exclude(
+        pk=playback_source.pk
+    ).update(status=PlaybackSource.Status.REPLACED)
+    playback_source.status = PlaybackSource.Status.ACTIVE
+    playback_source.origin = PlaybackSource.Origin.MATCHED_MANUAL
+    playback_source.selected_by = user
+    playback_source.save(update_fields=["status", "origin", "selected_by", "updated_at"])
+    return playback_source
