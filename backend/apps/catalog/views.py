@@ -1,5 +1,6 @@
 from django.db.models import Count, Prefetch
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from . import match
 from .models import PlaybackSource, Playlist, PlaylistTrack, Track
 from .serializers import (
     IngestSerializer,
+    MatchResultSerializer,
     PlaybackSourceSerializer,
     PlaylistDetailSerializer,
     PlaylistSerializer,
@@ -48,6 +50,7 @@ class PlaylistViewSet(viewsets.ReadOnlyModelViewSet):
         )
         return Response(PlaylistDetailSerializer(playlist).data, status=status_code)
 
+    @extend_schema(request=IngestSerializer, responses=PlaylistDetailSerializer)
     @action(detail=False, methods=["post"])
     def ingest(self, request):
         serializer = IngestSerializer(data=request.data)
@@ -61,6 +64,7 @@ class PlaylistViewSet(viewsets.ReadOnlyModelViewSet):
         playlist = ingest_apple_playlist(url, user=request.user)
         return self._detail_response(playlist, status.HTTP_201_CREATED)
 
+    @extend_schema(request=None, responses=MatchResultSerializer)
     @action(detail=True, methods=["post"])
     def match(self, request, pk=None):
         """Resolve YouTube playback sources for this playlist's unmatched tracks."""
@@ -81,6 +85,7 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return Track.objects.prefetch_related("playback_sources").all()
 
+    @extend_schema(responses=PlaybackSourceSerializer(many=True))
     @action(detail=True, methods=["get"])
     def candidates(self, request, pk=None):
         track = get_object_or_404(Track, pk=pk)
@@ -89,6 +94,7 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         )
         return Response(PlaybackSourceSerializer(rows, many=True).data)
 
+    @extend_schema(request=SetSourceSerializer, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"], url_path="set-source")
     def set_source(self, request, pk=None):
         track = get_object_or_404(Track, pk=pk)

@@ -65,6 +65,10 @@ class IngestSerializer(serializers.Serializer):
     url = serializers.URLField()
 
 
+class MatchResultSerializer(serializers.Serializer):
+    matched = serializers.IntegerField()
+
+
 class SetSourceSerializer(serializers.Serializer):
     """Correct a track's playback source: paste a YouTube video id OR promote
     an existing candidate by its PlaybackSource id."""
