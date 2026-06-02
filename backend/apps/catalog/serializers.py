@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from .models import PlaybackSource, Playlist, PlaylistTrack, Track
@@ -30,6 +31,7 @@ class TrackSerializer(serializers.ModelSerializer):
         model = Track
         fields = ["id", "title", "primary_artist", "duration_ms", "isrc", "active_source"]
 
+    @extend_schema_field(PlaybackSourceSerializer)
     def get_active_source(self, obj):
         # Uses prefetched playback_sources (no extra query per track).
         active = [p for p in obj.playback_sources.all() if p.status == PlaybackSource.Status.ACTIVE]
