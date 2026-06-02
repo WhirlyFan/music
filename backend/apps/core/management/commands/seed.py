@@ -27,6 +27,13 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
+from apps.catalog.models import Playlist, Track
+from apps.catalog.tests.factories import (
+    PlaybackSourceFactory,
+    PlaylistFactory,
+    PlaylistTrackFactory,
+    TrackFactory,
+)
 from apps.notes.models import Note
 from apps.notes.tests.factories import NoteFactory
 from apps.users.tests.factories import UserFactory
@@ -144,6 +151,27 @@ def seed_user_data(user, *, notes: int):
     NoteFactory.create_batch(notes, owner=user)
 
 
+def seed_catalog() -> int:
+    """Create a few sample public playlists (tracks + an active YouTube
+    playback source each) so the /playlists UI has content out of the box.
+
+    Network-free: the video ids are fake, so they populate the UI but won't
+    actually play. For real, playable data run `ingest_apple` + `match_youtube`.
+
+    Idempotent: skips if any playlist already exists, so re-seeding (without
+    --flush) doesn't pile up duplicates.
+    """
+    if Playlist.objects.exists():
+        return 0
+    for _ in range(3):
+        playlist = PlaylistFactory()
+        for position in range(8):
+            track = TrackFactory()
+            PlaylistTrackFactory(playlist=playlist, track=track, position=position)
+            PlaybackSourceFactory(track=track)
+    return 3
+
+
 # ---------- Command -------------------------------------------------------
 
 
@@ -196,10 +224,12 @@ class Command(BaseCommand):
 
         if options["flush"]:
             Note.objects.all().delete()
+            Playlist.objects.all().delete()  # cascades PlaylistTrack + SourceLink
+            Track.objects.all().delete()  # cascades PlaybackSource
             # Keep superusers so whoever is logged into /admin/ doesn't
             # get booted. Known admin account is recreated below anyway.
             User.objects.filter(is_superuser=False).delete()
-            self.stdout.write(self.style.WARNING("Flushed notes + non-superuser users."))
+            self.stdout.write(self.style.WARNING("Flushed notes, catalog + non-superuser users."))
 
         notes_per_user = options["notes"]
 
@@ -217,10 +247,15 @@ class Command(BaseCommand):
             ensure_verified_email(user, user.email)  # mandatory mode requires this
             seed_user_data(user, notes=notes_per_user)
 
+        # 3. Sample catalog (shared, not per-user) — gives the /playlists UI
+        #    content out of the box. Idempotent (create-if-empty).
+        seed_catalog()
+
         # Summary.
         self.stdout.write(
             self.style.SUCCESS(
-                f"Seeded: {User.objects.count()} users, {Note.objects.count()} notes."
+                f"Seeded: {User.objects.count()} users, {Note.objects.count()} notes, "
+                f"{Playlist.objects.count()} playlists."
             )
         )
         self.stdout.write("")
