@@ -43,6 +43,16 @@ export function AppHeader() {
           </Link>
         )}
 
+        {isAuthed && (
+          <Link
+            to="/playlists"
+            className="text-muted-foreground hover:text-foreground text-sm"
+            activeProps={{ className: 'text-foreground font-medium' }}
+          >
+            Playlists
+          </Link>
+        )}
+
         {/* Docs are public — anyone can read them without signing in. */}
         <Link
           to="/docs"

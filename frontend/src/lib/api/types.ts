@@ -4,15 +4,15 @@
  */
 
 export interface paths {
-    "/api/v1/jobs/": {
+    "/api/v1/catalog/playlists/": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description List + retrieve workflow runs the current user has triggered. */
-        get: operations["v1_jobs_list"];
+        /** @description List/retrieve playlists, plus ingest + match actions. */
+        get: operations["v1_catalog_playlists_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21,15 +21,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/jobs/{id}/": {
+    "/api/v1/catalog/playlists/{id}/": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** @description List + retrieve workflow runs the current user has triggered. */
-        get: operations["v1_jobs_retrieve"];
+        /** @description List/retrieve playlists, plus ingest + match actions. */
+        get: operations["v1_catalog_playlists_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -38,7 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/jobs/trigger/": {
+    "/api/v1/catalog/playlists/{id}/match/": {
         parameters: {
             query?: never;
             header?: never;
@@ -47,8 +47,93 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description List + retrieve workflow runs the current user has triggered. */
-        post: operations["v1_jobs_trigger_create"];
+        /** @description Resolve YouTube playback sources for this playlist's unmatched tracks. */
+        post: operations["v1_catalog_playlists_match_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/ingest/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description List/retrieve playlists, plus ingest + match actions. */
+        post: operations["v1_catalog_playlists_ingest_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Retrieve tracks; list candidates; correct the active playback source. */
+        get: operations["v1_catalog_tracks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Retrieve tracks; list candidates; correct the active playback source. */
+        get: operations["v1_catalog_tracks_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/candidates/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Retrieve tracks; list candidates; correct the active playback source. */
+        get: operations["v1_catalog_tracks_candidates_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/set-source/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Retrieve tracks; list candidates; correct the active playback source. */
+        post: operations["v1_catalog_tracks_set_source_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -135,10 +220,40 @@ export interface paths {
         patch: operations["v1_notes_partial_update"];
         trace?: never;
     };
+    "/api/v1/users/passkey-credential-ids/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_users_passkey_credential_ids_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Ingest: {
+            /** Format: uri */
+            url: string;
+        };
+        /**
+         * @description * `video_id` - YouTube video id
+         *     * `storage_key` - Object-storage key
+         *     * `url` - Direct URL
+         * @enum {string}
+         */
+        LocatorKindEnum: "video_id" | "storage_key" | "url";
+        MatchResult: {
+            matched: number;
+        };
         Note: {
             readonly id: number;
             title: string;
@@ -148,6 +263,13 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `matched_auto` - Matched (auto)
+         *     * `matched_manual` - Matched (manual correction)
+         *     * `direct` - Direct (paste/upload, no search)
+         * @enum {string}
+         */
+        OriginEnum: "matched_auto" | "matched_manual" | "direct";
         PaginatedNoteList: {
             /** @example 123 */
             count: number;
@@ -163,7 +285,7 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Note"][];
         };
-        PaginatedWorkflowRunList: {
+        PaginatedPlaybackSourceList: {
             /** @example 123 */
             count: number;
             /**
@@ -176,7 +298,37 @@ export interface components {
              * @example http://api.example.org/accounts/?page=2
              */
             previous?: string | null;
-            results: components["schemas"]["WorkflowRun"][];
+            results: components["schemas"]["PlaybackSource"][];
+        };
+        PaginatedPlaylistList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Playlist"][];
+        };
+        PaginatedTrackList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Track"][];
         };
         PatchedNote: {
             readonly id?: number;
@@ -187,27 +339,71 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /**
-         * @description * `PENDING` - Pending
-         *     * `RUNNING` - Running
-         *     * `SUCCEEDED` - Succeeded
-         *     * `FAILED` - Failed
-         *     * `CANCELLED` - Cancelled
-         * @enum {string}
-         */
-        StatusEnum: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
-        WorkflowRun: {
-            readonly id: number;
-            /** @description Hatchet workflow class name */
-            workflow: string;
-            readonly hatchet_run_id: string;
-            input?: unknown;
-            readonly status: components["schemas"]["StatusEnum"];
-            readonly error: string;
+        PlaybackSource: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly source_code: string;
+            locator_kind: components["schemas"]["LocatorKindEnum"];
+            locator: string;
+            status?: components["schemas"]["StatusEnum"];
+            origin: components["schemas"]["OriginEnum"];
+            /** Format: double */
+            confidence?: number | null;
+            duration_delta_ms?: number | null;
+            title?: string;
+            uploader?: string;
+            duration_ms?: number | null;
+        };
+        Playlist: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            is_public?: boolean;
+            readonly track_count: number;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        PlaylistDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            description?: string;
+            is_public?: boolean;
             /** Format: date-time */
-            readonly updated_at: string;
+            readonly created_at: string;
+            readonly track_count: number;
+            readonly items: components["schemas"]["PlaylistTrack"][];
+        };
+        PlaylistTrack: {
+            position: number;
+            readonly track: components["schemas"]["Track"];
+        };
+        /**
+         * @description Correct a track's playback source: paste a YouTube video id OR promote
+         *     an existing candidate by its PlaybackSource id.
+         */
+        SetSource: {
+            video_id?: string;
+            /** Format: uuid */
+            playback_source_id?: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `candidate` - Candidate
+         *     * `dead` - Dead
+         *     * `replaced` - Replaced
+         *     * `rejected` - Rejected
+         * @enum {string}
+         */
+        StatusEnum: "active" | "candidate" | "dead" | "replaced" | "rejected";
+        Track: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            primary_artist: string;
+            duration_ms?: number | null;
+            isrc?: string;
+            readonly active_source: components["schemas"]["PlaybackSource"];
         };
     };
     responses: never;
@@ -218,7 +414,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    v1_jobs_list: {
+    v1_catalog_playlists_list: {
         parameters: {
             query?: {
                 /** @description A page number within the paginated result set. */
@@ -235,18 +431,18 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedWorkflowRunList"];
+                    "application/json": components["schemas"]["PaginatedPlaylistList"];
                 };
             };
         };
     };
-    v1_jobs_retrieve: {
+    v1_catalog_playlists_retrieve: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this workflow run. */
-                id: number;
+                /** @description A UUID string identifying this playlist. */
+                id: string;
             };
             cookie?: never;
         };
@@ -257,12 +453,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRun"];
+                    "application/json": components["schemas"]["PlaylistDetail"];
                 };
             };
         };
     };
-    v1_jobs_trigger_create: {
+    v1_catalog_playlists_match_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this playlist. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MatchResult"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_ingest_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -271,9 +489,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkflowRun"];
-                "application/x-www-form-urlencoded": components["schemas"]["WorkflowRun"];
-                "multipart/form-data": components["schemas"]["WorkflowRun"];
+                "application/json": components["schemas"]["Ingest"];
+                "application/x-www-form-urlencoded": components["schemas"]["Ingest"];
+                "multipart/form-data": components["schemas"]["Ingest"];
             };
         };
         responses: {
@@ -282,7 +500,104 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowRun"];
+                    "application/json": components["schemas"]["PlaylistDetail"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTrackList"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Track"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_candidates_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaybackSourceList"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_set_source_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SetSource"];
+                "application/x-www-form-urlencoded": components["schemas"]["SetSource"];
+                "multipart/form-data": components["schemas"]["SetSource"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSource"];
                 };
             };
         };
@@ -430,6 +745,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Note"];
                 };
+            };
+        };
+    };
+    v1_users_passkey_credential_ids_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

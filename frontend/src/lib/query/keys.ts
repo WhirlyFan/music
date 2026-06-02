@@ -34,10 +34,10 @@ export const noteKeys = {
   detail: (id: number) => ['notes', 'detail', id] as const,
 }
 
-export const workflowRunKeys = {
-  all: () => ['workflow-runs'] as const,
-  list: () => ['workflow-runs', 'list'] as const,
-  detail: (id: number) => ['workflow-runs', 'detail', id] as const,
+export const playlistKeys = {
+  all: () => ['playlists'] as const,
+  list: () => ['playlists', 'list'] as const,
+  detail: (id: string) => ['playlists', 'detail', id] as const,
 }
 
 /**

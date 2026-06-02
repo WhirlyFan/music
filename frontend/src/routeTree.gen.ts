@@ -15,7 +15,9 @@ import { Route as NotesRouteImport } from './routes/notes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PlaylistsIndexRouteImport } from './routes/playlists/index'
 import { Route as DocsIndexRouteImport } from './routes/docs/index'
+import { Route as PlaylistsPlaylistIdRouteImport } from './routes/playlists/$playlistId'
 import { Route as DocsSplatRouteImport } from './routes/docs/$'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
 import { Route as AccountMfaRouteImport } from './routes/account/mfa'
@@ -60,10 +62,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
+  id: '/playlists/',
+  path: '/playlists/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DocsIndexRoute = DocsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => DocsRoute,
+} as any)
+const PlaylistsPlaylistIdRoute = PlaylistsPlaylistIdRouteImport.update({
+  id: '/playlists/$playlistId',
+  path: '/playlists/$playlistId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DocsSplatRoute = DocsSplatRouteImport.update({
   id: '/$',
@@ -143,7 +155,9 @@ export interface FileRoutesByFullPath {
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/docs/$': typeof DocsSplatRoute
+  '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/docs/': typeof DocsIndexRoute
+  '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -162,7 +176,9 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
   '/docs/$': typeof DocsSplatRoute
+  '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/docs': typeof DocsIndexRoute
+  '/playlists': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -185,7 +201,9 @@ export interface FileRoutesById {
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/docs/$': typeof DocsSplatRoute
+  '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/docs/': typeof DocsIndexRoute
+  '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -209,7 +227,9 @@ export interface FileRouteTypes {
     | '/account/mfa'
     | '/account/verify-email'
     | '/docs/$'
+    | '/playlists/$playlistId'
     | '/docs/'
+    | '/playlists/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -228,7 +248,9 @@ export interface FileRouteTypes {
     | '/signup'
     | '/account/email'
     | '/docs/$'
+    | '/playlists/$playlistId'
     | '/docs'
+    | '/playlists'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -250,7 +272,9 @@ export interface FileRouteTypes {
     | '/account/mfa'
     | '/account/verify-email'
     | '/docs/$'
+    | '/playlists/$playlistId'
     | '/docs/'
+    | '/playlists/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -272,6 +296,8 @@ export interface RootRouteChildren {
   AccountEmailRoute: typeof AccountEmailRoute
   AccountMfaRoute: typeof AccountMfaRouteWithChildren
   AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
+  PlaylistsPlaylistIdRoute: typeof PlaylistsPlaylistIdRoute
+  PlaylistsIndexRoute: typeof PlaylistsIndexRoute
   AccountPasswordChangeRoute: typeof AccountPasswordChangeRoute
   AccountPasswordForgotRoute: typeof AccountPasswordForgotRoute
   AccountPasswordResetKeyKeyRoute: typeof AccountPasswordResetKeyKeyRoute
@@ -321,12 +347,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/playlists/': {
+      id: '/playlists/'
+      path: '/playlists'
+      fullPath: '/playlists/'
+      preLoaderRoute: typeof PlaylistsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/docs/': {
       id: '/docs/'
       path: '/'
       fullPath: '/docs/'
       preLoaderRoute: typeof DocsIndexRouteImport
       parentRoute: typeof DocsRoute
+    }
+    '/playlists/$playlistId': {
+      id: '/playlists/$playlistId'
+      path: '/playlists/$playlistId'
+      fullPath: '/playlists/$playlistId'
+      preLoaderRoute: typeof PlaylistsPlaylistIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/docs/$': {
       id: '/docs/$'
@@ -475,6 +515,8 @@ const rootRouteChildren: RootRouteChildren = {
   AccountEmailRoute: AccountEmailRoute,
   AccountMfaRoute: AccountMfaRouteWithChildren,
   AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,
+  PlaylistsPlaylistIdRoute: PlaylistsPlaylistIdRoute,
+  PlaylistsIndexRoute: PlaylistsIndexRoute,
   AccountPasswordChangeRoute: AccountPasswordChangeRoute,
   AccountPasswordForgotRoute: AccountPasswordForgotRoute,
   AccountPasswordResetKeyKeyRoute: AccountPasswordResetKeyKeyRoute,
