@@ -22,6 +22,28 @@ _SEARCH_OPTS = {
 }
 
 
+_RESOLVE_OPTS = {
+    "format": "bestaudio",
+    "quiet": True,
+    "no_warnings": True,
+    "skip_download": True,
+    "noplaylist": True,
+    "retries": 3,
+}
+
+
+def resolve_audio(video_id: str) -> dict:
+    """Resolve the direct audio stream for a YouTube video (no download).
+
+    Returns {url, http_headers}. The URL is **IP-locked + time-limited** — only
+    the server that resolved it can fetch it, and only for a few hours — so we
+    proxy it from the same backend and cache it briefly (see streaming.py).
+    """
+    with YoutubeDL(_RESOLVE_OPTS) as ydl:
+        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+    return {"url": info["url"], "http_headers": dict(info.get("http_headers") or {})}
+
+
 def search(query: str, n: int = 5) -> list[dict]:
     """Return up to `n` YouTube candidates for `query`.
 

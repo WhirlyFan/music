@@ -1,11 +1,12 @@
 from django.db.models import Count, Prefetch
+from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from . import match
+from . import match, streaming
 from .models import PlaybackSource, Playlist, PlaylistTrack, Track
 from .serializers import (
     IngestSerializer,
@@ -112,6 +113,40 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
                 {"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND
             )
         return Response(PlaybackSourceSerializer(ps).data)
+
+    @extend_schema(exclude=True)  # binary audio proxy — no typed client needed
+    @action(detail=True, methods=["get"])
+    def stream(self, request, pk=None):
+        """Proxy this track's audio from YouTube (resolved live via yt-dlp).
+
+        Nothing is stored — we hold only the `video_id`; the audio is streamed
+        through and never written. Range is forwarded so the <audio> element can
+        seek. 404 until the track has an active source (Play matches first).
+        """
+        track = get_object_or_404(Track, pk=pk)
+        ps = track.playback_sources.filter(
+            status=PlaybackSource.Status.ACTIVE,
+            locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
+        ).first()
+        if ps is None:
+            raise Http404("Track has no active YouTube source.")
+
+        audio = streaming.resolved_audio(ps.locator)
+        headers = dict(audio.get("http_headers") or {})
+        if request.headers.get("Range"):
+            headers["Range"] = request.headers["Range"]
+        upstream = streaming.open_upstream(audio["url"], headers)
+
+        resp = StreamingHttpResponse(
+            streaming.stream_chunks(upstream),
+            status=getattr(upstream, "status", 200),
+            content_type=upstream.headers.get("Content-Type", "audio/mp4"),
+        )
+        for header in ("Content-Length", "Content-Range"):
+            if upstream.headers.get(header):
+                resp[header] = upstream.headers[header]
+        resp["Accept-Ranges"] = "bytes"
+        return resp
 
     @extend_schema(request=SetSourceSerializer, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"], url_path="set-source")
