@@ -77,6 +77,29 @@ Don't hand-roll button styling elsewhere — use `<Button variant=... size=...>`
 
 **Row highlight / hover:** `transition-colors duration-150` is acceptable for pure color (the one place a faster duration reads fine); the current row gets a `bg-muted` + a `▶` marker rather than motion.
 
+**Overlays (dialogs, sheets, dropdowns) — the global enter/exit system.** Radix
+keeps the node mounted while `data-state="closed"` until the exit animation ends,
+so we drive enter/exit off `data-[state]` with our tokens (entrances ease-out,
+exits a touch quicker — Frigade's two-curve model):
+
+| Surface | open | close |
+| --- | --- | --- |
+| Backdrop / dropdown (opacity only — popper-positioned, don't animate transform) | `data-[state=open]:animate-fade-in` | `data-[state=closed]:animate-fade-out` |
+| Centered dialog content (fade + zoom, keeps the −50% centering transform) | `data-[state=open]:animate-dialog-in` | `data-[state=closed]:animate-dialog-out` |
+| Bottom sheet (slide up — for a future Sheet) | `data-[state=open]:animate-sheet-up-in` | `data-[state=closed]:animate-sheet-up-out` |
+
+Wired into `components/ui/alert-dialog.tsx` (covers `confirm()` + `promptText()`)
+and `dropdown-menu.tsx`. The `*-out` tokens use `forwards` so the end frame holds
+until Radix unmounts.
+
+> **⚠️ shadcn animation classes are NOT available here.** We don't install
+> `tailwindcss-animate` / `tw-animate-css`, so the classes shadcn ships
+> (`animate-in`, `animate-out`, `fade-in-0`, `zoom-in-95`, `slide-in-from-*`) are
+> **no-ops** — a pasted component will *silently not animate*. When adding a
+> shadcn component, **translate those classes to our `data-[state]:animate-*`
+> tokens above.** (This is the deliberate trade-off for keeping every animation
+> on our own curves — see "When CSS isn't enough".)
+
 ## When CSS isn't enough
 
 The system is deliberately minimal. Reach for the **`motion`** library (renamed `framer-motion`) **only** for: list enter/exit (`AnimatePresence`), drag/reorder gestures, or spring physics — and only for that feature, called out in the PR. Everything else (hover, press, ripple, mount entrances, loops) stays CSS.

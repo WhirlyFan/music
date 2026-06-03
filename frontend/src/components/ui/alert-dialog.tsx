@@ -24,7 +24,7 @@ function AlertDialogOverlay({
       // invert and brighten the page in dark mode. backdrop-blur-sm adds
       // a soft macOS-style blur to the content behind the dialog.
       className={cn(
-        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/40 backdrop-blur-sm duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+        'data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out fixed inset-0 z-50 bg-black/40 backdrop-blur-sm',
         'focus:outline-hidden',
         className,
       )}
@@ -46,7 +46,7 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         className={cn(
           'bg-background fixed top-[50%] left-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border p-4 shadow-lg sm:rounded-lg',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           'focus:outline-hidden',
           className,
         )}
