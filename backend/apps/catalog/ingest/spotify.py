@@ -18,6 +18,7 @@ import urllib.parse
 import urllib.request
 
 from django.conf import settings
+from django.core.cache import cache
 
 
 class SpotifyError(Exception):
@@ -37,6 +38,9 @@ def _token() -> str:
     secret = settings.SPOTIFY_CLIENT_SECRET
     if not cid or not secret:
         raise SpotifyNotConfigured("Spotify isn't configured on this server yet.")
+    cached = cache.get("spotify:app_token")
+    if cached:
+        return cached
     auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
     data = urllib.parse.urlencode({"grant_type": "client_credentials"}).encode()
     req = urllib.request.Request(
@@ -48,7 +52,10 @@ def _token() -> str:
         },
     )
     with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read())["access_token"]
+        body = json.loads(r.read())
+    token = body["access_token"]
+    cache.set("spotify:app_token", token, max(60, body.get("expires_in", 3600) - 60))
+    return token
 
 
 def _get(url_or_path: str, token: str) -> dict:

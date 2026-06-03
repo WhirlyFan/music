@@ -221,6 +221,27 @@ def test_match_backfills_artwork_from_youtube_thumbnail(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_play_prefers_origin_art_then_youtube(monkeypatch):
+    from apps.catalog.ingest import spotify
+
+    # A Spotify-origin track resolves its REAL album art on play (single /tracks).
+    sp = TrackFactory(artwork_url="", source_url="https://open.spotify.com/track/abc123")
+    monkeypatch.setattr(spotify, "_token", lambda: "tok")
+    monkeypatch.setattr(
+        spotify, "_get", lambda path, tok: {"album": {"images": [{"url": "https://i.scdn.co/REAL", "width": 300}]}}
+    )
+    match.backfill_artwork(sp, "VID123")
+    sp.refresh_from_db()
+    assert sp.artwork_url == "https://i.scdn.co/REAL"  # Spotify, not the YouTube thumb
+
+    # No origin art available → falls back to the YouTube thumbnail.
+    yt = TrackFactory(artwork_url="", source_url="")
+    match.backfill_artwork(yt, "VID123")
+    yt.refresh_from_db()
+    assert yt.artwork_url == "https://i.ytimg.com/vi/VID123/hqdefault.jpg"
+
+
+@pytest.mark.django_db
 def test_set_source_correction(client, offline):
     client.post(INGEST, {"url": ALBUM_URL}, format="json")
     track = Track.objects.first()

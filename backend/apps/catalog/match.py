@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from django.db import transaction
 
-from .ingest import youtube
+from .ingest import spotify, youtube
 from .models import PlaybackSource, Source, Track
 
 # A duration this far off (ms) scores zero — filters covers / extended edits.
@@ -29,13 +29,31 @@ def _score(track: Track, cand: dict) -> tuple[float, int | None]:
     return round(dur_score * title_hit, 4), delta_ms
 
 
-@transaction.atomic
+def _origin_artwork(source_url: str) -> str:
+    """The track's REAL cover from its origin platform — Spotify only (we store a
+    per-track Spotify URL; Apple's stored URL is the collection, not the song).
+    Best-effort: returns '' on any failure so play is never blocked."""
+    if "open.spotify.com/track/" in (source_url or ""):
+        try:
+            sid = source_url.split("/track/")[1].split("?")[0].strip("/")
+            t = spotify._get(f"/tracks/{sid}", spotify._token())
+            return spotify._pick_image((t.get("album") or {}).get("images"))
+        except Exception:  # noqa: BLE001 — enrichment only, must never break playback
+            return ""
+    return ""
+
+
 def backfill_artwork(track: Track, video_id: str) -> None:
-    """Tracks imported before artwork existed (or from a source that gave none)
-    have a blank cover. Once matched to a video, use its thumbnail so the player
-    shows art instead of a placeholder. Only fills a blank — never overwrites."""
-    if video_id and not track.artwork_url:
-        track.artwork_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    """Fill a blank cover on play: prefer the track's own art from its origin
+    (Spotify), then fall back to the YouTube thumbnail. Only fills a blank — never
+    overwrites — and never raises (artwork is best-effort, playback comes first)."""
+    if track.artwork_url:
+        return
+    art = _origin_artwork(track.source_url)
+    if not art and video_id:
+        art = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+    if art:
+        track.artwork_url = art
         track.save(update_fields=["artwork_url"])
 
 
