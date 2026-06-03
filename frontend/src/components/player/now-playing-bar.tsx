@@ -171,12 +171,7 @@ export function NowPlayingBar() {
             aria-label={playing ? 'Pause' : 'Play'}
             disabled={!audioSrc}
           >
-            <span
-              key={playing ? 'pause' : 'play'}
-              className="motion-safe:animate-pop-in inline-flex"
-            >
-              {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
-            </span>
+            {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
           </Button>
           <Button
             size="icon"
