@@ -42,6 +42,7 @@ function PlaylistsPage() {
     onSubmit: async ({ value, formApi }) => {
       const result = await ingest.mutateAsync(value.url)
       setImported(result)
+      if (result.note) toast.info(result.note) // e.g. Spotify capped at 50
       formApi.reset()
     },
   })

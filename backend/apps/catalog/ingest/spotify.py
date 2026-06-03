@@ -1,15 +1,19 @@
-"""Spotify ingest via the Web API (client-credentials flow — public playlists,
-albums, tracks). Needs SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET (Doppler).
+"""Spotify ingest. **API-first** (client-credentials, SPOTIFY_CLIENT_ID/SECRET):
+it returns the *full* playlist + ISRC and is used whenever creds are configured.
+The Web API blocks Spotify's own editorial/algorithmic playlists (Top 50,
+Discover Weekly, …) for third-party apps, so for those — and when no creds are
+set — we fall back to the public **embed scrape** (keyless, but capped at ~50
+tracks). `partial=True` flags a result we could only return the capped 50 of.
 
-Unlike the Apple Music scrape, Spotify gives us **ISRC** per track, which we
-store for better cross-source identity. Playback is still resolved to YouTube
-lazily on play (Spotify doesn't hand us a playable stream).
-"""
+Playback is resolved to YouTube lazily on play either way (Spotify doesn't hand
+us a playable stream)."""
 
 from __future__ import annotations
 
 import base64
 import json
+import re
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -50,8 +54,20 @@ def _token() -> str:
 def _get(url_or_path: str, token: str) -> dict:
     url = url_or_path if url_or_path.startswith("http") else f"{_API}{url_or_path}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=15) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            # Since Nov 2024 Spotify 404s its own editorial/algorithmic playlists
+            # (Top 50, Discover Weekly, Today's Top Hits, …) for third-party apps.
+            raise SpotifyError(
+                "Spotify blocks API access to its own editorial playlists (Top 50, "
+                "Discover Weekly, etc.). Paste a user-made playlist, album, or track instead."
+            ) from e
+        if e.code in (401, 403):
+            raise SpotifyError("Spotify rejected the request — check the Client ID/Secret.") from e
+        raise SpotifyError(f"Spotify request failed ({e.code}).") from e
 
 
 def _classify(url: str) -> tuple[str, str]:
@@ -87,26 +103,103 @@ def _paginate(first: dict, token: str):
         page = _get(nxt, token) if nxt else None
 
 
-def ingest_with_meta(url: str) -> dict:
-    """Return {title, external_id, kind, tracks} for persistence."""
-    kind, sid = _classify(url)
-    token = _token()
+def _configured() -> bool:
+    return bool(settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET)
 
+
+def _api_with_meta(kind: str, sid: str) -> dict:
+    """Full fetch via the Web API (paginated, with ISRC). Requires credentials."""
+    token = _token()
     if kind == "track":
         t = _get(f"/tracks/{sid}", token)
         return {"title": t.get("name") or "", "external_id": sid, "kind": "track",
                 "tracks": [_normalize(t)]}
-
     if kind == "album":
         album = _get(f"/albums/{sid}", token)
-        # Album-track items omit external_ids; stamp the album's ISRC-less rows
-        # with the album artists as a fallback.
         items = _paginate(album.get("tracks") or {}, token)
         return {"title": album.get("name") or "", "external_id": sid, "kind": "album",
                 "tracks": [_normalize(it) for it in items]}
-
     playlist = _get(f"/playlists/{sid}", token)
     items = _paginate(playlist.get("tracks") or {}, token)
     tracks = [_normalize(it["track"]) for it in items if it.get("track")]
     return {"title": playlist.get("name") or "", "external_id": sid, "kind": "playlist",
             "tracks": tracks}
+
+
+# ── Keyless embed scrape ──────────────────────────────────────────────────────
+_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
+_EMBED = "https://open.spotify.com/embed/{kind}/{sid}"
+_EMBED_CAP = 50  # the public embed widget exposes only the first ~50 tracks
+_NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
+
+
+def _find(obj, key):
+    """First value for `key` anywhere in a nested dict/list (else None)."""
+    if isinstance(obj, dict):
+        if key in obj:
+            return obj[key]
+        for v in obj.values():
+            found = _find(v, key)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for v in obj:
+            found = _find(v, key)
+            if found is not None:
+                return found
+    return None
+
+
+def _scrape(kind: str, sid: str) -> dict | None:
+    """Keyless: parse the public embed page's `__NEXT_DATA__` trackList. Returns
+    {title, external_id, kind, tracks} (no ISRC, ~50-track cap) or None if the
+    page can't be read/parsed."""
+    req = urllib.request.Request(
+        _EMBED.format(kind=kind, sid=sid),
+        headers={"User-Agent": _UA, "Accept-Language": "en-US,en;q=0.9"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            html = r.read().decode("utf-8", "ignore")
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        return None
+    m = _NEXT_DATA.search(html)
+    if not m:
+        return None
+    try:
+        data = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return None
+    track_list = _find(data, "trackList") or []
+    tracks = [
+        {"title": t.get("title") or "", "artist": t.get("subtitle") or "",
+         "duration": t.get("duration"), "isrc": ""}
+        for t in track_list
+        if t.get("title")
+    ]
+    if not tracks:
+        return None
+    return {"title": _find(data, "name") or "Spotify import",
+            "external_id": sid, "kind": kind, "tracks": tracks}
+
+
+def ingest_with_meta(url: str) -> dict:
+    """API-first. Returns {title, external_id, kind, tracks, partial}.
+
+    With creds, fetch the *full* list via the Web API (no 50 cap, includes ISRC).
+    If the API refuses (editorial playlists 404 for apps) or no creds are set,
+    fall back to the keyless embed scrape. `partial` is True only when we end up
+    on the embed's capped ~50."""
+    kind, sid = _classify(url)
+    if _configured():
+        try:
+            return {**_api_with_meta(kind, sid), "partial": False}
+        except SpotifyError:
+            pass  # API refused (e.g. editorial 404) → try the keyless scrape
+    scraped = _scrape(kind, sid)
+    if scraped:
+        return {**scraped, "partial": len(scraped["tracks"]) >= _EMBED_CAP}
+    raise SpotifyError("Couldn't read that Spotify link — make sure it's public.")

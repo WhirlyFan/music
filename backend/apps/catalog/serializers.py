@@ -81,6 +81,8 @@ class ImportResultSerializer(serializers.Serializer):
     title = serializers.CharField(read_only=True)
     track_count = serializers.IntegerField(read_only=True)
     tracks = TrackSerializer(many=True, read_only=True)
+    # Optional advisory (e.g. "imported the first 50 — Spotify caps the preview").
+    note = serializers.CharField(read_only=True, allow_null=True, required=False)
 
 
 class SetSourceSerializer(serializers.Serializer):

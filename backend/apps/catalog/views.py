@@ -59,6 +59,7 @@ class IngestViewSet(viewsets.ViewSet):
             "title": result["title"],
             "track_count": len(result["tracks"]),
             "tracks": result["tracks"],
+            "note": result.get("note"),
         }
         return Response(ImportResultSerializer(data).data, status=status.HTTP_201_CREATED)
 

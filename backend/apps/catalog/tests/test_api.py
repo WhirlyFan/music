@@ -62,11 +62,52 @@ def test_ingest_rejects_unsupported_source(client):
 
 
 @pytest.mark.django_db
-def test_ingest_spotify_not_configured(client):
-    # No SPOTIFY_CLIENT_ID/SECRET in tests → clear error, no network call.
+def test_ingest_spotify_unreadable(client, monkeypatch):
+    # No creds (API skipped) + scrape can't read it → friendly 400, no real network.
+    from apps.catalog.ingest import spotify
+
+    monkeypatch.setattr(spotify, "_scrape", lambda kind, sid: None)
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/abc"}, format="json")
     assert r.status_code == 400
-    assert "configured" in r.data["detail"].lower()
+    assert "couldn't read" in r.data["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_ingest_spotify_api_first_full_list(client, monkeypatch):
+    # Creds set → API returns the full list (no cap, no note).
+    from apps.catalog.ingest import spotify
+
+    monkeypatch.setattr(spotify, "_configured", lambda: True)
+    monkeypatch.setattr(
+        spotify,
+        "_api_with_meta",
+        lambda kind, sid: {
+            "title": "User PL", "external_id": sid, "kind": "playlist",
+            "tracks": [{"title": "X", "artist": "Y", "duration": 1000, "isrc": "US000"}],
+        },
+    )
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/userpl"}, format="json")
+    assert r.status_code == 201
+    assert r.data["track_count"] == 1
+    assert not r.data.get("note")  # full list → no advisory
+
+
+@pytest.mark.django_db
+def test_ingest_spotify_editorial_falls_back_to_capped_scrape(client, monkeypatch):
+    # Editorial playlist (or no creds): API refused → keyless scrape returns 50 + a note.
+    from apps.catalog.ingest import spotify
+
+    fifty = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(50)]
+    monkeypatch.setattr(spotify, "_configured", lambda: False)
+    monkeypatch.setattr(
+        spotify,
+        "_scrape",
+        lambda kind, sid: {"title": "Top 50", "external_id": sid, "kind": "playlist", "tracks": fifty},
+    )
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/37i9editorial"}, format="json")
+    assert r.status_code == 201
+    assert r.data["track_count"] == 50
+    assert r.data["note"] and "50" in r.data["note"]
 
 
 @pytest.mark.django_db
@@ -189,3 +230,17 @@ def test_create_playlist_from_tracks(client):
     assert r.status_code == 201
     assert r.data["title"] == "My Mix"
     assert r.data["track_count"] == 3
+
+
+def test_spotify_404_explains_editorial(monkeypatch):
+    import urllib.error
+    import urllib.request
+
+    from apps.catalog.ingest import spotify
+
+    def raise_404(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", raise_404)
+    with pytest.raises(spotify.SpotifyError, match="editorial"):
+        spotify._get("/playlists/x", "tok")

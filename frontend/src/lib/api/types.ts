@@ -500,6 +500,7 @@ export interface components {
             readonly title: string;
             readonly track_count: number;
             readonly tracks: components["schemas"]["Track"][];
+            readonly note: string | null;
         };
         Ingest: {
             /** Format: uri */

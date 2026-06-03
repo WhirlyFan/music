@@ -102,8 +102,16 @@ def ingest_apple(url: str, *, user=None) -> dict:
 
 def ingest_spotify(url: str, *, user=None) -> dict:
     """Spotify playlist/album/track → loose Tracks (matched to YouTube on play).
-    Carries ISRC. Raises spotify.SpotifyError on bad URL / missing credentials."""
-    return _record(Source.objects.get(code=Source.SPOTIFY), spotify.ingest_with_meta(url), url, user=user)
+    Scrape-first (keyless); the API fills in full playlists + ISRC when set. Sets
+    a `note` when we could only return the capped first 50."""
+    parsed = spotify.ingest_with_meta(url)
+    result = _record(Source.objects.get(code=Source.SPOTIFY), parsed, url, user=user)
+    if parsed.get("partial"):
+        result["note"] = (
+            f"Imported the first {len(result['tracks'])} tracks — Spotify only exposes that many "
+            "of a playlist without connected credentials."
+        )
+    return result
 
 
 def ingest_youtube(url: str, *, user=None) -> dict:
