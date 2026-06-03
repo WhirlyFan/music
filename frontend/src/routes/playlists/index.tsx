@@ -1,12 +1,16 @@
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState } from 'react'
+import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { fieldErrorMessage } from '@/lib/auth/errors'
-import { useIngestPlaylist, usePlaylists } from '@/lib/query/catalog'
+import type { ImportResult } from '@/lib/query/catalog'
+import { useIngest, usePlaylists } from '@/lib/query/catalog'
+import { useEnqueue, useEnqueueBatch } from '@/lib/query/rooms'
 
 export const Route = createFileRoute('/playlists/')({
   component: PlaylistsPage,
@@ -19,16 +23,16 @@ const schema = z.object({
 
 function PlaylistsPage() {
   const { data, isLoading, error } = usePlaylists()
-  const ingest = useIngestPlaylist()
-  const navigate = useNavigate()
+  const ingest = useIngest()
+  const [imported, setImported] = useState<ImportResult | null>(null)
 
   const form = useForm({
     defaultValues: { url: '' },
     validators: { onSubmit: schema },
     onSubmit: async ({ value, formApi }) => {
-      const playlist = await ingest.mutateAsync(value.url)
+      const result = await ingest.mutateAsync(value.url)
+      setImported(result)
       formApi.reset()
-      navigate({ to: '/playlists/$playlistId', params: { playlistId: playlist.id } })
     },
   })
 
@@ -37,7 +41,7 @@ function PlaylistsPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Playlists</h1>
         <p className="text-muted-foreground text-sm">
-          Paste an Apple Music playlist or album link to import it.
+          Paste an Apple Music playlist or album link, then play or queue the tracks.
         </p>
       </header>
 
@@ -87,28 +91,119 @@ function PlaylistsPage() {
         <FormError message={ingest.error ? 'Import failed — check the URL and try again.' : null} />
       </form>
 
-      {isLoading && <p className="text-muted-foreground">Loading…</p>}
-      <FormError message={error ? 'Failed to load playlists.' : null} />
+      {imported && <ImportResultView result={imported} />}
 
-      <ul className="space-y-2">
-        {data?.results.map((playlist) => (
-          <li key={playlist.id}>
-            <Link
-              to="/playlists/$playlistId"
-              params={{ playlistId: playlist.id }}
-              className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
-            >
-              <span className="font-medium">{playlist.title}</span>
-              <span className="text-muted-foreground text-sm">
-                {playlist.track_count} track{playlist.track_count === 1 ? '' : 's'}
-              </span>
-            </Link>
+      <section className="space-y-2">
+        <h2 className="text-lg font-medium">Your playlists</h2>
+        {isLoading && <p className="text-muted-foreground">Loading…</p>}
+        <FormError message={error ? 'Failed to load playlists.' : null} />
+        <ul className="space-y-2">
+          {data?.results.map((playlist) => (
+            <li key={playlist.id}>
+              <Link
+                to="/playlists/$playlistId"
+                params={{ playlistId: playlist.id }}
+                className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
+              >
+                <span className="font-medium">{playlist.title}</span>
+                <span className="text-muted-foreground text-sm">
+                  {playlist.track_count} track{playlist.track_count === 1 ? '' : 's'}
+                </span>
+              </Link>
+            </li>
+          ))}
+          {data?.results.length === 0 && (
+            <p className="text-muted-foreground">
+              No saved playlists yet — import above, build a queue, then save it from the player.
+            </p>
+          )}
+        </ul>
+      </section>
+    </div>
+  )
+}
+
+/** The just-imported tracks, with play / queue verbs (no playlist created). */
+function ImportResultView({ result }: { result: ImportResult }) {
+  const playAll = useEnqueueBatch()
+  const enqueue = useEnqueue()
+  const trackIds = result.tracks.map((t) => t.id)
+
+  return (
+    <section
+      aria-labelledby="import-result-heading"
+      className="border-border space-y-3 rounded-lg border p-4"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 id="import-result-heading" className="font-medium">
+            {result.title}
+          </h2>
+          <p className="text-muted-foreground text-sm">{result.track_count} tracks imported</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            onClick={() =>
+              playAll.mutate(
+                { trackIds, replace: true },
+                { onSuccess: () => toast.success('Playing.') },
+              )
+            }
+          >
+            Play all
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              playAll.mutate(
+                { trackIds, replace: false },
+                { onSuccess: () => toast.success('Added to queue.') },
+              )
+            }
+          >
+            Add all to queue
+          </Button>
+        </div>
+      </div>
+
+      <ol className="space-y-2">
+        {result.tracks.map((track, i) => (
+          <li
+            key={track.id}
+            className="border-border flex items-center gap-3 rounded-lg border p-3"
+          >
+            <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium">{track.title}</p>
+              <p className="text-muted-foreground truncate text-sm">{track.primary_artist}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => enqueue.mutate({ trackId: track.id, mode: 'play_now' })}
+              >
+                Play
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  enqueue.mutate(
+                    { trackId: track.id, mode: 'add' },
+                    { onSuccess: () => toast.success('Added to queue.') },
+                  )
+                }
+              >
+                Add
+              </Button>
+            </div>
           </li>
         ))}
-        {data?.results.length === 0 && (
-          <p className="text-muted-foreground">No playlists yet — import one above.</p>
-        )}
-      </ul>
-    </div>
+      </ol>
+    </section>
   )
 }

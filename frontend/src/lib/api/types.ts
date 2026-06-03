@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/api/v1/catalog/ingest/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Paste a source URL → loose catalog Tracks (no playlist created).
+         *
+         *     The client then chooses what to do with them: play, add to queue, or save
+         *     as a playlist (all handled by the rooms API).
+         */
+        post: operations["v1_catalog_ingest_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/playlists/": {
         parameters: {
             query?: never;
@@ -11,7 +33,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List/retrieve playlists, plus ingest + match actions. */
+        /** @description List/retrieve owned playlists (created via save-as-playlist). */
         get: operations["v1_catalog_playlists_list"];
         put?: never;
         post?: never;
@@ -28,44 +50,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List/retrieve playlists, plus ingest + match actions. */
+        /** @description List/retrieve owned playlists (created via save-as-playlist). */
         get: operations["v1_catalog_playlists_retrieve"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/catalog/playlists/{id}/match/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Resolve YouTube playback sources for this playlist's unmatched tracks. */
-        post: operations["v1_catalog_playlists_match_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/catalog/playlists/ingest/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description List/retrieve playlists, plus ingest + match actions. */
-        post: operations["v1_catalog_playlists_ingest_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -117,6 +105,28 @@ export interface paths {
         get: operations["v1_catalog_tracks_candidates_list"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/match/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Resolve this track's YouTube source on demand (lazy — used by Play).
+         *
+         *     Returns the existing active source if already matched (no wasted
+         *     YouTube search); otherwise resolves one; 404 if nothing fits.
+         */
+        post: operations["v1_catalog_tracks_match_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -220,6 +230,143 @@ export interface paths {
         patch: operations["v1_notes_partial_update"];
         trace?: never;
     };
+    "/api/v1/rooms/advance/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_advance_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/clear/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_clear_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/enqueue/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_enqueue_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/enqueue-batch/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Play (replace) or add a batch of tracks — e.g. a pasted import. */
+        post: operations["v1_rooms_enqueue_batch_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        get: operations["v1_rooms_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/play-playlist/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_play_playlist_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/save-as-playlist/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_save_as_playlist_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/passkey-credential-ids/": {
         parameters: {
             query?: never;
@@ -240,6 +387,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Enqueue: {
+            /** Format: uuid */
+            track_id: string;
+            /** @default add */
+            mode: components["schemas"]["ModeEnum"];
+        };
+        /**
+         * @description Enqueue many tracks (e.g. a pasted import). replace=True is Play (reset
+         *     the queue and start at the first); replace=False is Add to queue (append).
+         */
+        EnqueueBatch: {
+            track_ids: string[];
+            /** @default false */
+            replace: boolean;
+        };
+        /** @description The result of a paste: loose tracks the caller can play/queue/save. */
+        ImportResult: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly track_count: number;
+            readonly tracks: components["schemas"]["Track"][];
+        };
         Ingest: {
             /** Format: uri */
             url: string;
@@ -251,9 +421,13 @@ export interface components {
          * @enum {string}
          */
         LocatorKindEnum: "video_id" | "storage_key" | "url";
-        MatchResult: {
-            matched: number;
-        };
+        /**
+         * @description * `add` - add
+         *     * `play_next` - play_next
+         *     * `play_now` - play_now
+         * @enum {string}
+         */
+        ModeEnum: "add" | "play_next" | "play_now";
         Note: {
             readonly id: number;
             title: string;
@@ -339,6 +513,10 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        PlayPlaylist: {
+            /** Format: uuid */
+            playlist_id: string;
+        };
         PlaybackSource: {
             /** Format: uuid */
             readonly id: string;
@@ -378,6 +556,25 @@ export interface components {
             position: number;
             readonly track: components["schemas"]["Track"];
         };
+        QueueItem: {
+            /** Format: uuid */
+            readonly id: string;
+            position: number;
+            played?: boolean;
+            readonly track: components["schemas"]["Track"];
+        };
+        Room: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly current_item: string | null;
+            readonly is_playing: boolean;
+            readonly position_ms: number;
+            readonly items: components["schemas"]["QueueItem"][];
+        };
+        SaveAsPlaylist: {
+            title: string;
+        };
         /**
          * @description Correct a track's playback source: paste a YouTube video id OR promote
          *     an existing candidate by its PlaybackSource id.
@@ -414,6 +611,31 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    v1_catalog_ingest_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Ingest"];
+                "application/x-www-form-urlencoded": components["schemas"]["Ingest"];
+                "multipart/form-data": components["schemas"]["Ingest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
+                };
+            };
+        };
+    };
     v1_catalog_playlists_list: {
         parameters: {
             query?: {
@@ -447,53 +669,6 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlaylistDetail"];
-                };
-            };
-        };
-    };
-    v1_catalog_playlists_match_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A UUID string identifying this playlist. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MatchResult"];
-                };
-            };
-        };
-    };
-    v1_catalog_playlists_ingest_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Ingest"];
-                "application/x-www-form-urlencoded": components["schemas"]["Ingest"];
-                "multipart/form-data": components["schemas"]["Ingest"];
-            };
-        };
         responses: {
             200: {
                 headers: {
@@ -570,6 +745,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedPlaybackSourceList"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_match_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSource"];
                 };
             };
         };
@@ -744,6 +941,163 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Note"];
+                };
+            };
+        };
+    };
+    v1_rooms_advance_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_clear_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_enqueue_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Enqueue"];
+                "application/x-www-form-urlencoded": components["schemas"]["Enqueue"];
+                "multipart/form-data": components["schemas"]["Enqueue"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_enqueue_batch_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnqueueBatch"];
+                "application/x-www-form-urlencoded": components["schemas"]["EnqueueBatch"];
+                "multipart/form-data": components["schemas"]["EnqueueBatch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_play_playlist_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlayPlaylist"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlayPlaylist"];
+                "multipart/form-data": components["schemas"]["PlayPlaylist"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_save_as_playlist_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAsPlaylist"];
+                "application/x-www-form-urlencoded": components["schemas"]["SaveAsPlaylist"];
+                "multipart/form-data": components["schemas"]["SaveAsPlaylist"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Playlist"];
                 };
             };
         };

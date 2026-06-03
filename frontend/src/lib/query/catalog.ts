@@ -2,14 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/types'
-import { playlistKeys } from '@/lib/query/keys'
+import { playlistKeys, roomKeys } from '@/lib/query/keys'
 
 export type Playlist = components['schemas']['Playlist']
 export type PlaylistDetail = components['schemas']['PlaylistDetail']
 export type PaginatedPlaylistList = components['schemas']['PaginatedPlaylistList']
 export type Track = components['schemas']['Track']
 export type PlaybackSource = components['schemas']['PlaybackSource']
-type MatchResult = components['schemas']['MatchResult']
+export type ImportResult = components['schemas']['ImportResult']
 
 export function usePlaylists() {
   return useQuery({
@@ -26,35 +26,26 @@ export function usePlaylist(id: string) {
   })
 }
 
-/** Paste an Apple Music URL → ingest into the catalog. */
-export function useIngestPlaylist() {
-  const qc = useQueryClient()
+/**
+ * Paste an Apple Music URL → loose catalog tracks (no playlist created).
+ * The caller decides what to do with the result: play, queue, or save.
+ */
+export function useIngest() {
   return useMutation({
     mutationFn: (url: string) =>
-      api<PlaylistDetail>('/catalog/playlists/ingest/', { method: 'POST', body: { url } }),
-    onSuccess: (playlist) => {
-      qc.setQueryData(playlistKeys.detail(playlist.id), playlist)
-      qc.invalidateQueries({ queryKey: playlistKeys.list() })
-    },
+      api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
   })
 }
 
-/** Resolve YouTube playback sources for a playlist's unmatched tracks. */
-export function useMatchPlaylist(id: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: () => api<MatchResult>(`/catalog/playlists/${id}/match/`, { method: 'POST' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.detail(id) }),
-  })
-}
-
-/** Lazily resolve a single track's YouTube source (used by Play). */
+/** Lazily resolve a single track's YouTube source (used right before play). */
 export function useMatchTrack(playlistId?: string) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (trackId: string) =>
       api<PlaybackSource>(`/catalog/tracks/${trackId}/match/`, { method: 'POST' }),
     onSuccess: () => {
+      // The room player reads each track's active_source — refresh it too.
+      qc.invalidateQueries({ queryKey: roomKeys.all() })
       if (playlistId) qc.invalidateQueries({ queryKey: playlistKeys.detail(playlistId) })
     },
   })
@@ -70,6 +61,7 @@ export function useSetSource(playlistId?: string) {
         body: { video_id: args.videoId, playback_source_id: args.playbackSourceId },
       }),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: roomKeys.all() })
       if (playlistId) qc.invalidateQueries({ queryKey: playlistKeys.detail(playlistId) })
     },
   })

@@ -3,6 +3,7 @@ import { createRootRouteWithContext, Outlet, redirect } from '@tanstack/react-ro
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import { AppHeader } from '@/components/layout/app-header'
+import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
 import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/hooks'
@@ -80,9 +81,14 @@ function RootLayout() {
 
       <AppHeader />
 
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8">
+      {/* pb-28 keeps content clear of the fixed now-playing bar. */}
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8 pb-28">
         <Outlet />
       </main>
+
+      {/* Persistent player + queue — survives navigation; renders only when
+          authenticated and something is queued. */}
+      <NowPlayingBar />
 
       {/* Global toast surface (theme-synced, top-right). The wrapper
           component lives at components/ui/sonner.tsx — that's where to

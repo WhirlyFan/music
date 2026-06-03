@@ -1,11 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import type { PlaybackSource } from '@/lib/query/catalog'
-import { useMatchPlaylist, useMatchTrack, usePlaylist, useSetSource } from '@/lib/query/catalog'
+import { usePlaylist, useSetSource } from '@/lib/query/catalog'
+import { useEnqueue, useEnqueueBatch, usePlayPlaylist } from '@/lib/query/rooms'
 
 export const Route = createFileRoute('/playlists/$playlistId')({
   component: PlaylistDetailPage,
@@ -14,28 +14,15 @@ export const Route = createFileRoute('/playlists/$playlistId')({
 function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
-  const matchAll = useMatchPlaylist(playlistId)
-  const matchTrack = useMatchTrack(playlistId)
+  const playPlaylist = usePlayPlaylist()
+  const addBatch = useEnqueueBatch()
+  const enqueue = useEnqueue()
   const setSource = useSetSource(playlistId)
-  const [nowPlaying, setNowPlaying] = useState<string | null>(null)
 
   if (isLoading) return <p className="text-muted-foreground">Loading…</p>
   if (error || !playlist) return <FormError message="Failed to load playlist." />
 
-  // Play: if the track is already matched, play immediately; otherwise resolve
-  // its YouTube source on demand (lazy — only what you actually play), then play.
-  async function handlePlay(trackId: string, source: PlaybackSource | null) {
-    if (source && source.locator_kind === 'video_id') {
-      setNowPlaying(source.locator)
-      return
-    }
-    try {
-      const resolved = await matchTrack.mutateAsync(trackId)
-      if (resolved.locator_kind === 'video_id') setNowPlaying(resolved.locator)
-    } catch {
-      toast.error('Couldn’t find a YouTube match for this track.')
-    }
-  }
+  const trackIds = playlist.items.map((item) => item.track.id)
 
   return (
     <div className="space-y-6">
@@ -44,37 +31,32 @@ function PlaylistDetailPage() {
           <h1 className="text-2xl font-semibold tracking-tight">{playlist.title}</h1>
           <p className="text-muted-foreground text-sm">{playlist.track_count} tracks</p>
         </div>
-        {/* Optional: pre-resolve every track up front. Play resolves lazily, so
-            this is just a convenience for warming a whole playlist. */}
-        <Button
-          variant="outline"
-          onClick={() => matchAll.mutate()}
-          aria-busy={matchAll.isPending || undefined}
-          className={matchAll.isPending ? 'pointer-events-none opacity-60' : undefined}
-        >
-          {matchAll.isPending ? 'Matching…' : 'Match all'}
-        </Button>
-      </header>
-
-      {nowPlaying && (
-        <div className="aspect-video w-full overflow-hidden rounded-lg border">
-          {/* IFrame Player — the ToS-compliant playback path (video + ads).
-              Ad-free audio (yt-dlp → R2) is Phase 3. */}
-          <iframe
-            title="Now playing"
-            className="h-full w-full"
-            src={`https://www.youtube.com/embed/${nowPlaying}?autoplay=1`}
-            allow="autoplay; encrypted-media"
-            allowFullScreen
-          />
+        <div className="flex gap-2">
+          <Button
+            onClick={() =>
+              playPlaylist.mutate(playlistId, { onSuccess: () => toast.success('Playing.') })
+            }
+          >
+            Play
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              addBatch.mutate(
+                { trackIds, replace: false },
+                { onSuccess: () => toast.success('Added to queue.') },
+              )
+            }
+          >
+            Add to queue
+          </Button>
         </div>
-      )}
+      </header>
 
       <ol className="space-y-2">
         {playlist.items.map((item) => {
           const source: PlaybackSource | null = item.track.active_source
-          const videoId = source?.locator_kind === 'video_id' ? source.locator : null
-          const isMatching = matchTrack.isPending && matchTrack.variables === item.track.id
+          const videoMatched = source?.locator_kind === 'video_id'
           return (
             <li
               key={item.track.id}
@@ -92,13 +74,23 @@ function PlaylistDetailPage() {
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  onClick={() => handlePlay(item.track.id, source)}
-                  aria-busy={isMatching || undefined}
-                  className={isMatching ? 'pointer-events-none opacity-60' : undefined}
+                  onClick={() => enqueue.mutate({ trackId: item.track.id, mode: 'play_now' })}
                 >
-                  {isMatching ? 'Matching…' : 'Play'}
+                  Play
                 </Button>
-                {videoId && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    enqueue.mutate(
+                      { trackId: item.track.id, mode: 'add' },
+                      { onSuccess: () => toast.success('Added to queue.') },
+                    )
+                  }
+                >
+                  Add
+                </Button>
+                {videoMatched && (
                   <Button
                     size="sm"
                     variant="ghost"

@@ -41,6 +41,16 @@ export const playlistKeys = {
 }
 
 /**
+ * The caller's listening room (room-of-one): now-playing + persisted queue.
+ * `me()` is the single source of truth — every queue/playback mutation
+ * invalidates it so the player + queue panel re-render from the server.
+ */
+export const roomKeys = {
+  all: () => ['room'] as const,
+  me: () => ['room', 'me'] as const,
+}
+
+/**
  * MFA surface: authenticator list + per-method enrollment data.
  *
  * The cascade is deliberate — `mfaKeys.all()` is the parent prefix used by
