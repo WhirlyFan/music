@@ -4,9 +4,12 @@ import { useEffect, useRef } from 'react'
 const BUFFER = 600
 const POINTS = 140 // perimeter samples (35 per edge) the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
-const BASE = BUFFER * 0.025 // resting ring thickness
-const PULSE_AMP = BUFFER * 0.085 // uniform breathing driven by bass (the dominant motion)
-const DETAIL_AMP = BUFFER * 0.03 // gentle per-edge frequency texture on top
+const BASE = BUFFER * 0.03 // resting ring offset (peaks point out, valleys tuck behind)
+const WAVES = 8 // distinct humps around the perimeter
+const WAVES2 = 5 // a second traveling harmonic, for organic (non-mechanical) motion
+const WAVE_MIN = BUFFER * 0.022 // wave size at silence (always visibly rippling)
+const WAVE_EXTRA = BUFFER * 0.055 // extra wave size driven by the music
+const TAU = Math.PI * 2
 
 type Pt = { px: number; py: number; nx: number; ny: number }
 type Sampled = { colors: string[]; glow: string }
@@ -112,8 +115,9 @@ export function AudioVisualizer({
     const bins = analyser.frequencyBinCount
     const data = new Uint8Array(bins)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const bassCount = Math.max(2, Math.floor(bins * 0.08)) // sub-bass / kick range
-    let pulse = 0 // smoothed bass envelope, 0..1
+    const lowCount = Math.max(2, Math.floor(bins * 0.22)) // bass + low-mid → the swell
+    let env = 0 // smoothed energy, 0..1 → how big the waves get
+    let phase = 0 // advances each frame → the waves travel around the cover
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
     let raf = 0
@@ -135,11 +139,13 @@ export function AudioVisualizer({
     const draw = () => {
       analyser.getByteFrequencyData(data)
 
-      // Bass envelope → the pulse. Fast attack, slow release = "breathing"/beat.
-      let bass = 0
-      for (let i = 1; i <= bassCount; i++) bass += data[i]
-      bass = bass / bassCount / 255
-      pulse += (bass - pulse) * (bass > pulse ? 0.45 : 0.08)
+      // Energy (bass + low-mid) → how big the waves swell. Fast attack, slow release.
+      let e = 0
+      for (let i = 1; i <= lowCount; i++) e += data[i]
+      e = e / lowCount / 255
+      env += (e - env) * (e > env ? 0.4 : 0.08)
+      phase += 0.018 + env * 0.05 // travels faster when louder
+      const amp = WAVE_MIN + env * WAVE_EXTRA
 
       ctx.clearRect(0, 0, BUFFER, BUFFER)
       ctx.globalAlpha = 1
@@ -148,8 +154,11 @@ export function AudioVisualizer({
       const ox = new Float32Array(POINTS)
       const oy = new Float32Array(POINTS)
       for (let i = 0; i < POINTS; i++) {
-        const detail = data[Math.floor((i / POINTS) * bins * 0.5)] / 255 // low-mid texture
-        const off = BASE + pulse * PULSE_AMP + detail * DETAIL_AMP
+        const t = i / POINTS
+        // Two traveling sine waves → distinct, organic, seamless humps that ripple.
+        const w =
+          0.6 * Math.sin(WAVES * t * TAU + phase) + 0.4 * Math.sin(WAVES2 * t * TAU - phase * 0.8)
+        const off = BASE + w * amp
         ox[i] = PERIM[i].px + PERIM[i].nx * off
         oy[i] = PERIM[i].py + PERIM[i].ny * off
       }
@@ -162,8 +171,8 @@ export function AudioVisualizer({
       ctx.closePath()
       ctx.fill()
 
-      // Glow pulses with the same beat (cheap GPU drop-shadow, set imperatively).
-      canvas.style.filter = `drop-shadow(0 0 ${12 + pulse * 26}px ${glowRef.current ?? fallback})`
+      // Glow swells with the music (cheap GPU drop-shadow, set imperatively).
+      canvas.style.filter = `drop-shadow(0 0 ${12 + env * 24}px ${glowRef.current ?? fallback})`
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
