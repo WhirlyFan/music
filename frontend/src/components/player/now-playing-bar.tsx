@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { FullScreenPlayer } from '@/components/player/full-screen-player'
+import { SeekBar } from '@/components/player/seek-bar'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
@@ -22,13 +23,6 @@ import {
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 
-function fmt(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
-
 /**
  * Persistent player (mounted in the root layout, so playback + the queue survive
  * navigation). The DB-backed room is the single source of truth: now-playing +
@@ -42,7 +36,7 @@ function fmt(seconds: number): string {
 export function NowPlayingBar() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
-  const { data: room } = useRoom(authed)
+  const { data: room, refetch: refetchRoom } = useRoom(authed)
 
   const matchTrack = useMatchTrack()
   const next = useNext()
@@ -132,6 +126,13 @@ export function NowPlayingBar() {
       return
     }
     previous.mutate()
+  }
+
+  function seek(seconds: number) {
+    const el = audioRef.current
+    if (!el) return
+    el.currentTime = seconds
+    setCurrentTime(seconds) // optimistic so the thumb doesn't snap back while buffering
   }
 
   return (
@@ -240,26 +241,8 @@ export function NowPlayingBar() {
             </p>
           </div>
           {audioSrc ? (
-            <div className="mt-1 flex items-center gap-2">
-              <span className="text-muted-foreground w-9 text-right text-[11px] tabular-nums">
-                {fmt(currentTime)}
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step="any"
-                value={Math.min(currentTime, duration || 0)}
-                onChange={(e) => {
-                  const el = audioRef.current
-                  if (el) el.currentTime = Number(e.target.value)
-                }}
-                aria-label="Seek"
-                className="accent-primary h-1 flex-1 cursor-pointer"
-              />
-              <span className="text-muted-foreground w-9 text-[11px] tabular-nums">
-                {fmt(duration)}
-              </span>
+            <div className="mt-1">
+              <SeekBar currentTime={currentTime} duration={duration} onSeek={seek} />
             </div>
           ) : (
             <p className="text-muted-foreground mt-1 text-xs">Finding audio…</p>
@@ -287,10 +270,7 @@ export function NowPlayingBar() {
           onTogglePlay={togglePlay}
           onPrevious={handlePrevious}
           onNext={() => next.mutate()}
-          onSeek={(s) => {
-            const el = audioRef.current
-            if (el) el.currentTime = s
-          }}
+          onSeek={seek}
           onPauseMain={() => audioRef.current?.pause()}
           onCorrect={(videoId) => setSource.mutate({ trackId: track.id, videoId })}
           onClose={() => setExpanded(false)}
@@ -310,7 +290,12 @@ export function NowPlayingBar() {
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+          onLoadedMetadata={(e) => {
+            setDuration(e.currentTarget.duration)
+            // The stream endpoint backfills artwork for old tracks on play — pull
+            // it in live so the cover appears without a reload.
+            if (!track.artwork_url) void refetchRoom()
+          }}
           onEnded={() => next.mutate()}
         />
       )}

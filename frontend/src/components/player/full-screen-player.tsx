@@ -2,16 +2,10 @@ import { ExternalLink, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lu
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
+import { SeekBar } from '@/components/player/seek-bar'
 import { ExplicitBadge } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import type { Track } from '@/lib/query/catalog'
-
-function fmt(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
 
 /** Human label + so we can show the right "open on …" verb for the origin link. */
 function sourceLabel(url: string): string {
@@ -184,24 +178,7 @@ export function FullScreenPlayer({
             </Button>
           </div>
           {audioReady ? (
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground w-9 text-right text-[11px] tabular-nums">
-                {fmt(currentTime)}
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={duration || 0}
-                step="any"
-                value={Math.min(currentTime, duration || 0)}
-                onChange={(e) => onSeek(Number(e.target.value))}
-                aria-label="Seek"
-                className="accent-primary h-1 flex-1 cursor-pointer"
-              />
-              <span className="text-muted-foreground w-9 text-[11px] tabular-nums">
-                {fmt(duration)}
-              </span>
-            </div>
+            <SeekBar currentTime={currentTime} duration={duration} onSeek={onSeek} />
           ) : (
             <p className="text-muted-foreground text-center text-xs">Finding audio…</p>
           )}
