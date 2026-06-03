@@ -50,7 +50,9 @@ def test_play_now_is_one_song_not_the_list(client):
     tracks = [TrackFactory() for _ in range(4)]
     r = api.post("/api/v1/rooms/play-now/", {"track_id": str(tracks[2].id)}, format="json")
     assert r.data["current"]["id"] == str(tracks[2].id)
-    assert r.data["context"] == [] and r.data["queue"] == []
+    # Context is just that one song (not the 4-track list it came from); no queue.
+    assert ctx_ids(r.data) == [str(tracks[2].id)]
+    assert r.data["queue"] == []
 
 
 @pytest.mark.django_db
@@ -64,7 +66,9 @@ def test_play_loads_context_with_label(client):
     )
     assert r.data["current"]["id"] == str(tracks[0].id)
     assert r.data["context_label"] == "My Album"
-    assert ctx_ids(r.data) == ids(tracks[1:])
+    # context is the FULL playlist (stable list); current is the first track.
+    assert ctx_ids(r.data) == ids(tracks)
+    assert r.data["current_item_id"] == r.data["context"][0]["id"]
 
 
 @pytest.mark.django_db
@@ -72,12 +76,14 @@ def test_clicking_context_song_moves_position_without_losing_skipped(client):
     api, _ = client
     c = [TrackFactory() for _ in range(5)]
     api.post("/api/v1/rooms/play/", {"track_ids": ids(c), "start_index": 0}, format="json")
-    target = api.get("/api/v1/rooms/me/").data["context"][2]  # c[3]
+    target = api.get("/api/v1/rooms/me/").data["context"][3]  # c[3] (full list)
     assert target["track"]["id"] == str(c[3].id)
 
     r = api.post("/api/v1/rooms/jump/", {"item_id": target["id"]}, format="json")
     assert r.data["current"]["id"] == str(c[3].id)
-    assert ctx_ids(r.data) == [str(c[4].id)]  # only what's after
+    # The full playlist stays visible; only the position (highlight) moved.
+    assert ctx_ids(r.data) == ids(c)
+    assert r.data["current_item_id"] == target["id"]
 
     # The skipped tracks aren't lost — Previous walks back through them.
     r = api.post("/api/v1/rooms/previous/", format="json")
@@ -94,7 +100,7 @@ def test_queue_plays_before_context_then_resumes(client):
     api.post("/api/v1/rooms/play/", {"track_ids": ids(c), "start_index": 0}, format="json")
     r = api.post("/api/v1/rooms/queue/", {"track_ids": [str(extra.id)]}, format="json")
     assert queue_ids(r.data) == [str(extra.id)]
-    assert ctx_ids(r.data) == [str(c[1].id), str(c[2].id)]
+    assert ctx_ids(r.data) == ids(c)  # full playlist stays visible
 
     r = api.post("/api/v1/rooms/next/", format="json")  # queue first
     assert r.data["current"]["id"] == str(extra.id)
@@ -139,7 +145,7 @@ def test_play_playlist_then_save_as_playlist(client):
 
     r = api.post("/api/v1/rooms/play-playlist/", {"playlist_id": str(playlist.id)}, format="json")
     assert r.data["current"] is not None
-    assert len(r.data["context"]) == 2
+    assert len(r.data["context"]) == 3  # full playlist visible
 
     saved = api.post("/api/v1/rooms/save-as-playlist/", {"title": "Saved"}, format="json")
     assert saved.data["track_count"] == 3

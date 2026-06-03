@@ -81,9 +81,13 @@ export function NowPlayingBar() {
 
   const audioSrc = matched ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
-  const context = room?.context ?? [] // the playlist/album remaining ("Next from")
+  const context = room?.context ?? [] // the FULL playlist/album (stable list)
   const contextLabel = room?.context_label ?? ''
-  const upcoming = queue.length + context.length
+  // The list includes already-played tracks, so "upcoming" is only what's after
+  // the current position (plus the user queue, which plays first).
+  const ctxIdx = context.findIndex((i) => i.id === itemId)
+  const contextAhead = ctxIdx >= 0 ? context.length - ctxIdx - 1 : context.length
+  const upcoming = queue.length + contextAhead
 
   function togglePlay() {
     const el = audioRef.current
@@ -146,8 +150,9 @@ export function NowPlayingBar() {
             />
           )}
           <QueueSection
-            label={contextLabel ? `Next from: ${contextLabel}` : 'Next up'}
+            label={contextLabel ? `Playing from ${contextLabel}` : 'Now playing'}
             items={context}
+            currentId={itemId}
             onPlay={(id) => jump.mutate(id)}
             onRemove={(id) => removeItem.mutate(id)}
             emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
@@ -252,16 +257,17 @@ function QueueSection({
   items,
   onPlay,
   onRemove,
-  muted = false,
+  currentId = null,
   emptyHint,
 }: {
   label: string
   items: QueueItem[]
   onPlay: (itemId: string) => void
   onRemove: (itemId: string) => void
-  muted?: boolean
+  currentId?: string | null
   emptyHint?: string
 }) {
+  const curIdx = currentId ? items.findIndex((i) => i.id === currentId) : -1
   return (
     <div className="mb-2">
       <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
@@ -271,31 +277,45 @@ function QueueSection({
         <p className="text-muted-foreground py-1 text-sm">{emptyHint}</p>
       )}
       <ol className="space-y-0.5">
-        {items.map((item) => (
-          <li key={item.id} className="hover:bg-muted/60 group flex items-center gap-2 rounded">
-            <button
-              type="button"
-              onClick={() => onPlay(item.id)}
-              className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm ${
-                muted ? 'opacity-70' : ''
+        {items.map((item, i) => {
+          const isCurrent = item.id === currentId
+          const played = curIdx >= 0 && i < curIdx // earlier in the list (already passed)
+          return (
+            <li
+              key={item.id}
+              className={`group flex items-center gap-2 rounded ${
+                isCurrent ? 'bg-muted' : 'hover:bg-muted/60'
               }`}
-              title={`Play ${item.track.title}`}
             >
-              <span className="truncate">{item.track.title}</span>
-              <span className="text-muted-foreground truncate text-xs">
-                {item.track.primary_artist}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onRemove(item.id)}
-              aria-label={`Remove ${item.track.title}`}
-              className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
-            >
-              <X className="size-4" />
-            </button>
-          </li>
-        ))}
+              <button
+                type="button"
+                onClick={() => onPlay(item.id)}
+                className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm ${
+                  played ? 'opacity-50' : ''
+                } ${isCurrent ? 'font-medium' : ''}`}
+                title={`Play ${item.track.title}`}
+              >
+                {isCurrent ? (
+                  <Play className="text-primary size-3 shrink-0" />
+                ) : (
+                  <span className="size-3 shrink-0" />
+                )}
+                <span className="truncate">{item.track.title}</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {item.track.primary_artist}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemove(item.id)}
+                aria-label={`Remove ${item.track.title}`}
+                className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+              >
+                <X className="size-4" />
+              </button>
+            </li>
+          )
+        })}
       </ol>
     </div>
   )

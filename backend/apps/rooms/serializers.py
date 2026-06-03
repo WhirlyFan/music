@@ -52,11 +52,19 @@ class RoomSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(QueueItemSerializer(many=True))
     def get_queue(self, room):
+        # The ephemeral user queue (excluding the now-playing item).
         return QueueItemSerializer(services.upcoming(room)["queue"], many=True).data
 
     @extend_schema_field(QueueItemSerializer(many=True))
     def get_context(self, room):
-        return QueueItemSerializer(services.upcoming(room)["context"], many=True).data
+        # The FULL context (the whole playlist/album), in order — the client shows
+        # it as a stable list and highlights `current_item_id`. Already-played
+        # tracks stay visible; clicking just moves the position.
+        rows = sorted(
+            (i for i in room.items.all() if i.kind == QueueItem.Kind.CONTEXT),
+            key=lambda i: i.position,
+        )
+        return QueueItemSerializer(rows, many=True).data
 
 
 class PlaySerializer(serializers.Serializer):
