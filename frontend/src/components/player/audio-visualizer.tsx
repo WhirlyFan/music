@@ -4,12 +4,9 @@ import { useEffect, useRef } from 'react'
 const BUFFER = 600
 const POINTS = 140 // perimeter samples (35 per edge) the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
-const BASE = BUFFER * 0.03 // resting ring offset (peaks point out, valleys tuck behind)
-const WAVES = 8 // distinct humps around the perimeter
-const WAVES2 = 5 // a second traveling harmonic, for organic (non-mechanical) motion
-const WAVE_MIN = BUFFER * 0.022 // wave size at silence (always visibly rippling)
-const WAVE_EXTRA = BUFFER * 0.055 // extra wave size driven by the music
-const TAU = Math.PI * 2
+const BASE = BUFFER * 0.02 // thin resting ring (stays still when there's no sound)
+const AMP = BUFFER * 0.1 // how far a hump pushes out on a loud frequency band
+const SPEC = 0.55 // fraction of the spectrum mapped around the ring (skip the empty highs)
 
 type Pt = { px: number; py: number; nx: number; ny: number }
 type Sampled = { colors: string[]; glow: string }
@@ -115,9 +112,11 @@ export function AudioVisualizer({
     const bins = analyser.frequencyBinCount
     const data = new Uint8Array(bins)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const lowCount = Math.max(2, Math.floor(bins * 0.22)) // bass + low-mid → the swell
-    let env = 0 // smoothed energy, 0..1 → how big the waves get
-    let phase = 0 // advances each frame → the waves travel around the cover
+    const halfP = POINTS / 2
+    const useBins = Math.max(8, Math.floor(bins * SPEC))
+    const buf = new Float32Array(POINTS) // eased per-point amplitude (temporal smoothing)
+    const raw = new Float32Array(POINTS)
+    const sm = new Float32Array(POINTS)
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
     let raf = 0
@@ -139,29 +138,39 @@ export function AudioVisualizer({
     const draw = () => {
       analyser.getByteFrequencyData(data)
 
-      // Energy (bass + low-mid) → how big the waves swell. Fast attack, slow release.
-      let e = 0
-      for (let i = 1; i <= lowCount; i++) e += data[i]
-      e = e / lowCount / 255
-      env += (e - env) * (e > env ? 0.4 : 0.08)
-      phase += 0.018 + env * 0.05 // travels faster when louder
-      const amp = WAVE_MIN + env * WAVE_EXTRA
+      // Map the spectrum (low→high→low, mirrored for symmetry) around the ring, so
+      // each hump IS a frequency band — the shape is the music, with no autonomous
+      // animation. Still when silent; bulges where there's energy.
+      for (let i = 0; i < POINTS; i++) {
+        const m = i < halfP ? i : POINTS - 1 - i // mirror → symmetric
+        const bin = 1 + Math.floor((m / (halfP - 1)) * (useBins - 1))
+        raw[i] = data[bin] / 255
+      }
+      let energy = 0
+      const ox = new Float32Array(POINTS)
+      const oy = new Float32Array(POINTS)
+      for (let i = 0; i < POINTS; i++) {
+        // spatial smoothing (5-tap, wrapped) → clean humps instead of spikes
+        sm[i] =
+          (raw[(i - 2 + POINTS) % POINTS] +
+            raw[(i - 1 + POINTS) % POINTS] +
+            raw[i] +
+            raw[(i + 1) % POINTS] +
+            raw[(i + 2) % POINTS]) /
+          5
+        const target = Math.pow(sm[i], 1.4) // gamma → flat when quiet, pops on peaks
+        buf[i] += (target - buf[i]) * 0.25 // temporal easing (on top of analyser smoothing)
+        energy += buf[i]
+        const off = BASE + buf[i] * AMP
+        ox[i] = PERIM[i].px + PERIM[i].nx * off
+        oy[i] = PERIM[i].py + PERIM[i].ny * off
+      }
+      energy /= POINTS
 
       ctx.clearRect(0, 0, BUFFER, BUFFER)
       ctx.globalAlpha = 1
       ctx.fillStyle = conicGradient() ?? fallback
       ctx.beginPath()
-      const ox = new Float32Array(POINTS)
-      const oy = new Float32Array(POINTS)
-      for (let i = 0; i < POINTS; i++) {
-        const t = i / POINTS
-        // Two traveling sine waves → distinct, organic, seamless humps that ripple.
-        const w =
-          0.6 * Math.sin(WAVES * t * TAU + phase) + 0.4 * Math.sin(WAVES2 * t * TAU - phase * 0.8)
-        const off = BASE + w * amp
-        ox[i] = PERIM[i].px + PERIM[i].nx * off
-        oy[i] = PERIM[i].py + PERIM[i].ny * off
-      }
       // Smooth closed curve through the points (quadratic via segment midpoints).
       ctx.moveTo((ox[POINTS - 1] + ox[0]) / 2, (oy[POINTS - 1] + oy[0]) / 2)
       for (let i = 0; i < POINTS; i++) {
@@ -171,8 +180,8 @@ export function AudioVisualizer({
       ctx.closePath()
       ctx.fill()
 
-      // Glow swells with the music (cheap GPU drop-shadow, set imperatively).
-      canvas.style.filter = `drop-shadow(0 0 ${12 + env * 24}px ${glowRef.current ?? fallback})`
+      // Glow swells with overall energy (cheap GPU drop-shadow, set imperatively).
+      canvas.style.filter = `drop-shadow(0 0 ${10 + energy * 60}px ${glowRef.current ?? fallback})`
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
