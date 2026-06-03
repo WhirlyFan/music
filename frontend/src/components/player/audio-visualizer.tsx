@@ -4,10 +4,8 @@ import { useEffect, useRef } from 'react'
 const BUFFER = 600
 const POINTS = 160 // perimeter samples the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
-const BASE = BUFFER * 0.025 // thin resting ring (stays still when there's no sound)
-const AMP = BUFFER * 0.11 // how far a hump pushes out at full energy
-const LOBES = 6 // humps spread around the ring, each driven by a different frequency band
-const SPEC = 0.6 // fraction of the spectrum used (skip the empty highs)
+const BASE = BUFFER * 0.05 // baseline ring offset (peaks point out, valleys tuck behind)
+const AMP = BUFFER * 0.08 // waveform deflection
 const BANDS = 5 // colors sampled top→bottom for the artwork gradient
 
 type Pt = { px: number; py: number; nx: number; ny: number }
@@ -74,13 +72,14 @@ function sampleArtwork(img: HTMLImageElement): Sampled | null {
 }
 
 /**
- * A filled halo around the square cover that reacts to the music. The spectrum is
- * split into LOBES bands; each band drives one smooth hump, spread around the
- * ring — so different regions move to different parts of the music (no autonomous
- * animation; still when silent). The halo is filled with a single linear gradient
- * derived from the artwork (a vertical palette), and a CSS drop-shadow glow swells
- * with loudness. The cover (on top) hides the inner fill, leaving the halo.
- * Animates only while mounted; respects reduced motion; falls back to the accent.
+ * A filled halo around the square cover that reacts to the music. The shape is
+ * the live BASS waveform (the analyser is low-passed) wrapped around the ring —
+ * peaks/valleys land where the music puts them, not at assigned positions —
+ * smoothed spatially + over time so it undulates rather than jitters. The halo is
+ * filled with a single linear gradient derived from the artwork (a vertical
+ * palette), and a CSS drop-shadow glow swells with loudness. The cover (on top)
+ * hides the inner edge, leaving the halo. Animates only while mounted; respects
+ * reduced motion; falls back to the accent color.
  */
 export function AudioVisualizer({
   analyser,
@@ -118,17 +117,17 @@ export function AudioVisualizer({
     if (!ctx) return
 
     const c = BUFFER / 2
-    const bins = analyser.frequencyBinCount
-    const data = new Uint8Array(bins)
+    const samples = analyser.fftSize
+    const data = new Uint8Array(samples)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const useBins = Math.max(LOBES * 2, Math.floor(bins * SPEC))
-    const lobe = new Float32Array(LOBES) // eased per-band amplitude (temporal smoothing)
+    const buf = new Float32Array(POINTS) // temporally-eased offset per point
+    const raw = new Float32Array(POINTS)
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
     let raf = 0
 
-    // A vertical linear gradient built from the artwork palette — one cohesive
-    // gradient across the whole halo (not the cover's literal edge pixels).
+    // One cohesive vertical gradient built from the artwork palette (fills the
+    // whole halo — not the cover's literal edge pixels).
     const artGradient = () => {
       const s = sampledRef.current
       if (!s) return null
@@ -142,31 +141,28 @@ export function AudioVisualizer({
     }
 
     const draw = () => {
-      analyser.getByteFrequencyData(data)
-
-      // Each lobe = one frequency band; weight up the highs (which carry less
-      // energy) so lobes move comparably rather than all following the bass.
-      for (let j = 0; j < LOBES; j++) {
-        const b0 = 1 + Math.floor((j / LOBES) * useBins)
-        const b1 = 1 + Math.floor(((j + 1) / LOBES) * useBins)
-        let e = 0
-        for (let b = b0; b < b1; b++) e += data[b]
-        e = e / Math.max(1, b1 - b0) / 255
-        const weight = 1 + 1.5 * (j / (LOBES - 1))
-        const target = Math.min(1, e * weight)
-        lobe[j] += (target - lobe[j]) * 0.25 // temporal easing
+      // The bass waveform itself IS the shape — peaks/valleys land where the music
+      // puts them, not at assigned positions. Flat (a thin ring) when silent.
+      analyser.getByteTimeDomainData(data)
+      for (let i = 0; i < POINTS; i++) {
+        raw[i] = (data[Math.floor((i / POINTS) * samples)] - 128) / 128 // -1..1
       }
 
       let energy = 0
       const ox = new Float32Array(POINTS)
       const oy = new Float32Array(POINTS)
       for (let i = 0; i < POINTS; i++) {
-        const t = (i / POINTS) * LOBES
-        const which = Math.floor(t) % LOBES
-        const bump = Math.sin((t % 1) * Math.PI) // 0..1..0 smooth hump within the lobe
-        const a = bump * lobe[which]
-        energy += a
-        const off = BASE + a * AMP
+        // 5-tap spatial smoothing (wrapped) + temporal easing → undulates, not jitters
+        const sm =
+          (raw[(i - 2 + POINTS) % POINTS] +
+            raw[(i - 1 + POINTS) % POINTS] +
+            raw[i] +
+            raw[(i + 1) % POINTS] +
+            raw[(i + 2) % POINTS]) /
+          5
+        buf[i] += (sm - buf[i]) * 0.25
+        energy += Math.abs(buf[i])
+        const off = BASE + buf[i] * AMP
         ox[i] = PERIM[i].px + PERIM[i].nx * off
         oy[i] = PERIM[i].py + PERIM[i].ny * off
       }

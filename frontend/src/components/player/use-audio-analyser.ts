@@ -30,11 +30,17 @@ export function useAudioAnalyser(audioRef: React.RefObject<HTMLAudioElement | nu
     if (connectedRef.current === el) return // this element is already wired
     try {
       const source = ctx.createMediaElementSource(el)
+      source.connect(ctx.destination) // audible output: full-range, unaffected by the filter
+      // Separate analysis branch, low-passed to the bass so the waveform tracks the
+      // kick/bassline (slow, smooth) instead of jittery treble. The analyser needs
+      // no onward connection to analyse.
+      const lowpass = ctx.createBiquadFilter()
+      lowpass.type = 'lowpass'
+      lowpass.frequency.value = 200
       const node = ctx.createAnalyser()
-      node.fftSize = 512
-      node.smoothingTimeConstant = 0.85 // heavy temporal smoothing → breathing, not jittery
-      source.connect(node)
-      node.connect(ctx.destination) // keep audio audible
+      node.fftSize = 1024 // time-domain resolution for a smooth waveform
+      source.connect(lowpass)
+      lowpass.connect(node)
       connectedRef.current = el
       setAnalyser(node)
     } catch {
