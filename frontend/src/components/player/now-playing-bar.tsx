@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { FullScreenPlayer } from '@/components/player/full-screen-player'
 import { SeekBar } from '@/components/player/seek-bar'
+import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
@@ -49,6 +50,7 @@ export function NowPlayingBar() {
   const setSource = useSetSource()
 
   const audioRef = useRef<HTMLAudioElement>(null)
+  const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -262,6 +264,7 @@ export function NowPlayingBar() {
       {expanded && (
         <FullScreenPlayer
           track={track}
+          analyser={analyser}
           playing={playing}
           currentTime={currentTime}
           duration={duration}
@@ -287,7 +290,10 @@ export function NowPlayingBar() {
             setCurrentTime(0)
             setDuration(0)
           }}
-          onPlay={() => setPlaying(true)}
+          onPlay={() => {
+            setPlaying(true)
+            connectAnalyser() // wire the visualizer on first play (user gesture)
+          }}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => {

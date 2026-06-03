@@ -2,6 +2,7 @@ import { ExternalLink, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lu
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
+import { AudioVisualizer } from '@/components/player/audio-visualizer'
 import { SeekBar } from '@/components/player/seek-bar'
 import { ExplicitBadge } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,7 @@ function PreviewButton({ url, onStart }: { url: string; onStart: () => void }) {
  */
 export function FullScreenPlayer({
   track,
+  analyser,
   playing,
   currentTime,
   duration,
@@ -74,6 +76,7 @@ export function FullScreenPlayer({
   onClose,
 }: {
   track: Track
+  analyser: AnalyserNode | null
   playing: boolean
   currentTime: number
   duration: number
@@ -133,15 +136,18 @@ export function FullScreenPlayer({
       </Button>
 
       <div className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-sm flex-col items-center gap-5 px-6">
-        {track.artwork_url ? (
-          <img
-            src={track.artwork_url}
-            alt=""
-            className="aspect-square w-64 rounded-xl object-cover shadow-2xl"
-          />
-        ) : (
-          <div className="bg-muted aspect-square w-64 rounded-xl shadow-2xl" />
-        )}
+        <div className="relative grid size-80 place-items-center">
+          <AudioVisualizer analyser={analyser} />
+          {track.artwork_url ? (
+            <img
+              src={track.artwork_url}
+              alt=""
+              className="aspect-square w-56 rounded-xl object-cover shadow-2xl"
+            />
+          ) : (
+            <div className="bg-muted aspect-square w-56 rounded-xl shadow-2xl" />
+          )}
+        </div>
 
         <div className="w-full text-center">
           <div className="flex items-center justify-center gap-2">
