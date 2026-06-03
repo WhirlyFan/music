@@ -31,7 +31,7 @@ class TrackSerializer(serializers.ModelSerializer):
         model = Track
         fields = [
             "id", "title", "primary_artist", "duration_ms", "isrc",
-            "artwork_url", "album_name", "is_explicit", "preview_url",
+            "artwork_url", "album_name", "is_explicit", "preview_url", "source_url",
             "active_source",
         ]
 

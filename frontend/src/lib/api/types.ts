@@ -730,6 +730,8 @@ export interface components {
             is_explicit?: boolean;
             /** Format: uri */
             preview_url?: string;
+            /** Format: uri */
+            source_url?: string;
             readonly active_source: components["schemas"]["PlaybackSource"];
         };
     };

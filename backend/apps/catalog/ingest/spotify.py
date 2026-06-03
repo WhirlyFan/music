@@ -105,6 +105,7 @@ def _normalize(track: dict) -> dict:
         "album": album.get("name") or "",
         "explicit": bool(track.get("explicit")),
         "preview": track.get("preview_url") or "",  # null since Spotify's 2024 change
+        "source_url": (track.get("external_urls") or {}).get("spotify", ""),
     }
 
 
@@ -198,7 +199,10 @@ def _scrape(kind: str, sid: str) -> dict | None:
         {"title": t.get("title") or "", "artist": t.get("subtitle") or "",
          "duration": t.get("duration"), "isrc": "",
          "artwork": cover, "album": "", "explicit": bool(t.get("isExplicit")),
-         "preview": (t.get("audioPreview") or {}).get("url") or ""}
+         "preview": (t.get("audioPreview") or {}).get("url") or "",
+         # uri is "spotify:track:<id>" → a public track link.
+         "source_url": f"https://open.spotify.com/track/{t['uri'].split(':')[-1]}"
+         if t.get("uri", "").startswith("spotify:track:") else ""}
         for t in track_list
         if t.get("title")
     ]

@@ -82,6 +82,7 @@ class Track(BaseModel):
     album_name = models.CharField(max_length=512, blank=True)
     is_explicit = models.BooleanField(default=False)
     preview_url = models.URLField(max_length=1024, blank=True)  # 30s clip (Spotify/Apple)
+    source_url = models.URLField(max_length=1024, blank=True)  # link back to the origin track/page
 
     class Meta:
         ordering = ["title"]

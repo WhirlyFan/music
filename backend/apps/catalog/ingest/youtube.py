@@ -66,6 +66,7 @@ def _entry(e: dict) -> dict:
         # The thumbnail is derivable from the id — no extra request. YouTube has
         # no album/explicit metadata (it's the playback layer, not a catalog).
         "artwork": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else "",
+        "source_url": f"https://www.youtube.com/watch?v={vid}" if vid else "",
     }
 
 

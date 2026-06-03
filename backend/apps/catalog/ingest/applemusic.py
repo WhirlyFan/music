@@ -185,4 +185,5 @@ def ingest_with_meta(url: str) -> dict:
             t["artwork"] = image
         if album:
             t["album"] = album
+        t["source_url"] = url  # link back to the Apple Music album/playlist page
     return {"title": title, "external_id": external_id, "kind": kind, "tracks": tracks}

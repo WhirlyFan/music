@@ -66,6 +66,7 @@ def _upsert_track(row: dict) -> Track:
             "album_name": row.get("album") or "",
             "is_explicit": bool(row.get("explicit")),
             "preview_url": row.get("preview") or "",
+            "source_url": row.get("source_url") or "",
         },
     )
     if not created:
@@ -75,6 +76,7 @@ def _upsert_track(row: dict) -> Track:
             "album_name": row.get("album"),
             "isrc": row.get("isrc"),
             "preview_url": row.get("preview"),
+            "source_url": row.get("source_url"),
         }
         updates = {f: v for f, v in blanks.items() if v and not getattr(track, f)}
         if row.get("explicit") and not track.is_explicit:

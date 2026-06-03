@@ -2,11 +2,12 @@ import { ListMusic, Pause, Play, Shuffle, SkipBack, SkipForward, Trash2, X } fro
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
+import { FullScreenPlayer } from '@/components/player/full-screen-player'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
-import { useMatchTrack } from '@/lib/query/catalog'
+import { useMatchTrack, useSetSource } from '@/lib/query/catalog'
 import {
   type QueueItem,
   useClearQueue,
@@ -51,12 +52,14 @@ export function NowPlayingBar() {
   const shuffle = useShuffle()
   const clear = useClearQueue()
   const save = useSaveQueueAsPlaylist()
+  const setSource = useSetSource()
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [queueOpen, setQueueOpen] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'
@@ -216,7 +219,14 @@ export function NowPlayingBar() {
           </Button>
         </div>
 
-        <TrackArtwork track={track} className="size-11" />
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label="Open now playing"
+          className="hover:scale-105 motion-safe:transition-transform"
+        >
+          <TrackArtwork track={track} className="size-11" />
+        </button>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -265,6 +275,27 @@ export function NowPlayingBar() {
           <ListMusic className="mr-1 size-4" /> {upcoming}
         </Button>
       </div>
+
+      {expanded && (
+        <FullScreenPlayer
+          track={track}
+          playing={playing}
+          currentTime={currentTime}
+          duration={duration}
+          audioReady={!!audioSrc}
+          canNext={upcoming > 0}
+          onTogglePlay={togglePlay}
+          onPrevious={handlePrevious}
+          onNext={() => next.mutate()}
+          onSeek={(s) => {
+            const el = audioRef.current
+            if (el) el.currentTime = s
+          }}
+          onPauseMain={() => audioRef.current?.pause()}
+          onCorrect={(videoId) => setSource.mutate({ trackId: track.id, videoId })}
+          onClose={() => setExpanded(false)}
+        />
+      )}
 
       {audioSrc && (
         <audio
