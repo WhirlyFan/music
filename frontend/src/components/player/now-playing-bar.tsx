@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { ListMusic, Pause, Play, Shuffle, SkipBack, SkipForward, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
 import { useMatchTrack, useSetSource } from '@/lib/query/catalog'
+import { playlistKeys } from '@/lib/query/keys'
 import {
   type QueueItem,
   useClearQueue,
@@ -38,6 +40,7 @@ export function NowPlayingBar() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const { data: room, refetch: refetchRoom } = useRoom(authed)
+  const qc = useQueryClient()
 
   const matchTrack = useMatchTrack()
   const next = useNext()
@@ -298,9 +301,12 @@ export function NowPlayingBar() {
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => {
             setDuration(e.currentTarget.duration)
-            // The stream endpoint backfills artwork for old tracks on play — pull
-            // it in live so the cover appears without a reload.
-            if (!track.artwork_url) void refetchRoom()
+            // The stream endpoint resolves artwork for blank-cover tracks on play —
+            // pull it into the player AND any playlist view that shows this track.
+            if (!track.artwork_url) {
+              void refetchRoom()
+              void qc.invalidateQueries({ queryKey: playlistKeys.all() })
+            }
           }}
           onEnded={() => next.mutate()}
         />

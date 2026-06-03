@@ -79,3 +79,18 @@ export function useSetSource(playlistId?: string) {
     },
   })
 }
+
+/** Re-resolve a track's cover from its origin (Spotify/Apple → YouTube fallback).
+ *  Used to self-heal a broken cover and to retry a YouTube-fallback cover. */
+export function useRefreshArtwork() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (trackId: string) =>
+      api<Track>(`/catalog/tracks/${trackId}/refresh-artwork/`, { method: 'POST' }),
+    onSuccess: () => {
+      // The cover shows in the player, playlist list + detail — refresh them all.
+      qc.invalidateQueries({ queryKey: roomKeys.all() })
+      qc.invalidateQueries({ queryKey: playlistKeys.all() })
+    },
+  })
+}

@@ -1,12 +1,18 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import type { PlaybackSource } from '@/lib/query/catalog'
-import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
-import { usePlaylist, useSetSource } from '@/lib/query/catalog'
+import { usePlaylist, useRefreshArtwork, useSetSource } from '@/lib/query/catalog'
 import { usePlayNow, usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
+
+/** A YouTube-thumbnail fallback cover — offer to re-resolve the real art. */
+function isYouTubeArt(url?: string | null): boolean {
+  return !!url && url.includes('i.ytimg.com')
+}
 
 export const Route = createFileRoute('/playlists/$playlistId')({
   component: PlaylistDetailPage,
@@ -19,6 +25,7 @@ function PlaylistDetailPage() {
   const playNow = usePlayNow()
   const queueTracks = useQueueTracks()
   const setSource = useSetSource(playlistId)
+  const refreshArtwork = useRefreshArtwork()
 
   if (isLoading) return <p className="text-muted-foreground">Loading…</p>
   if (error || !playlist) return <FormError message="Failed to load playlist." />
@@ -66,7 +73,23 @@ function PlaylistDetailPage() {
               <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
                 {item.position + 1}
               </span>
-              <TrackArtwork track={item.track} />
+              <div className="relative shrink-0">
+                <TrackArtwork track={item.track} />
+                {isYouTubeArt(item.track.artwork_url) && (
+                  <button
+                    type="button"
+                    aria-label={`Retry cover art for ${item.track.title}`}
+                    title="Cover is from YouTube — retry the original"
+                    disabled={refreshArtwork.isPending}
+                    onClick={() => refreshArtwork.mutate(item.track.id)}
+                    className="bg-background/80 text-foreground hover:bg-background absolute -top-1 -right-1 grid size-5 place-items-center rounded-full border shadow-sm disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`size-3 ${refreshArtwork.isPending ? 'animate-spin' : ''}`}
+                    />
+                  </button>
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
                   {item.track.is_explicit && <ExplicitBadge />}
