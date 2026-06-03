@@ -102,3 +102,30 @@ def test_play_playlist_and_save():
 
     saved = services.save_as_playlist(room, user, "Mix")
     assert saved.items.count() == 3
+
+
+@pytest.mark.django_db
+def test_play_now_is_idempotent_on_current_track():
+    # Spam-playing the same song must not pile up duplicate context rows.
+    user = UserFactory()
+    room = services.get_active_room(user)
+    track = TrackFactory()
+    first = services.play_now(room, track, added_by=user)
+    again = services.play_now(room, track, added_by=user)
+    services.play_now(room, track, added_by=user)
+
+    assert again.id == first.id  # same row, not a new one
+    assert room.items.filter(kind=QueueItem.Kind.CONTEXT).count() == 1
+    room.refresh_from_db()
+    assert room.playback.current_item.track_id == track.id
+
+
+@pytest.mark.django_db
+def test_play_now_different_track_replaces_context():
+    user = UserFactory()
+    room = services.get_active_room(user)
+    a, b = TrackFactory(), TrackFactory()
+    services.play_now(room, a, added_by=user)
+    services.play_now(room, b, added_by=user)
+    ctx = room.items.filter(kind=QueueItem.Kind.CONTEXT)
+    assert ctx.count() == 1 and ctx.first().track_id == b.id

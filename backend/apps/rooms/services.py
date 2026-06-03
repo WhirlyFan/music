@@ -78,8 +78,21 @@ def play(room: Room, tracks, *, start: int = 0, added_by=None, label: str = "") 
 @transaction.atomic
 def play_now(room: Room, track, *, added_by=None) -> QueueItem:
     """Play one song now (clicking a single track): the context becomes just that
-    song. The user queue is preserved."""
-    playback, _ = PlaybackState.objects.get_or_create(room=room)
+    song. The user queue is preserved.
+
+    Idempotent on the current track — clicking Play on the song that's already
+    playing just restarts it, never a duplicate (Spotify behaves the same). The
+    `select_for_update` lock serializes rapid repeat clicks so concurrent requests
+    can't race into duplicate context rows (each would otherwise delete the
+    visible context and insert its own)."""
+    PlaybackState.objects.get_or_create(room=room)
+    playback = PlaybackState.objects.select_for_update().get(room=room)
+    cur = playback.current_item
+    if cur is not None and cur.track_id == track.id:
+        playback.position_ms = 0
+        playback.is_playing = True
+        playback.save(update_fields=["position_ms", "is_playing", "updated_at"])
+        return cur
     _ctx(room).delete()
     row = QueueItem.objects.create(room=room, track=track, kind=CONTEXT, position=0, added_by=added_by)
     _set_current(playback, row, label="")
