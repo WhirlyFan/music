@@ -26,35 +26,26 @@ export function useAudioAnalyser(audioRef: React.RefObject<HTMLAudioElement | nu
     }
     if (!ctxRef.current) ctxRef.current = new AudioContext()
     const ctx = ctxRef.current
-    if (connectedRef.current === el) {
-      void ctx.resume()
-      return // this element is already wired
+    void ctx.resume()
+    if (connectedRef.current === el) return // this element is already wired
+    try {
+      const source = ctx.createMediaElementSource(el)
+      source.connect(ctx.destination) // audible output: full-range, unaffected by the filter
+      // Separate analysis branch, low-passed to the bass so the waveform tracks the
+      // kick/bassline (slow, smooth) instead of jittery treble. The analyser needs
+      // no onward connection to analyse.
+      const lowpass = ctx.createBiquadFilter()
+      lowpass.type = 'lowpass'
+      lowpass.frequency.value = 150
+      const node = ctx.createAnalyser()
+      node.fftSize = 1024 // time-domain resolution for a smooth waveform
+      source.connect(lowpass)
+      lowpass.connect(node)
+      connectedRef.current = el
+      setAnalyser(node)
+    } catch {
+      // already connected / unsupported — leave the visualizer off, audio is fine
     }
-    // Capture the element into the graph ONLY once the context is actually running.
-    // Capturing into a suspended context routes playback into silence — so if it
-    // can't resume we leave the element alone (it plays directly) and just skip the
-    // visualizer. Playback is never sacrificed for the visualizer.
-    void ctx.resume().then(() => {
-      if (ctx.state !== 'running' || connectedRef.current === el) return
-      try {
-        const source = ctx.createMediaElementSource(el)
-        source.connect(ctx.destination) // audible output: full-range, unaffected by the filter
-        // Separate analysis branch, low-passed to the bass so the waveform tracks the
-        // kick/bassline (slow, smooth) instead of jittery treble. The analyser needs
-        // no onward connection to analyse.
-        const lowpass = ctx.createBiquadFilter()
-        lowpass.type = 'lowpass'
-        lowpass.frequency.value = 150
-        const node = ctx.createAnalyser()
-        node.fftSize = 1024 // time-domain resolution for a smooth waveform
-        source.connect(lowpass)
-        lowpass.connect(node)
-        connectedRef.current = el
-        setAnalyser(node)
-      } catch {
-        // already connected / unsupported — leave the visualizer off, audio is fine
-      }
-    })
   }, [audioRef])
 
   return { analyser, connect }
