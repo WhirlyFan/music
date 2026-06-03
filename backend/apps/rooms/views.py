@@ -13,6 +13,7 @@ from .models import QueueItem, Room
 from .serializers import (
     PlayPlaylistSerializer,
     PlaySerializer,
+    QueueItemRefSerializer,
     QueueSerializer,
     RoomSerializer,
     SaveAsPlaylistSerializer,
@@ -95,6 +96,31 @@ class RoomViewSet(viewsets.ViewSet):
                 services.enqueue(room, track, added_by=request.user, play_next=True)
         else:
             services.enqueue_many(room, tracks, added_by=request.user)
+        return self._respond(request.user)
+
+    @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def jump(self, request):
+        """Play an up-next item now (click-to-play); skips everything before it."""
+        s = QueueItemRefSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        services.jump(services.get_active_room(request.user), s.validated_data["item_id"])
+        return self._respond(request.user)
+
+    @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def remove(self, request):
+        """Remove a single up-next item."""
+        s = QueueItemRefSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        services.remove(services.get_active_room(request.user), s.validated_data["item_id"])
+        return self._respond(request.user)
+
+    @extend_schema(request=None, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def shuffle(self, request):
+        """Reshuffle the remaining context order."""
+        services.shuffle(services.get_active_room(request.user))
         return self._respond(request.user)
 
     @extend_schema(request=None, responses=RoomSerializer)

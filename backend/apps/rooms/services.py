@@ -13,6 +13,8 @@ Play order (and therefore `advance`) is: user queue first, then context.
 
 from __future__ import annotations
 
+import random
+
 from django.db import transaction
 from django.db.models import Max, Min
 
@@ -105,6 +107,44 @@ def advance(room: Room):
     nxt.delete()
     _set_current(playback, track)
     return track
+
+
+@transaction.atomic
+def jump(room: Room, item_id):
+    """Play an up-next item now (clicking it in the queue). Everything ordered
+    before it — queue first, then context — is skipped (removed)."""
+    target = room.items.filter(id=item_id).first()
+    if target is None:
+        return None
+    if target.kind == QUEUE:
+        room.items.filter(kind=QUEUE, position__lt=target.position).delete()
+    else:
+        # Jumping into the context skips the rest of the user queue + earlier context.
+        room.items.filter(kind=QUEUE).delete()
+        room.items.filter(kind=CONTEXT, position__lt=target.position).delete()
+    track = target.track
+    target.delete()
+    playback, _ = PlaybackState.objects.get_or_create(room=room)
+    _set_current(playback, track)
+    return track
+
+
+@transaction.atomic
+def remove(room: Room, item_id) -> bool:
+    """Remove a single up-next item (does not touch now-playing)."""
+    return bool(room.items.filter(id=item_id).delete()[0])
+
+
+@transaction.atomic
+def shuffle(room: Room) -> None:
+    """Randomize the order of the remaining context (the user queue keeps its
+    explicit order). Re-call to reshuffle."""
+    ctx = list(room.items.filter(kind=CONTEXT))
+    positions = [c.position for c in ctx]
+    random.shuffle(positions)
+    for item, pos in zip(ctx, positions, strict=True):
+        item.position = pos
+    QueueItem.objects.bulk_update(ctx, ["position"])
 
 
 @transaction.atomic

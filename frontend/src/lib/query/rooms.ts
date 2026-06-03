@@ -63,6 +63,25 @@ export function useQueueTracks() {
   )
 }
 
+/** Click an up-next item to play it now (skips everything before it). */
+export function useJump() {
+  return useRoomMutation((itemId: string) =>
+    api<Room>('/rooms/jump/', { method: 'POST', body: { item_id: itemId } }),
+  )
+}
+
+/** Remove a single up-next item. */
+export function useRemoveItem() {
+  return useRoomMutation((itemId: string) =>
+    api<Room>('/rooms/remove/', { method: 'POST', body: { item_id: itemId } }),
+  )
+}
+
+/** Reshuffle the remaining context order. */
+export function useShuffle() {
+  return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }))
+}
+
 /** Advance the head: user queue first, then the context. */
 export function useAdvance() {
   return useRoomMutation(() => api<Room>('/rooms/advance/', { method: 'POST' }))

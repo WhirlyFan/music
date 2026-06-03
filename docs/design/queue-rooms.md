@@ -70,9 +70,12 @@ Playlist (existing)          ← now strictly user-owned + intentional
 | **Play playlist** | `play-playlist {playlist_id}` | context = the playlist, from the top |
 | **Add to queue / Play next** | `queue {track_ids, play_next}` | append to (or head of) the **user queue**; starts playback if idle |
 | **Skip / track end** | `advance` | next track: user queue first, then context (consumed item removed) |
+| **Click up-next item** | `jump {item_id}` | play it now; skips (removes) everything before it in play order |
+| **Remove item** | `remove {item_id}` | drop a single up-next item |
+| **Shuffle** | `shuffle` | randomize the remaining context order (re-call to reshuffle) |
 | **Save queue as playlist** | `save-as-playlist {title}` | owned `Playlist` from now-playing + queue + context, in play order |
 | **Clear** | `clear` | empty both layers, stop |
-| **Reorder / remove** | *(Phase B)* | edit queue (host-gated in shared sessions) |
+| **Reorder (drag), repeat modes** | *(next)* | drag-to-reorder + off/all/one repeat (host-gated in shared sessions) |
 
 ## Real-time (the Jam) — architecture
 - **Transport:** **Django Channels** over the **ASGI app we already have** (`config.asgi.application` is configured) + a **Redis channel layer** (add a `redis` service to compose).

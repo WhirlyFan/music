@@ -64,5 +64,11 @@ class PlayPlaylistSerializer(serializers.Serializer):
     playlist_id = serializers.UUIDField()
 
 
+class QueueItemRefSerializer(serializers.Serializer):
+    """Reference an existing up-next item (for jump / remove)."""
+
+    item_id = serializers.UUIDField()
+
+
 class SaveAsPlaylistSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)

@@ -270,6 +270,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/jump/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Play an up-next item now (click-to-play); skips everything before it. */
+        post: operations["v1_rooms_jump_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/me/": {
         parameters: {
             query?: never;
@@ -347,6 +364,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/remove/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Remove a single up-next item. */
+        post: operations["v1_rooms_remove_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/save-as-playlist/": {
         parameters: {
             query?: never;
@@ -361,6 +395,23 @@ export interface paths {
          *     `request.user`'s active room — there is no other-user access.
          */
         post: operations["v1_rooms_save_as_playlist_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/shuffle/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reshuffle the remaining context order. */
+        post: operations["v1_rooms_shuffle_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -560,6 +611,11 @@ export interface components {
             kind?: components["schemas"]["KindEnum"];
             position: number;
             readonly track: components["schemas"]["Track"];
+        };
+        /** @description Reference an existing up-next item (for jump / remove). */
+        QueueItemRef: {
+            /** Format: uuid */
+            item_id: string;
         };
         /**
          * @description The room as the player needs it: now-playing track + the two up-next
@@ -986,6 +1042,31 @@ export interface operations {
             };
         };
     };
+    v1_rooms_jump_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueItemRef"];
+                "application/x-www-form-urlencoded": components["schemas"]["QueueItemRef"];
+                "multipart/form-data": components["schemas"]["QueueItemRef"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
     v1_rooms_me_retrieve: {
         parameters: {
             query?: never;
@@ -1080,6 +1161,31 @@ export interface operations {
             };
         };
     };
+    v1_rooms_remove_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueItemRef"];
+                "application/x-www-form-urlencoded": components["schemas"]["QueueItemRef"];
+                "multipart/form-data": components["schemas"]["QueueItemRef"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
     v1_rooms_save_as_playlist_create: {
         parameters: {
             query?: never;
@@ -1101,6 +1207,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Playlist"];
+                };
+            };
+        };
+    };
+    v1_rooms_shuffle_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
                 };
             };
         };

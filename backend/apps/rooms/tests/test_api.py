@@ -104,6 +104,46 @@ def test_play_preserves_user_queue(client):
 
 
 @pytest.mark.django_db
+def test_jump_plays_item_and_drops_those_before_it(client):
+    api, _ = client
+    ctx = [TrackFactory() for _ in range(4)]
+    api.post("/api/v1/rooms/play/", {"track_ids": ids(ctx), "start_index": 0}, format="json")
+    r = api.get("/api/v1/rooms/me/")
+    # context is ctx[1], ctx[2], ctx[3]; click the 3rd of those (ctx[3])
+    target = r.data["context"][2]
+    assert target["track"]["id"] == str(ctx[3].id)
+
+    r = api.post("/api/v1/rooms/jump/", {"item_id": target["id"]}, format="json")
+    assert r.data["current"]["id"] == str(ctx[3].id)
+    assert r.data["context"] == []  # everything before it was skipped
+
+
+@pytest.mark.django_db
+def test_remove_drops_one_item(client):
+    api, _ = client
+    ctx = [TrackFactory() for _ in range(3)]
+    api.post("/api/v1/rooms/play/", {"track_ids": ids(ctx), "start_index": 0}, format="json")
+    item_id = api.get("/api/v1/rooms/me/").data["context"][0]["id"]
+
+    r = api.post("/api/v1/rooms/remove/", {"item_id": item_id}, format="json")
+    assert len(r.data["context"]) == 1
+    assert item_id not in [c["id"] for c in r.data["context"]]
+
+
+@pytest.mark.django_db
+def test_shuffle_keeps_same_set(client):
+    api, _ = client
+    ctx = [TrackFactory() for _ in range(5)]
+    api.post("/api/v1/rooms/play/", {"track_ids": ids(ctx), "start_index": 0}, format="json")
+    before = {c["track"]["id"] for c in api.get("/api/v1/rooms/me/").data["context"]}
+
+    r = api.post("/api/v1/rooms/shuffle/", format="json")
+    after = {c["track"]["id"] for c in r.data["context"]}
+    assert before == after  # same tracks, (possibly) new order
+    assert len(r.data["context"]) == 4
+
+
+@pytest.mark.django_db
 def test_play_playlist_then_save_as_playlist(client):
     api, user = client
     playlist = PlaylistFactory(created_by=user)
