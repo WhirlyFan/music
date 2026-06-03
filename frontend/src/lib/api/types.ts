@@ -230,26 +230,6 @@ export interface paths {
         patch: operations["v1_notes_partial_update"];
         trace?: never;
     };
-    "/api/v1/rooms/advance/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description The caller's own listening room (room-of-one). All actions operate on
-         *     `request.user`'s active room — there is no other-user access.
-         */
-        post: operations["v1_rooms_advance_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/rooms/clear/": {
         parameters: {
             query?: never;
@@ -279,7 +259,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Play an up-next item now (click-to-play); skips everything before it. */
+        /** @description Play a specific queue item now (click any row in the queue). */
         post: operations["v1_rooms_jump_create"];
         delete?: never;
         options?: never;
@@ -307,6 +287,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/next/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_next_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/play/": {
         parameters: {
             query?: never;
@@ -317,10 +317,30 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Play a list as the context, starting at `start_index` (per-track Play
-         *     sends the surrounding list + the clicked index).
+         * @description Replace the queue with a list and play from `start_index`
+         *     (Play playlist / Play all).
          */
         post: operations["v1_rooms_play_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/play-now/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Play one song now (clicking a track) — inserts it at the cursor; does
+         *     not pull in the surrounding list.
+         */
+        post: operations["v1_rooms_play_now_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -347,6 +367,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/previous/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_previous_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/queue/": {
         parameters: {
             query?: never;
@@ -356,7 +396,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Add one or more tracks to the user queue (`play_next` → at the head). */
+        /** @description Add one or more tracks to the queue (`play_next` → right after current). */
         post: operations["v1_rooms_queue_create"];
         delete?: never;
         options?: never;
@@ -373,7 +413,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Remove a single up-next item. */
+        /** @description Remove a single queue item. */
         post: operations["v1_rooms_remove_create"];
         delete?: never;
         options?: never;
@@ -410,7 +450,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Reshuffle the remaining context order. */
+        /** @description Reshuffle the up-next items. */
         post: operations["v1_rooms_shuffle_create"];
         delete?: never;
         options?: never;
@@ -450,12 +490,6 @@ export interface components {
             /** Format: uri */
             url: string;
         };
-        /**
-         * @description * `context` - From context
-         *     * `queue` - User queue
-         * @enum {string}
-         */
-        KindEnum: "context" | "queue";
         /**
          * @description * `video_id` - YouTube video id
          *     * `storage_key` - Object-storage key
@@ -548,13 +582,16 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description Set the context to `track_ids` and start playing at `start_index`. */
+        /** @description Replace the queue with `track_ids` and play from `start_index`. */
         Play: {
             track_ids: string[];
             /** @default 0 */
             start_index: number;
-            /** @default  */
-            label: string;
+        };
+        /** @description Play a single track now (insert at the cursor). */
+        PlayNow: {
+            /** Format: uuid */
+            track_id: string;
         };
         PlayPlaylist: {
             /** Format: uuid */
@@ -599,7 +636,7 @@ export interface components {
             position: number;
             readonly track: components["schemas"]["Track"];
         };
-        /** @description Add tracks to the user queue. `play_next` puts them at the head. */
+        /** @description Add tracks to the queue. `play_next` inserts right after current. */
         Queue: {
             track_ids: string[];
             /** @default false */
@@ -608,28 +645,28 @@ export interface components {
         QueueItem: {
             /** Format: uuid */
             readonly id: string;
-            kind?: components["schemas"]["KindEnum"];
             position: number;
             readonly track: components["schemas"]["Track"];
         };
-        /** @description Reference an existing up-next item (for jump / remove). */
+        /** @description Reference an existing queue item (for jump / remove). */
         QueueItemRef: {
             /** Format: uuid */
             item_id: string;
         };
         /**
-         * @description The room as the player needs it: now-playing track + the two up-next
-         *     layers (explicit `queue`, then the `context` it resumes into).
+         * @description The room as the player needs it: now-playing + the single queue split into
+         *     already-played `history` and upcoming `queue`, around the current cursor.
          */
         Room: {
             /** Format: uuid */
             readonly id: string;
-            readonly current: components["schemas"]["Track"] | null;
+            readonly current: components["schemas"]["Track"];
+            /** Format: uuid */
+            readonly current_item_id: string | null;
             readonly is_playing: boolean;
             readonly position_ms: number;
-            readonly context_label: string;
+            readonly history: components["schemas"]["QueueItem"][];
             readonly queue: components["schemas"]["QueueItem"][];
-            readonly context: components["schemas"]["QueueItem"][];
         };
         SaveAsPlaylist: {
             title: string;
@@ -1004,25 +1041,6 @@ export interface operations {
             };
         };
     };
-    v1_rooms_advance_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Room"];
-                };
-            };
-        };
-    };
     v1_rooms_clear_create: {
         parameters: {
             query?: never;
@@ -1086,6 +1104,25 @@ export interface operations {
             };
         };
     };
+    v1_rooms_next_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
     v1_rooms_play_create: {
         parameters: {
             query?: never;
@@ -1098,6 +1135,31 @@ export interface operations {
                 "application/json": components["schemas"]["Play"];
                 "application/x-www-form-urlencoded": components["schemas"]["Play"];
                 "multipart/form-data": components["schemas"]["Play"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_play_now_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlayNow"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlayNow"];
+                "multipart/form-data": components["schemas"]["PlayNow"];
             };
         };
         responses: {
@@ -1125,6 +1187,25 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["PlayPlaylist"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_previous_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

@@ -8,8 +8,9 @@ export type Room = components['schemas']['Room']
 export type QueueItem = components['schemas']['QueueItem']
 type Playlist = components['schemas']['Playlist']
 
-/** The caller's room (now-playing + the two-layer up-next). Source of truth for
- *  the player + queue panel; rehydrates on load so playback survives navigation. */
+/** The caller's room: now-playing + a single queue (history behind the cursor,
+ *  up-next ahead). Source of truth for the player; rehydrates on load so
+ *  playback survives navigation. */
 export function useRoom(enabled = true) {
   return useQuery({
     queryKey: roomKeys.me(),
@@ -19,7 +20,7 @@ export function useRoom(enabled = true) {
 }
 
 // Every mutation returns the fresh Room — seed the cache directly (no refetch).
-// TArgs defaults to void so no-arg mutations (advance/clear) keep `mutate()`.
+// TArgs defaults to void so no-arg mutations (next/previous/…) keep `mutate()`.
 function useRoomMutation<TArgs = void>(fn: (args: TArgs) => Promise<Room>) {
   const qc = useQueryClient()
   return useMutation<Room, Error, TArgs>({
@@ -28,32 +29,32 @@ function useRoomMutation<TArgs = void>(fn: (args: TArgs) => Promise<Room>) {
   })
 }
 
-/**
- * Play a list as the context, starting at `startIndex` (defaults to the top).
- * Per-track Play sends the whole surrounding list + the clicked index, so the
- * rest of the list becomes the up-next context — like clicking a song in Spotify.
- */
+/** Play one song now (clicking a track): inserts it at the cursor and plays it —
+ *  does NOT pull in the surrounding list. */
+export function usePlayNow() {
+  return useRoomMutation((trackId: string) =>
+    api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } }),
+  )
+}
+
+/** Replace the queue with a list and play from `startIndex` (Play playlist / all). */
 export function usePlay() {
-  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) =>
+  return useRoomMutation((args: { trackIds: string[]; startIndex?: number }) =>
     api<Room>('/rooms/play/', {
       method: 'POST',
-      body: {
-        track_ids: args.trackIds,
-        start_index: args.startIndex ?? 0,
-        label: args.label ?? '',
-      },
+      body: { track_ids: args.trackIds, start_index: args.startIndex ?? 0 },
     }),
   )
 }
 
-/** Play an owned playlist as the context, from the top. */
+/** Replace the queue with an owned playlist, from the top. */
 export function usePlayPlaylist() {
   return useRoomMutation((playlistId: string) =>
     api<Room>('/rooms/play-playlist/', { method: 'POST', body: { playlist_id: playlistId } }),
   )
 }
 
-/** Add tracks to the user queue (`playNext` puts them at the head). */
+/** Add tracks to the queue (`playNext` inserts right after current). */
 export function useQueueTracks() {
   return useRoomMutation((args: { trackIds: string[]; playNext?: boolean }) =>
     api<Room>('/rooms/queue/', {
@@ -63,36 +64,41 @@ export function useQueueTracks() {
   )
 }
 
-/** Click an up-next item to play it now (skips everything before it). */
+/** Advance the cursor to the next track. */
+export function useNext() {
+  return useRoomMutation(() => api<Room>('/rooms/next/', { method: 'POST' }))
+}
+
+/** Move the cursor back to the previously played track. */
+export function usePrevious() {
+  return useRoomMutation(() => api<Room>('/rooms/previous/', { method: 'POST' }))
+}
+
+/** Click any queue row (history or up-next) to play it now. */
 export function useJump() {
   return useRoomMutation((itemId: string) =>
     api<Room>('/rooms/jump/', { method: 'POST', body: { item_id: itemId } }),
   )
 }
 
-/** Remove a single up-next item. */
+/** Remove a single queue item. */
 export function useRemoveItem() {
   return useRoomMutation((itemId: string) =>
     api<Room>('/rooms/remove/', { method: 'POST', body: { item_id: itemId } }),
   )
 }
 
-/** Reshuffle the remaining context order. */
+/** Reshuffle the up-next items. */
 export function useShuffle() {
   return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }))
 }
 
-/** Advance the head: user queue first, then the context. */
-export function useAdvance() {
-  return useRoomMutation(() => api<Room>('/rooms/advance/', { method: 'POST' }))
-}
-
-/** Empty both layers and stop playback. */
+/** Empty the queue and stop playback. */
 export function useClearQueue() {
   return useRoomMutation(() => api<Room>('/rooms/clear/', { method: 'POST' }))
 }
 
-/** Save what's lined up (now-playing + queue + context) as an owned playlist. */
+/** Save the whole queue as an owned playlist. */
 export function useSaveQueueAsPlaylist() {
   const qc = useQueryClient()
   return useMutation({

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { fieldErrorMessage } from '@/lib/auth/errors'
 import type { ImportResult } from '@/lib/query/catalog'
 import { useIngest, usePlaylists } from '@/lib/query/catalog'
-import { usePlay, useQueueTracks } from '@/lib/query/rooms'
+import { usePlay, usePlayNow, useQueueTracks } from '@/lib/query/rooms'
 
 export const Route = createFileRoute('/playlists/')({
   component: PlaylistsPage,
@@ -126,6 +126,7 @@ function PlaylistsPage() {
 /** The just-imported tracks, with play / queue verbs (no playlist created). */
 function ImportResultView({ result }: { result: ImportResult }) {
   const play = usePlay()
+  const playNow = usePlayNow()
   const queueTracks = useQueueTracks()
   const trackIds = result.tracks.map((t) => t.id)
 
@@ -145,10 +146,7 @@ function ImportResultView({ result }: { result: ImportResult }) {
           <Button
             size="sm"
             onClick={() =>
-              play.mutate(
-                { trackIds, startIndex: 0, label: result.title },
-                { onSuccess: () => toast.success('Playing.') },
-              )
+              play.mutate({ trackIds }, { onSuccess: () => toast.success('Playing.') })
             }
           >
             Play all
@@ -182,10 +180,7 @@ function ImportResultView({ result }: { result: ImportResult }) {
               <p className="text-muted-foreground truncate text-sm">{track.primary_artist}</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={() => play.mutate({ trackIds, startIndex: i, label: result.title })}
-              >
+              <Button size="sm" onClick={() => playNow.mutate(track.id)}>
                 Play
               </Button>
               <Button

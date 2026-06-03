@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import type { PlaybackSource } from '@/lib/query/catalog'
 import { usePlaylist, useSetSource } from '@/lib/query/catalog'
-import { usePlay, usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
+import { usePlayNow, usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
 
 export const Route = createFileRoute('/playlists/$playlistId')({
   component: PlaylistDetailPage,
@@ -15,7 +15,7 @@ function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
   const playPlaylist = usePlayPlaylist()
-  const play = usePlay()
+  const playNow = usePlayNow()
   const queueTracks = useQueueTracks()
   const setSource = useSetSource(playlistId)
 
@@ -54,7 +54,7 @@ function PlaylistDetailPage() {
       </header>
 
       <ol className="space-y-2">
-        {playlist.items.map((item, i) => {
+        {playlist.items.map((item) => {
           const source: PlaybackSource | null = item.track.active_source
           const videoMatched = source?.locator_kind === 'video_id'
           return (
@@ -72,10 +72,7 @@ function PlaylistDetailPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => play.mutate({ trackIds, startIndex: i, label: playlist.title })}
-                >
+                <Button size="sm" onClick={() => playNow.mutate(item.track.id)}>
                   Play
                 </Button>
                 <Button
