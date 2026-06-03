@@ -7,10 +7,11 @@ const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in
 const BASE = BUFFER * 0.04 // baseline ring offset (peaks point out, valleys tuck behind)
 const AMP = BUFFER * 0.12 // waveform deflection (bigger → more expressive peaks)
 const GAIN = 2.0 // pre-emphasis before a soft clip → peaks pop, quiet stays calm
-const STIFFNESS = 0.08 // spring pull toward the target
-// Fraction of velocity kept each frame. LOWER = more friction. Kept well below
-// the overshoot threshold so it's overdamped — eases in like honey, never wobbles.
-const DAMPING = 0.55
+// Attack/release envelope (NOT a spring — no momentum, so it can't overshoot or
+// wobble). Peaks/valleys form quickly (attack); they relax slowly (release) so the
+// whole thing moves like something thick and viscous.
+const ATTACK = 0.35 // how fast it reaches a new peak/valley
+const RELEASE = 0.05 // how slowly it settles back → thickness
 const BANDS = 5 // colors sampled top→bottom for the artwork gradient
 
 type Pt = { px: number; py: number; nx: number; ny: number }
@@ -125,8 +126,7 @@ export function AudioVisualizer({
     const samples = analyser.fftSize
     const data = new Uint8Array(samples)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const buf = new Float32Array(POINTS) // current offset per point (spring position)
-    const vel = new Float32Array(POINTS) // spring velocity → momentum + friction
+    const buf = new Float32Array(POINTS) // current offset per point
     const raw = new Float32Array(POINTS)
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
@@ -167,10 +167,10 @@ export function AudioVisualizer({
             raw[(i + 2) % POINTS]) /
           5
         const target = Math.tanh(sm * GAIN) // pre-emphasis → expressive, soft-clipped peaks
-        // spring + damping: the wave follows the target with momentum and friction,
-        // so it eases like something viscous instead of snapping/jittering.
-        vel[i] = (vel[i] + (target - buf[i]) * STIFFNESS) * DAMPING
-        buf[i] += vel[i]
+        // Move toward the target with no momentum (so it can't overshoot/wobble):
+        // fast when growing a peak/valley, slow when relaxing → thick + viscous.
+        const rate = Math.abs(target) > Math.abs(buf[i]) ? ATTACK : RELEASE
+        buf[i] += (target - buf[i]) * rate
         energy += Math.abs(buf[i])
         const off = BASE + buf[i] * AMP
         ox[i] = PERIM[i].px + PERIM[i].nx * off
