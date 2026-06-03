@@ -4,8 +4,11 @@ import { useEffect, useRef } from 'react'
 const BUFFER = 600
 const POINTS = 160 // perimeter samples the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
-const BASE = BUFFER * 0.05 // baseline ring offset (peaks point out, valleys tuck behind)
-const AMP = BUFFER * 0.08 // waveform deflection
+const BASE = BUFFER * 0.04 // baseline ring offset (peaks point out, valleys tuck behind)
+const AMP = BUFFER * 0.11 // waveform deflection (bigger → more expressive peaks)
+const GAIN = 2.2 // pre-emphasis before a soft clip → peaks pop, quiet stays calm
+const STIFFNESS = 0.1 // spring pull toward the target
+const DAMPING = 0.78 // fraction of velocity kept each frame → viscous friction (no jitter)
 const BANDS = 5 // colors sampled top→bottom for the artwork gradient
 
 type Pt = { px: number; py: number; nx: number; ny: number }
@@ -120,7 +123,8 @@ export function AudioVisualizer({
     const samples = analyser.fftSize
     const data = new Uint8Array(samples)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const buf = new Float32Array(POINTS) // temporally-eased offset per point
+    const buf = new Float32Array(POINTS) // current offset per point (spring position)
+    const vel = new Float32Array(POINTS) // spring velocity → momentum + friction
     const raw = new Float32Array(POINTS)
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
@@ -160,7 +164,11 @@ export function AudioVisualizer({
             raw[(i + 1) % POINTS] +
             raw[(i + 2) % POINTS]) /
           5
-        buf[i] += (sm - buf[i]) * 0.25
+        const target = Math.tanh(sm * GAIN) // pre-emphasis → expressive, soft-clipped peaks
+        // spring + damping: the wave follows the target with momentum and friction,
+        // so it eases like something viscous instead of snapping/jittering.
+        vel[i] = (vel[i] + (target - buf[i]) * STIFFNESS) * DAMPING
+        buf[i] += vel[i]
         energy += Math.abs(buf[i])
         const off = BASE + buf[i] * AMP
         ox[i] = PERIM[i].px + PERIM[i].nx * off
