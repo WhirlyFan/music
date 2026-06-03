@@ -31,8 +31,7 @@ export function useAudioAnalyser(audioRef: React.RefObject<HTMLAudioElement | nu
     try {
       const source = ctx.createMediaElementSource(el)
       const node = ctx.createAnalyser()
-      node.fftSize = 256
-      node.smoothingTimeConstant = 0.8
+      node.fftSize = 1024 // time-domain resolution for a smooth waveform
       source.connect(node)
       node.connect(ctx.destination) // keep audio audible
       connectedRef.current = el

@@ -137,15 +137,15 @@ export function FullScreenPlayer({
 
       <div className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-sm flex-col items-center gap-5 px-6">
         <div className="relative grid size-80 place-items-center">
-          <AudioVisualizer analyser={analyser} />
+          <AudioVisualizer analyser={analyser} artworkUrl={track.artwork_url} />
           {track.artwork_url ? (
             <img
               src={track.artwork_url}
               alt=""
-              className="aspect-square w-56 rounded-xl object-cover shadow-2xl"
+              className="aspect-square w-48 rounded-xl object-cover shadow-2xl"
             />
           ) : (
-            <div className="bg-muted aspect-square w-56 rounded-xl shadow-2xl" />
+            <div className="bg-muted aspect-square w-48 rounded-xl shadow-2xl" />
           )}
         </div>
 
