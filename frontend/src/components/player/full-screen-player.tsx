@@ -1,5 +1,6 @@
 import { ExternalLink, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 import { ExplicitBadge } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
@@ -105,7 +106,10 @@ export function FullScreenPlayer({
     source?.locator_kind === 'video_id' ? `https://www.youtube.com/watch?v=${source.locator}` : null
   const subtitle = [track.primary_artist, track.album_name].filter(Boolean).join(' · ')
 
-  return (
+  // Portal to <body>: the bottom bar uses backdrop-blur, which makes it the
+  // containing block for fixed descendants — rendering inside it would pin this
+  // overlay to the bar's ~64px box instead of the viewport.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -263,6 +267,7 @@ export function FullScreenPlayer({
           )}
         </dl>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

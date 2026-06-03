@@ -30,6 +30,15 @@ def _score(track: Track, cand: dict) -> tuple[float, int | None]:
 
 
 @transaction.atomic
+def _backfill_artwork(track: Track, video_id: str) -> None:
+    """Tracks imported before artwork existed (or from a source that gave none)
+    have a blank cover. Once matched to a video, use its thumbnail so the player
+    shows art instead of a placeholder. Only fills a blank — never overwrites."""
+    if video_id and not track.artwork_url:
+        track.artwork_url = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+        track.save(update_fields=["artwork_url"])
+
+
 def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None):
     """Search YouTube for `track`, persist candidates, promote the best to active.
 
@@ -70,6 +79,7 @@ def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None
     best = scored[0][1]
     best.status = PlaybackSource.Status.ACTIVE  # exactly one active (DB-enforced)
     PlaybackSource.objects.bulk_create([ps for _, ps in scored])
+    _backfill_artwork(track, best.locator)
     return best
 
 
@@ -79,7 +89,7 @@ def set_manual_youtube_source(track: Track, video_id: str, *, user=None) -> Play
     track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).update(
         status=PlaybackSource.Status.REPLACED
     )
-    return PlaybackSource.objects.create(
+    ps = PlaybackSource.objects.create(
         track=track,
         source=Source.objects.get(code=Source.YOUTUBE),
         locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
@@ -88,6 +98,8 @@ def set_manual_youtube_source(track: Track, video_id: str, *, user=None) -> Play
         status=PlaybackSource.Status.ACTIVE,
         selected_by=user,
     )
+    _backfill_artwork(track, video_id)
+    return ps
 
 
 @transaction.atomic
@@ -101,4 +113,5 @@ def promote_candidate(playback_source: PlaybackSource, *, user=None) -> Playback
     playback_source.origin = PlaybackSource.Origin.MATCHED_MANUAL
     playback_source.selected_by = user
     playback_source.save(update_fields=["status", "origin", "selected_by", "updated_at"])
+    _backfill_artwork(track, playback_source.locator)
     return playback_source

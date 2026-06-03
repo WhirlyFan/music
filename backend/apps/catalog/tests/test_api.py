@@ -206,6 +206,21 @@ def test_lazy_match_single_track(client, offline, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_match_backfills_artwork_from_youtube_thumbnail(monkeypatch):
+    # Tracks with no cover (old imports / sources that gave none) get the video
+    # thumbnail once matched — so the player shows art, not a placeholder.
+    track = TrackFactory(artwork_url="")
+    monkeypatch.setattr(
+        match.youtube,
+        "search",
+        lambda q, n=5: [{"video_id": "VID123", "title": "t", "uploader": "u", "duration_sec": 200}],
+    )
+    match.match_track_to_youtube(track)
+    track.refresh_from_db()
+    assert track.artwork_url == "https://i.ytimg.com/vi/VID123/hqdefault.jpg"
+
+
+@pytest.mark.django_db
 def test_set_source_correction(client, offline):
     client.post(INGEST, {"url": ALBUM_URL}, format="json")
     track = Track.objects.first()
