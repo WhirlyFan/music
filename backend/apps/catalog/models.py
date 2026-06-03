@@ -75,6 +75,13 @@ class Track(BaseModel):
     title = models.CharField(max_length=512)
     primary_artist = models.CharField(max_length=512)
     duration_ms = models.IntegerField(null=True, blank=True)
+    # Display metadata, normalized from the ingest source (Apple/Spotify); YouTube
+    # is only the playback layer, so its imports carry sparser metadata. Enriched
+    # across sources on re-import (an empty field is filled in by a later source).
+    artwork_url = models.URLField(max_length=1024, blank=True)
+    album_name = models.CharField(max_length=512, blank=True)
+    is_explicit = models.BooleanField(default=False)
+    preview_url = models.URLField(max_length=1024, blank=True)  # 30s clip (Spotify/Apple)
 
     class Meta:
         ordering = ["title"]

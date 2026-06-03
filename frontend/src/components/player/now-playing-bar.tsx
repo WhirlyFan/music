@@ -2,6 +2,7 @@ import { ListMusic, Pause, Play, Shuffle, SkipBack, SkipForward, Trash2, X } fro
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
+import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
@@ -215,13 +216,16 @@ export function NowPlayingBar() {
           </Button>
         </div>
 
+        <TrackArtwork track={track} className="size-11" />
+
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             {playing && <Equalizer />}
+            {track.is_explicit && <ExplicitBadge />}
             <p className="truncate text-sm font-medium">
               {track.title}
               <span className="text-muted-foreground ml-2 truncate text-xs font-normal">
-                {track.primary_artist}
+                {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
               </span>
             </p>
           </div>
@@ -331,6 +335,8 @@ function QueueSection({
                 ) : (
                   <span className="size-3 shrink-0" />
                 )}
+                <TrackArtwork track={item.track} className="size-7 rounded-sm" />
+                {item.track.is_explicit && <ExplicitBadge />}
                 <span className="truncate">{item.track.title}</span>
                 <span className="text-muted-foreground truncate text-xs">
                   {item.track.primary_artist}

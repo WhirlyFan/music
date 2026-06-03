@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import type { PlaybackSource } from '@/lib/query/catalog'
+import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { usePlaylist, useSetSource } from '@/lib/query/catalog'
 import { usePlayNow, usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
 
@@ -65,10 +66,14 @@ function PlaylistDetailPage() {
               <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
                 {item.position + 1}
               </span>
+              <TrackArtwork track={item.track} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{item.track.title}</p>
+                <div className="flex items-center gap-1.5">
+                  {item.track.is_explicit && <ExplicitBadge />}
+                  <p className="truncate font-medium">{item.track.title}</p>
+                </div>
                 <p className="text-muted-foreground truncate text-sm">
-                  {item.track.primary_artist}
+                  {[item.track.primary_artist, item.track.album_name].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <div className="flex items-center gap-2">

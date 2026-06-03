@@ -51,6 +51,8 @@ def _walk(obj, out, seen):
                         "title": title,
                         "artist": artist,
                         "duration": dur,
+                        "preview": node.get("previewUrl") or "",  # 30s m4a clip
+                        "explicit": bool(node.get("showExplicitBadge")),
                         "_id": str(sid) if sid is not None else None,
                     }
                 )
@@ -104,6 +106,34 @@ def _extract_title(html_text):
     return htmllib.unescape(m.group(1)).strip() if m else ""
 
 
+def _extract_album_name(html_text):
+    """Clean album name from JSON-LD's MusicAlbum (structured + locale-independent,
+    unlike the og:title '<Album> by <Artists>' display string). Empty for playlists."""
+    for blk in re.findall(
+        r'<script[^>]*type="application/ld\+json"[^>]*>(.*?)</script>', html_text, re.S
+    ):
+        try:
+            d = json.loads(blk)
+        except Exception:
+            continue
+        if d.get("@type") == "MusicAlbum" and d.get("name"):
+            return d["name"]
+    return ""
+
+
+def _extract_image(html_text):
+    """The collection cover (og:image is a wide social card — rebuild the same
+    mzstatic asset as a square 300px cover). Apple album songs share this cover;
+    playlist songs fall back to the playlist cover."""
+    m = re.search(r'<meta property="og:image" content="([^"]+)"', html_text)
+    if not m:
+        return ""
+    url = htmllib.unescape(m.group(1))
+    if "mzstatic.com/image/thumb/" in url:
+        return url.rsplit("/", 1)[0] + "/300x300bb.jpg"
+    return url
+
+
 def _classify(url: str):
     """Return (kind, external_id) from an Apple Music URL.
 
@@ -131,21 +161,28 @@ def _tracks(url: str):
         if one:
             tracks = one
     title = _extract_title(html_text)
-    return title, tracks
+    image = _extract_image(html_text)
+    album = _extract_album_name(html_text)
+    return title, image, album, tracks
 
 
 def ingest(url: str):
     """Back-compat: return just the normalized track list (drops internal id)."""
-    _, tracks = _tracks(url)
+    _, _, _, tracks = _tracks(url)
     for t in tracks:
         t.pop("_id", None)
     return tracks
 
 
 def ingest_with_meta(url: str) -> dict:
-    """Return {title, external_id, kind, tracks} for persistence."""
+    """Return {title, external_id, kind, tracks} for persistence. Tracks inherit
+    the collection cover as artwork; album/track imports inherit the album name."""
     kind, external_id = _classify(url)
-    title, tracks = _tracks(url)
+    title, image, album, tracks = _tracks(url)
     for t in tracks:
         t.pop("_id", None)
+        if image:
+            t["artwork"] = image
+        if album:
+            t["album"] = album
     return {"title": title, "external_id": external_id, "kind": kind, "tracks": tracks}

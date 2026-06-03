@@ -56,12 +56,16 @@ _INGEST_OPTS = {
 
 def _entry(e: dict) -> dict:
     duration = e.get("duration")
+    vid = e.get("id")
     return {
-        "video_id": e.get("id"),
+        "video_id": vid,
         "title": e.get("title") or "",
         "artist": e.get("channel") or e.get("uploader") or "",
         # yt-dlp reports seconds; our Track stores milliseconds.
         "duration": int(duration * 1000) if duration else None,
+        # The thumbnail is derivable from the id — no extra request. YouTube has
+        # no album/explicit metadata (it's the playback layer, not a catalog).
+        "artwork": f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg" if vid else "",
     }
 
 

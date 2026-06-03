@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
@@ -217,9 +218,15 @@ function ImportResultView({ result }: { result: ImportResult }) {
             <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
               {i + 1}
             </span>
+            <TrackArtwork track={track} />
             <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{track.title}</p>
-              <p className="text-muted-foreground truncate text-sm">{track.primary_artist}</p>
+              <div className="flex items-center gap-1.5">
+                {track.is_explicit && <ExplicitBadge />}
+                <p className="truncate font-medium">{track.title}</p>
+              </div>
+              <p className="text-muted-foreground truncate text-sm">
+                {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" onClick={() => playNow.mutate(track.id)}>

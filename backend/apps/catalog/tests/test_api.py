@@ -49,6 +49,13 @@ def test_ingest_returns_loose_tracks(client, offline):
     assert r.data["tracks"][0]["active_source"] is None  # not matched yet (lazy on play)
     assert r.data["id"]  # the import id
 
+    # Display metadata is normalized from the source: album tracks share the cover
+    # + album name; songs carry their explicit badge and 30s preview clip.
+    assert "mzstatic" in r.data["tracks"][0]["artwork_url"]
+    assert r.data["tracks"][0]["album_name"] == "Let God Sort Em Out"
+    assert any(t["preview_url"] for t in r.data["tracks"])
+    assert any(t["is_explicit"] for t in r.data["tracks"])
+
     # No playlist materialized by the paste.
     rl = client.get("/api/v1/catalog/playlists/")
     assert rl.status_code == 200 and rl.data["results"] == []
@@ -118,14 +125,46 @@ def test_ingest_spotify(client, monkeypatch):
         "title": "Sp Mix",
         "external_id": "sp1",
         "kind": "playlist",
-        "tracks": [{"title": "X", "artist": "Y", "duration": 210000, "isrc": "US1234567890"}],
+        "tracks": [{
+            "title": "X", "artist": "Y", "duration": 210000, "isrc": "US1234567890",
+            "artwork": "https://i.scdn.co/image/abc", "album": "Sp Album",
+            "explicit": True, "preview": "https://p.scdn.co/mp3-preview/abc",
+        }],
     }
     monkeypatch.setattr(spotify, "ingest_with_meta", lambda url: meta)
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/sp1"}, format="json")
     assert r.status_code == 201
     assert r.data["track_count"] == 1
     assert r.data["tracks"][0]["active_source"] is None  # matched to YouTube lazily on play
-    assert Track.objects.get(title="X").isrc == "US1234567890"  # ISRC stored
+    assert r.data["tracks"][0]["album_name"] == "Sp Album"
+    assert r.data["tracks"][0]["is_explicit"] is True
+    tr = Track.objects.get(title="X")
+    assert tr.isrc == "US1234567890"  # ISRC stored
+    assert tr.artwork_url and tr.preview_url  # display metadata stored
+
+
+@pytest.mark.django_db
+def test_metadata_enriched_across_sources():
+    # A track first seen sparse (YouTube-like: no album/art) is backfilled when the
+    # same song is re-imported from a richer source — never overwriting what exists.
+    from apps.catalog.services import _upsert_track
+
+    row = {"title": "E", "artist": "A", "duration": 1000}
+    t1 = _upsert_track(row)
+    assert t1.album_name == "" and t1.artwork_url == ""
+
+    t2 = _upsert_track({**row, "album": "Real Album", "artwork": "https://img/x",
+                        "explicit": True, "preview": "https://p/x"})
+    assert t2.pk == t1.pk  # same canonical track (match_key)
+    t1.refresh_from_db()
+    assert t1.album_name == "Real Album"
+    assert t1.artwork_url == "https://img/x"
+    assert t1.is_explicit is True
+
+    # A later source does NOT clobber metadata we already have.
+    _upsert_track({**row, "album": "Wrong Album"})
+    t1.refresh_from_db()
+    assert t1.album_name == "Real Album"
 
 
 @pytest.mark.django_db

@@ -50,16 +50,39 @@ def create_playlist_from_tracks(*, user, title: str, track_ids) -> Playlist:
 
 
 def _upsert_track(row: dict) -> Track:
-    """Get-or-create a Track from a normalized ingest row (dedupe by match_key)."""
-    track, _ = Track.objects.get_or_create(
+    """Get-or-create a Track from a normalized ingest row (dedupe by match_key).
+
+    Metadata is combined across sources: a track first seen via one source (say
+    keyless Spotify, no album art) is enriched when re-imported from a richer one
+    (Apple/Spotify API) — we fill any field the stored track is still missing."""
+    track, created = Track.objects.get_or_create(
         match_key=make_match_key(row["title"], row.get("artist"), row.get("duration")),
         defaults={
             "title": row["title"],
             "primary_artist": row.get("artist") or "",
             "duration_ms": row.get("duration"),
             "isrc": row.get("isrc") or "",  # Spotify supplies this; others don't
+            "artwork_url": row.get("artwork") or "",
+            "album_name": row.get("album") or "",
+            "is_explicit": bool(row.get("explicit")),
+            "preview_url": row.get("preview") or "",
         },
     )
+    if not created:
+        # Backfill only blanks — never overwrite metadata we already have.
+        blanks = {
+            "artwork_url": row.get("artwork"),
+            "album_name": row.get("album"),
+            "isrc": row.get("isrc"),
+            "preview_url": row.get("preview"),
+        }
+        updates = {f: v for f, v in blanks.items() if v and not getattr(track, f)}
+        if row.get("explicit") and not track.is_explicit:
+            updates["is_explicit"] = True
+        if updates:
+            for f, v in updates.items():
+                setattr(track, f, v)
+            track.save(update_fields=list(updates))
     return track
 
 

@@ -724,6 +724,12 @@ export interface components {
             primary_artist: string;
             duration_ms?: number | null;
             isrc?: string;
+            /** Format: uri */
+            artwork_url?: string;
+            album_name?: string;
+            is_explicit?: boolean;
+            /** Format: uri */
+            preview_url?: string;
             readonly active_source: components["schemas"]["PlaybackSource"];
         };
     };

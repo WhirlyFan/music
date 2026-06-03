@@ -85,12 +85,26 @@ def _classify(url: str) -> tuple[str, str]:
     raise SpotifyError("That doesn't look like a Spotify playlist, album, or track link.")
 
 
+def _pick_image(images: list, target: int = 300) -> str:
+    """Pick the album image closest to `target` px wide (Spotify lists widest first)."""
+    sized = [im for im in images or [] if im.get("url")]
+    if not sized:
+        return ""
+    best = min(sized, key=lambda im: abs((im.get("width") or 0) - target))
+    return best["url"]
+
+
 def _normalize(track: dict) -> dict:
+    album = track.get("album") or {}
     return {
         "title": track.get("name") or "",
         "artist": ", ".join(a.get("name", "") for a in track.get("artists") or []),
         "duration": track.get("duration_ms"),
         "isrc": (track.get("external_ids") or {}).get("isrc", ""),
+        "artwork": _pick_image(album.get("images")),
+        "album": album.get("name") or "",
+        "explicit": bool(track.get("explicit")),
+        "preview": track.get("preview_url") or "",  # null since Spotify's 2024 change
     }
 
 
@@ -117,8 +131,10 @@ def _api_with_meta(kind: str, sid: str) -> dict:
     if kind == "album":
         album = _get(f"/albums/{sid}", token)
         items = _paginate(album.get("tracks") or {}, token)
+        # Album-track items omit the nested album object — inject it so each track
+        # inherits the cover art + album name.
         return {"title": album.get("name") or "", "external_id": sid, "kind": "album",
-                "tracks": [_normalize(it) for it in items]}
+                "tracks": [_normalize({**it, "album": album}) for it in items]}
     playlist = _get(f"/playlists/{sid}", token)
     items = _paginate(playlist.get("tracks") or {}, token)
     tracks = [_normalize(it["track"]) for it in items if it.get("track")]
@@ -174,9 +190,15 @@ def _scrape(kind: str, sid: str) -> dict | None:
     except json.JSONDecodeError:
         return None
     track_list = _find(data, "trackList") or []
+    # The embed exposes no per-track art, but carries the collection cover — use it
+    # as a shared fallback (free; already in this payload). Per-track it does give a
+    # 30s `audioPreview` and an `isExplicit` flag.
+    cover = ((_find(data, "coverArt") or {}).get("sources") or [{}])[-1].get("url", "")
     tracks = [
         {"title": t.get("title") or "", "artist": t.get("subtitle") or "",
-         "duration": t.get("duration"), "isrc": ""}
+         "duration": t.get("duration"), "isrc": "",
+         "artwork": cover, "album": "", "explicit": bool(t.get("isExplicit")),
+         "preview": (t.get("audioPreview") or {}).get("url") or ""}
         for t in track_list
         if t.get("title")
     ]

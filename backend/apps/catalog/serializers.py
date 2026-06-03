@@ -29,7 +29,11 @@ class TrackSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Track
-        fields = ["id", "title", "primary_artist", "duration_ms", "isrc", "active_source"]
+        fields = [
+            "id", "title", "primary_artist", "duration_ms", "isrc",
+            "artwork_url", "album_name", "is_explicit", "preview_url",
+            "active_source",
+        ]
 
     @extend_schema_field(PlaybackSourceSerializer)
     def get_active_source(self, obj):
