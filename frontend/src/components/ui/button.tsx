@@ -4,10 +4,11 @@ import * as React from 'react'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  // Motion, kept functional: color transitions on hover (affordance) + a subtle
-  // tactile press (scale-down) on click. No decorative hover-lift/glow — buttons
-  // stay quiet. Press is motion-safe so reduce-motion users get no movement.
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-[color,background-color,transform] duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 motion-safe:active:scale-[0.97]',
+  // Motion, kept functional: 250ms `ease` transitions (HeroUI's exact cadence —
+  // 150ms felt cheap/snappy) + a subtle tactile press (scale-down) on click. No
+  // decorative hover-lift/glow. Press is motion-safe so reduce-motion users get
+  // no movement.
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-[transform,color,background-color,opacity] duration-[250ms] ease motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 motion-safe:active:scale-[0.97]',
   {
     variants: {
       variant: {
