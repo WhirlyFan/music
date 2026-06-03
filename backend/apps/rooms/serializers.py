@@ -11,50 +11,68 @@ class QueueItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QueueItem
-        fields = ["id", "kind", "position", "track"]
+        fields = ["id", "position", "track"]
 
 
 class RoomSerializer(serializers.ModelSerializer):
-    """The room as the player needs it: now-playing track + the two up-next
-    layers (explicit `queue`, then the `context` it resumes into)."""
+    """The room as the player needs it: now-playing + the single queue split into
+    already-played `history` and upcoming `queue`, around the current cursor."""
 
-    current = TrackSerializer(source="playback.current_track", read_only=True, allow_null=True)
+    current = serializers.SerializerMethodField()
+    current_item_id = serializers.UUIDField(
+        source="playback.current_item_id", read_only=True, allow_null=True
+    )
     is_playing = serializers.BooleanField(source="playback.is_playing", read_only=True)
     position_ms = serializers.IntegerField(source="playback.position_ms", read_only=True)
-    context_label = serializers.CharField(source="playback.context_label", read_only=True)
+    history = serializers.SerializerMethodField()
     queue = serializers.SerializerMethodField()
-    context = serializers.SerializerMethodField()
 
     class Meta:
         model = Room
-        fields = ["id", "current", "is_playing", "position_ms", "context_label", "queue", "context"]
+        fields = ["id", "current", "current_item_id", "is_playing", "position_ms", "history", "queue"]
 
-    def _layer(self, room, kind):
-        # Uses the prefetched `items` (no extra query); ordered by position.
-        items = sorted(
-            (i for i in room.items.all() if i.kind == kind), key=lambda i: i.position
+    def _split(self, room):
+        playback = getattr(room, "playback", None)
+        cur_id = playback.current_item_id if playback else None
+        items = sorted(room.items.all(), key=lambda i: i.position)  # prefetched
+        cur_pos = next((i.position for i in items if i.id == cur_id), None)
+        if cur_pos is None:
+            return [], items
+        return (
+            [i for i in items if i.position < cur_pos],
+            [i for i in items if i.position > cur_pos],
         )
-        return QueueItemSerializer(items, many=True).data
+
+    @extend_schema_field(TrackSerializer)
+    def get_current(self, room):
+        playback = getattr(room, "playback", None)
+        item = playback.current_item if (playback and playback.current_item_id) else None
+        return TrackSerializer(item.track).data if item else None
+
+    @extend_schema_field(QueueItemSerializer(many=True))
+    def get_history(self, room):
+        return QueueItemSerializer(self._split(room)[0], many=True).data
 
     @extend_schema_field(QueueItemSerializer(many=True))
     def get_queue(self, room):
-        return self._layer(room, QueueItem.Kind.QUEUE)
-
-    @extend_schema_field(QueueItemSerializer(many=True))
-    def get_context(self, room):
-        return self._layer(room, QueueItem.Kind.CONTEXT)
+        return QueueItemSerializer(self._split(room)[1], many=True).data
 
 
 class PlaySerializer(serializers.Serializer):
-    """Set the context to `track_ids` and start playing at `start_index`."""
+    """Replace the queue with `track_ids` and play from `start_index`."""
 
     track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
     start_index = serializers.IntegerField(min_value=0, default=0)
-    label = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class PlayNowSerializer(serializers.Serializer):
+    """Play a single track now (insert at the cursor)."""
+
+    track_id = serializers.UUIDField()
 
 
 class QueueSerializer(serializers.Serializer):
-    """Add tracks to the user queue. `play_next` puts them at the head."""
+    """Add tracks to the queue. `play_next` inserts right after current."""
 
     track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
     play_next = serializers.BooleanField(default=False)
@@ -65,7 +83,7 @@ class PlayPlaylistSerializer(serializers.Serializer):
 
 
 class QueueItemRefSerializer(serializers.Serializer):
-    """Reference an existing up-next item (for jump / remove)."""
+    """Reference an existing queue item (for jump / remove)."""
 
     item_id = serializers.UUIDField()
 

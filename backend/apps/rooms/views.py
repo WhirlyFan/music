@@ -11,6 +11,7 @@ from apps.catalog.serializers import PlaylistSerializer
 from . import services
 from .models import QueueItem, Room
 from .serializers import (
+    PlayNowSerializer,
     PlayPlaylistSerializer,
     PlaySerializer,
     QueueItemRefSerializer,
@@ -35,14 +36,16 @@ class RoomViewSet(viewsets.ViewSet):
     def _room_detail(self, user) -> Room:
         services.get_active_room(user)  # ensure room + playback exist
         return (
-            Room.objects.select_related("playback", "playback__current_track")
+            Room.objects.select_related(
+                "playback", "playback__current_item", "playback__current_item__track"
+            )
             .prefetch_related(
                 Prefetch(
                     "items",
                     queryset=QueueItem.objects.select_related("track").order_by("position"),
                 ),
                 "items__track__playback_sources",
-                "playback__current_track__playback_sources",
+                "playback__current_item__track__playback_sources",
             )
             .get(host=user, is_active=True)
         )
@@ -58,19 +61,25 @@ class RoomViewSet(viewsets.ViewSet):
     @extend_schema(request=PlaySerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def play(self, request):
-        """Play a list as the context, starting at `start_index` (per-track Play
-        sends the surrounding list + the clicked index)."""
+        """Replace the queue with a list and play from `start_index`
+        (Play playlist / Play all)."""
         s = PlaySerializer(data=request.data)
         s.is_valid(raise_exception=True)
         tracks = _ordered_tracks(s.validated_data["track_ids"])
         room = services.get_active_room(request.user)
-        services.play(
-            room,
-            tracks,
-            start=s.validated_data["start_index"],
-            added_by=request.user,
-            label=s.validated_data["label"],
-        )
+        services.play(room, tracks, start=s.validated_data["start_index"], added_by=request.user)
+        return self._respond(request.user)
+
+    @extend_schema(request=PlayNowSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"], url_path="play-now")
+    def play_now(self, request):
+        """Play one song now (clicking a track) — inserts it at the cursor; does
+        not pull in the surrounding list."""
+        s = PlayNowSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        track = get_object_or_404(Track, pk=s.validated_data["track_id"])
+        room = services.get_active_room(request.user)
+        services.play_now(room, track, added_by=request.user)
         return self._respond(request.user)
 
     @extend_schema(request=PlayPlaylistSerializer, responses=RoomSerializer)
@@ -86,22 +95,34 @@ class RoomViewSet(viewsets.ViewSet):
     @extend_schema(request=QueueSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def queue(self, request):
-        """Add one or more tracks to the user queue (`play_next` → at the head)."""
+        """Add one or more tracks to the queue (`play_next` → right after current)."""
         s = QueueSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         tracks = _ordered_tracks(s.validated_data["track_ids"])
         room = services.get_active_room(request.user)
         if s.validated_data["play_next"]:
-            for track in reversed(tracks):  # keep requested order at the head
+            for track in reversed(tracks):  # keep requested order right after current
                 services.enqueue(room, track, added_by=request.user, play_next=True)
         else:
             services.enqueue_many(room, tracks, added_by=request.user)
         return self._respond(request.user)
 
+    @extend_schema(request=None, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def next(self, request):
+        services.next_track(services.get_active_room(request.user))
+        return self._respond(request.user)
+
+    @extend_schema(request=None, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def previous(self, request):
+        services.previous_track(services.get_active_room(request.user))
+        return self._respond(request.user)
+
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def jump(self, request):
-        """Play an up-next item now (click-to-play); skips everything before it."""
+        """Play a specific queue item now (click any row in the queue)."""
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         services.jump(services.get_active_room(request.user), s.validated_data["item_id"])
@@ -110,7 +131,7 @@ class RoomViewSet(viewsets.ViewSet):
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def remove(self, request):
-        """Remove a single up-next item."""
+        """Remove a single queue item."""
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         services.remove(services.get_active_room(request.user), s.validated_data["item_id"])
@@ -119,14 +140,8 @@ class RoomViewSet(viewsets.ViewSet):
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def shuffle(self, request):
-        """Reshuffle the remaining context order."""
+        """Reshuffle the up-next items."""
         services.shuffle(services.get_active_room(request.user))
-        return self._respond(request.user)
-
-    @extend_schema(request=None, responses=RoomSerializer)
-    @action(detail=False, methods=["post"])
-    def advance(self, request):
-        services.advance(services.get_active_room(request.user))
         return self._respond(request.user)
 
     @extend_schema(request=None, responses=RoomSerializer)
