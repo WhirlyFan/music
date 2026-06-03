@@ -34,10 +34,50 @@ const buttonVariants = cva(
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
 
+type Ripple = { id: number; x: number; y: number; size: number }
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  ({ className, variant, size, onPointerDown, children, ...props }, ref) => {
+    const [ripples, setRipples] = React.useState<Ripple[]>([])
+    const nextId = React.useRef(0)
+
+    function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+      // Ripple originates from the press point (HeroUI scale-ripple style). Under
+      // reduce-motion the global guard collapses the animation to ~0ms, so the
+      // onAnimationEnd cleanup still fires and nothing visibly moves.
+      const rect = e.currentTarget.getBoundingClientRect()
+      const diameter = Math.max(rect.width, rect.height)
+      setRipples((prev) => [
+        ...prev,
+        {
+          id: nextId.current++,
+          size: diameter,
+          x: e.clientX - rect.left - diameter / 2,
+          y: e.clientY - rect.top - diameter / 2,
+        },
+      ])
+      onPointerDown?.(e)
+    }
+
     return (
-      <button className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />
+      <button
+        className={cn('relative overflow-hidden', buttonVariants({ variant, size, className }))}
+        ref={ref}
+        onPointerDown={handlePointerDown}
+        {...props}
+      >
+        {children}
+        <span aria-hidden className="pointer-events-none absolute inset-0">
+          {ripples.map((r) => (
+            <span
+              key={r.id}
+              className="animate-ripple absolute rounded-full bg-current"
+              style={{ left: r.x, top: r.y, width: r.size, height: r.size }}
+              onAnimationEnd={() => setRipples((prev) => prev.filter((p) => p.id !== r.id))}
+            />
+          ))}
+        </span>
+      </button>
     )
   },
 )
