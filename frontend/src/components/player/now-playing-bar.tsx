@@ -167,6 +167,7 @@ export function NowPlayingBar() {
           </Button>
           <Button
             size="icon"
+            variant="shadow"
             onClick={togglePlay}
             aria-label={playing ? 'Pause' : 'Play'}
             disabled={!audioSrc}
