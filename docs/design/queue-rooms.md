@@ -16,7 +16,7 @@
 
 **Key reframes:**
 1. **Ingest ≠ playlist.** Ingesting a URL resolves **Track(s)** into the catalog and returns an *import result*. The user then chooses: **Play**, **Add to queue**, or **Save as playlist**. No playlist is created implicitly.
-2. **Two layers, like Spotify** *(as built)*. A session has a **context** (the list you play *from* — album/playlist/import) and a separate **user queue** (explicit "Add to queue" / "Play next"). Up-next + advance order is **user queue first, then context**. Pressing **Play** on a track sets the context to its surrounding list starting at that track (the rest becomes up-next) — it does **not** grow a flat queue or create a playlist. The context shrinks as consumed and is replaced on the next Play; the user queue interleaves and **survives a context change**.
+2. **Single queue + a cursor** *(as built — the model most players use, e.g. Feishin)*. A room is one ordered list with a `current` pointer. Items aren't deleted as they play: those **behind** the cursor are history (so **Previous** works), those **ahead** are up-next. Clicking a song is **play-now** — it inserts that *one* song at the cursor and plays it; it does **not** drag in the surrounding list. Only **Play playlist / Play all** replace the queue with a list. *(We previously tried a two-layer context+queue; it was the wrong call — the single list gives Previous for free and matches "click = just that song".)*
 3. **Solo is a room of one.** Every user listens inside a **Session** (their private queue + now-playing). Starting a **Jam** just makes that session *shareable* (others join via link) — one code path, not two.
 4. **Playlists are owned + intentional** — created explicitly or via **"Save queue as playlist."**
 
@@ -32,21 +32,17 @@ Session (a.k.a. Room)        ← a listening context; solo or shared
   is_active       bool
   created_at, updated_at
 
-QueueItem                    ← one up-next entry, in one of two layers
+QueueItem                    ← one entry in the room's single ordered queue
   id (uuid), room FK
   track           FK Track
-  kind            context | queue   (context = from the source list; queue = explicit add)
-  position        int               (ordered within its kind)
+  position        int               (orders the whole list; history < cursor < up-next)
   added_by        FK user (attribution: "who queued this")
   created_at
-  -- consumed items are DELETED (they leave "up next"); context is replaced on a new Play,
-  --    the user queue is preserved across context changes.
+  -- items are NOT deleted as they play; the cursor moves. history = behind, up-next = ahead.
 
 PlaybackState                ← now-playing head for a room (server = clock authority)
   room            FK (1:1)
-  current_track   FK Track (nullable)   (a Track, not a QueueItem — consumed rows are deleted,
-                                          so the head can't dangle; survives refresh)
-  context_label   str                   ("Next from: <label>")
+  current_item    FK QueueItem (nullable)   (the cursor; Next/Previous move it)
   position_ms     int
   is_playing      bool
   updated_at                 (server timestamp drives client drift-correction)
@@ -66,15 +62,15 @@ Playlist (existing)          ← now strictly user-owned + intentional
 
 | Action | Endpoint | Effect |
 |--------|----------|--------|
-| **Play track / Play all** | `play {track_ids, start_index, label}` | set the **context** to the list at `start_index`; rest becomes up-next; preserves the user queue |
-| **Play playlist** | `play-playlist {playlist_id}` | context = the playlist, from the top |
-| **Add to queue / Play next** | `queue {track_ids, play_next}` | append to (or head of) the **user queue**; starts playback if idle |
-| **Skip / track end** | `advance` | next track: user queue first, then context (consumed item removed) |
-| **Click up-next item** | `jump {item_id}` | play it now; skips (removes) everything before it in play order |
-| **Remove item** | `remove {item_id}` | drop a single up-next item |
-| **Shuffle** | `shuffle` | randomize the remaining context order (re-call to reshuffle) |
-| **Save queue as playlist** | `save-as-playlist {title}` | owned `Playlist` from now-playing + queue + context, in play order |
-| **Clear** | `clear` | empty both layers, stop |
+| **Play song (click a track)** | `play-now {track_id}` | insert that one song at the cursor + play; does **not** load the surrounding list |
+| **Play all / Play playlist** | `play {track_ids, start_index}` / `play-playlist {playlist_id}` | **replace** the queue with the list, play from the top |
+| **Add to queue / Play next** | `queue {track_ids, play_next}` | append (or insert after current); starts playback if idle |
+| **Next / Previous** | `next` / `previous` | move the cursor forward / back (Previous: UI restarts if >3s in) |
+| **Click a queue row** | `jump {item_id}` | play that item now (works for history or up-next) |
+| **Remove item** | `remove {item_id}` | drop a single queue item |
+| **Shuffle** | `shuffle` | randomize the up-next items (re-call to reshuffle) |
+| **Save queue as playlist** | `save-as-playlist {title}` | owned `Playlist` from the whole queue, in order |
+| **Clear** | `clear` | empty the queue, stop |
 | **Reorder (drag), repeat modes** | *(next)* | drag-to-reorder + off/all/one repeat (host-gated in shared sessions) |
 
 ## Real-time (the Jam) — architecture
@@ -88,7 +84,7 @@ Playlist (existing)          ← now strictly user-owned + intentional
 - **Attribution:** `QueueItem.added_by` → "added by Alice."
 
 ## Phasing (incremental, each shippable)
-- **Phase A — Session + queue (solo, no WS) ✅ shipped:** `Room`/`QueueItem`/`PlaybackState`; **decoupled ingest** (ingest → tracks + import result); **two-layer** Play / Play-next / Add-to-queue / Play-playlist / Save-queue-as-playlist; persistent now-playing bar + queue panel; **ad-free `<audio>` playback** via the yt-dlp stream proxy (lazy match-on-play, no media stored — only `video_id`). *Fixed the "one song = one playlist" wart and the flat-queue grow bug.*
+- **Phase A — Session + queue (solo, no WS) ✅ shipped:** `Room`/`QueueItem`/`PlaybackState`; **decoupled ingest** (ingest → tracks + import result); **single queue + cursor** with play-now / play / play-playlist / queue / next / previous / jump / remove / shuffle / save-as-playlist; a real **player** (transport controls + seek bar) + interactive queue panel (Up next / Recently played); **ad-free `<audio>` playback** via the yt-dlp stream proxy (lazy match-on-play, no media stored — only `video_id`). *Fixed the "one song = one playlist" wart and the flat-queue grow bug; Previous comes free from the cursor.*
 - **Phase B — Real-time Jam:** Channels + Redis; share/join via code; shared queue + synced playback + drift correction; host controls + attribution.
 - **Phase C — Library polish:** liked tracks, playlist management/ownership UI, collaborators.
 
