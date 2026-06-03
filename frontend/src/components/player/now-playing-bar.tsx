@@ -60,6 +60,24 @@ export function NowPlayingBar() {
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
 
+  // Autoplay gate: NEVER autoplay the track restored from a previous session on
+  // load/login — only tracks the user actually starts or advances to. We arm
+  // autoplay the first time the current item *changes* after the initial
+  // hydration (any change is user-driven: play / next / jump). `prevItemId`
+  // starts undefined = "not hydrated yet"; the first real value is the restored
+  // track and is deliberately not armed. (Adjust-state-during-render pattern —
+  // not an effect — so it commits before paint with no flash.)
+  const [prevItemId, setPrevItemId] = useState<string | null | undefined>(undefined)
+  const [armed, setArmed] = useState(false)
+  if (room) {
+    if (prevItemId === undefined) {
+      setPrevItemId(itemId) // first load → capture, leave un-armed (no autoplay)
+    } else if (itemId !== prevItemId) {
+      setPrevItemId(itemId)
+      setArmed(true) // a post-hydration change → user-initiated → autoplay
+    }
+  }
+
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
   useEffect(() => {
@@ -238,7 +256,7 @@ export function NowPlayingBar() {
           key={itemId ?? track.id}
           ref={audioRef}
           src={audioSrc}
-          autoPlay
+          autoPlay={armed}
           onLoadStart={() => {
             setCurrentTime(0)
             setDuration(0)
