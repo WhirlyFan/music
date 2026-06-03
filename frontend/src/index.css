@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 /*
  * Theme tokens — full shadcn / tweakcn slot set + extras.
@@ -502,6 +503,26 @@
  * (keep a 1ms duration so transitionend/animationend still fire). This is the
  * single most important animation best-practice.
  */
+/*
+ * Retime tw-animate-css to OUR curves globally. Its `animate-in/out` read
+ * `var(--tw-ease, ease)` + `var(--tw-duration, .15s)`, so setting those on the
+ * utility classes makes every shadcn component that uses `animate-in fade-in-0
+ * zoom-in-95 slide-in-from-*` inherit our feel automatically — no per-component
+ * work. In `@layer base` so a per-element `ease-*` / `duration-*` still wins.
+ * (Centered dialogs are the exception: prefer `animate-dialog-*` — the plugin's
+ * zoom keyframe overrides the −50%/−50% centering transform. See motion skill.)
+ */
+@layer base {
+  .animate-in {
+    --tw-ease: var(--ease-out-quint);
+    --tw-duration: 0.2s;
+  }
+  .animate-out {
+    --tw-ease: var(--ease-standard);
+    --tw-duration: 0.15s;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -92,13 +92,25 @@ Wired into `components/ui/alert-dialog.tsx` (covers `confirm()` + `promptText()`
 and `dropdown-menu.tsx`. The `*-out` tokens use `forwards` so the end frame holds
 until Radix unmounts.
 
-> **⚠️ shadcn animation classes are NOT available here.** We don't install
-> `tailwindcss-animate` / `tw-animate-css`, so the classes shadcn ships
-> (`animate-in`, `animate-out`, `fade-in-0`, `zoom-in-95`, `slide-in-from-*`) are
-> **no-ops** — a pasted component will *silently not animate*. When adding a
-> shadcn component, **translate those classes to our `data-[state]:animate-*`
-> tokens above.** (This is the deliberate trade-off for keeping every animation
-> on our own curves — see "When CSS isn't enough".)
+### shadcn classes work — retimed to our curves
+
+We **do** install **`tw-animate-css`** (the maintained Tailwind v4 successor to
+`tailwindcss-animate`; CSS-only, not a JS animation lib). It provides shadcn's
+vocabulary — `animate-in/out`, `fade-in-0`, `zoom-in-95`, `slide-in-from-*`,
+`accordion-down`, etc. — so a pasted shadcn component animates with **no extra
+work**. Its `animate-in/out` read `var(--tw-ease)` / `var(--tw-duration)`, and
+`src/index.css` globally sets those (in `@layer base`) to our `--ease-out-quint`
+(entrances) and `--ease-standard` (exits) — so **everything inherits our curves
+automatically**. A per-element `ease-*` / `duration-*` still wins when you want
+something bespoke.
+
+> **Centered dialogs are the one exception.** The plugin's `zoom`/`slide`
+> keyframes animate `transform`, which overrides a centered element's
+> `−50%/−50%` translate (it'd jump to the corner). For centered content use our
+> **`animate-dialog-in/out`** (keeps the centering transform), as
+> `alert-dialog.tsx` does. Popper-anchored surfaces (dropdowns, popovers) are
+> fine with the plugin since Radix positions a wrapper — though our
+> `animate-fade-in/out` is the simplest popper-safe choice.
 
 ## When CSS isn't enough
 
