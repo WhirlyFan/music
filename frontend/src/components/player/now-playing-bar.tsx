@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
+import { promptText } from '@/lib/overlay'
 import { useMatchTrack } from '@/lib/query/catalog'
 import {
   type QueueItem,
@@ -148,8 +149,13 @@ export function NowPlayingBar() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => {
-                  const title = window.prompt('Save queue as playlist — name it:')
+                onClick={async () => {
+                  const title = await promptText({
+                    title: 'Save queue as playlist',
+                    label: 'Playlist name',
+                    defaultValue: contextLabel,
+                    confirmLabel: 'Save playlist',
+                  })
                   if (title)
                     save.mutate(title, {
                       onSuccess: () => toast.success('Saved to your playlists.'),

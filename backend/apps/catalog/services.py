@@ -13,7 +13,26 @@ from django.db import transaction
 
 from .ingest import applemusic
 from .ingest.normalize import make_match_key
-from .models import PlaylistImport, Source, SourceLink, Track
+from .models import Playlist, PlaylistImport, PlaylistTrack, Source, SourceLink, Track
+
+
+@transaction.atomic
+def create_playlist_from_tracks(*, user, title: str, track_ids) -> Playlist:
+    """Create an owned, named playlist from a list of track ids (in order).
+    Unknown ids are skipped; duplicates collapse to first position."""
+    playlist = Playlist.objects.create(title=title, created_by=user)
+    by_id = {str(t.id): t for t in Track.objects.filter(pk__in=track_ids)}
+    position = 0
+    for tid in track_ids:
+        track = by_id.get(str(tid))
+        if track is None:
+            continue
+        _, created = PlaylistTrack.objects.get_or_create(
+            playlist=playlist, track=track, defaults={"position": position, "added_by": user}
+        )
+        if created:
+            position += 1
+    return playlist
 
 
 @transaction.atomic

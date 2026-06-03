@@ -37,6 +37,19 @@ export function useIngest() {
   })
 }
 
+/** Create a named playlist from a set of tracks (e.g. saving an import). */
+export function useCreatePlaylist() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { title: string; trackIds: string[] }) =>
+      api<Playlist>('/catalog/playlists/', {
+        method: 'POST',
+        body: { title: args.title, track_ids: args.trackIds },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.list() }),
+  })
+}
+
 /** Lazily resolve a single track's YouTube source (used right before play). */
 export function useMatchTrack(playlistId?: string) {
   const qc = useQueryClient()

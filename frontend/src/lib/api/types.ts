@@ -33,10 +33,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List/retrieve owned playlists (created via save-as-playlist). */
+        /**
+         * @description List/retrieve owned playlists, and create a named one from track ids
+         *     (e.g. saving an import).
+         */
         get: operations["v1_catalog_playlists_list"];
         put?: never;
-        post?: never;
+        /**
+         * @description List/retrieve owned playlists, and create a named one from track ids
+         *     (e.g. saving an import).
+         */
+        post: operations["v1_catalog_playlists_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -50,7 +57,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description List/retrieve owned playlists (created via save-as-playlist). */
+        /**
+         * @description List/retrieve owned playlists, and create a named one from track ids
+         *     (e.g. saving an import).
+         */
         get: operations["v1_catalog_playlists_retrieve"];
         put?: never;
         post?: never;
@@ -478,6 +488,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Create a named playlist from a set of track ids (e.g. a saved import). */
+        CreatePlaylist: {
+            title: string;
+            track_ids: string[];
+        };
         /** @description The result of a paste: loose tracks the caller can play/queue/save. */
         ImportResult: {
             /** Format: uuid */
@@ -762,6 +777,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaginatedPlaylistList"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlaylist"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreatePlaylist"];
+                "multipart/form-data": components["schemas"]["CreatePlaylist"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Playlist"];
                 };
             };
         };

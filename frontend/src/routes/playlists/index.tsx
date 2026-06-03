@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { fieldErrorMessage } from '@/lib/auth/errors'
+import { promptText } from '@/lib/overlay'
 import type { ImportResult } from '@/lib/query/catalog'
-import { useIngest, usePlaylists } from '@/lib/query/catalog'
+import { useCreatePlaylist, useIngest, usePlaylists } from '@/lib/query/catalog'
 import { usePlay, usePlayNow, useQueueTracks } from '@/lib/query/rooms'
 
 export const Route = createFileRoute('/playlists/')({
@@ -128,7 +129,23 @@ function ImportResultView({ result }: { result: ImportResult }) {
   const play = usePlay()
   const playNow = usePlayNow()
   const queueTracks = useQueueTracks()
+  const createPlaylist = useCreatePlaylist()
   const trackIds = result.tracks.map((t) => t.id)
+
+  async function saveAsPlaylist() {
+    // Prompt for a name, pre-filled with the source's title (editable / optional).
+    const name = await promptText({
+      title: 'Save as playlist',
+      label: 'Playlist name',
+      defaultValue: result.title,
+      confirmLabel: 'Save playlist',
+    })
+    if (!name) return
+    createPlaylist.mutate(
+      { title: name, trackIds },
+      { onSuccess: () => toast.success(`Saved “${name}”.`) },
+    )
+  }
 
   return (
     <section
@@ -165,6 +182,9 @@ function ImportResultView({ result }: { result: ImportResult }) {
             }
           >
             Add all to queue
+          </Button>
+          <Button size="sm" variant="outline" onClick={saveAsPlaylist}>
+            Save as playlist
           </Button>
         </div>
       </div>

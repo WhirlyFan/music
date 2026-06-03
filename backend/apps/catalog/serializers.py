@@ -54,6 +54,13 @@ class PlaylistSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "is_public", "track_count", "created_at"]
 
 
+class CreatePlaylistSerializer(serializers.Serializer):
+    """Create a named playlist from a set of track ids (e.g. a saved import)."""
+
+    title = serializers.CharField(max_length=255)
+    track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+
+
 class PlaylistDetailSerializer(serializers.ModelSerializer):
     items = PlaylistTrackSerializer(many=True, read_only=True)
     track_count = serializers.IntegerField(read_only=True)

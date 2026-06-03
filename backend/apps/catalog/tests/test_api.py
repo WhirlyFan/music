@@ -127,3 +127,16 @@ def test_stream_proxies_audio_with_range(client, monkeypatch):
     assert r["Accept-Ranges"] == "bytes"
     assert r["Content-Range"] == "bytes 0-8/9"
     assert r["Content-Type"] == "audio/mp4"
+
+
+@pytest.mark.django_db
+def test_create_playlist_from_tracks(client):
+    tracks = [TrackFactory() for _ in range(3)]
+    r = client.post(
+        "/api/v1/catalog/playlists/",
+        {"title": "My Mix", "track_ids": [str(t.id) for t in tracks]},
+        format="json",
+    )
+    assert r.status_code == 201
+    assert r.data["title"] == "My Mix"
+    assert r.data["track_count"] == 3

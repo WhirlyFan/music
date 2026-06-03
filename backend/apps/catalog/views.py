@@ -2,13 +2,14 @@ from django.db.models import Count, Prefetch
 from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
-from rest_framework import permissions, status, viewsets
+from rest_framework import mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from . import match, streaming
 from .models import PlaybackSource, Playlist, PlaylistTrack, Track
 from .serializers import (
+    CreatePlaylistSerializer,
     ImportResultSerializer,
     IngestSerializer,
     PlaybackSourceSerializer,
@@ -17,7 +18,7 @@ from .serializers import (
     SetSourceSerializer,
     TrackSerializer,
 )
-from .services import ingest_apple
+from .services import create_playlist_from_tracks, ingest_apple
 
 # Prefetch playlist items (ordered) + each track's playback sources in one go.
 _DETAIL_PREFETCH = [
@@ -57,8 +58,9 @@ class IngestViewSet(viewsets.ViewSet):
         return Response(ImportResultSerializer(data).data, status=status.HTTP_201_CREATED)
 
 
-class PlaylistViewSet(viewsets.ReadOnlyModelViewSet):
-    """List/retrieve owned playlists (created via save-as-playlist)."""
+class PlaylistViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
+    """List/retrieve owned playlists, and create a named one from track ids
+    (e.g. saving an import)."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -70,6 +72,16 @@ class PlaylistViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_serializer_class(self):
         return PlaylistDetailSerializer if self.action == "retrieve" else PlaylistSerializer
+
+    @extend_schema(request=CreatePlaylistSerializer, responses=PlaylistSerializer)
+    def create(self, request, *args, **kwargs):
+        s = CreatePlaylistSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        playlist = create_playlist_from_tracks(
+            user=request.user, title=s.validated_data["title"], track_ids=s.validated_data["track_ids"]
+        )
+        playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
+        return Response(PlaylistSerializer(playlist).data, status=status.HTTP_201_CREATED)
 
 
 class TrackViewSet(viewsets.ReadOnlyModelViewSet):
