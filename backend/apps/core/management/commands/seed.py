@@ -151,6 +151,40 @@ def seed_user_data(user, *, notes: int):
     NoteFactory.create_batch(notes, owner=user)
 
 
+# Real public playlists ingested into the dev account so artwork + playback can be
+# checked against live data. Best-effort (network + scrape dependent).
+SEED_PLAYLIST_URLS: tuple[str, ...] = (
+    "https://open.spotify.com/playlist/37i9dQZEVXbLRQDuF5jeBp",  # Spotify: Top 50 - USA
+    "https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb",  # Apple
+)
+
+
+def seed_real_playlists(user) -> list[tuple[str, int, str | None]]:
+    """Import the real playlists above into `user`'s account, saved as Playlists.
+
+    Best-effort: each URL is independent and any failure (offline, scrape change,
+    rate limit) is captured and skipped so the seed never breaks. Idempotent by
+    title. Returns [(title_or_url, track_count, error_or_None)]."""
+    from apps.catalog import services
+
+    out: list[tuple[str, int, str | None]] = []
+    for url in SEED_PLAYLIST_URLS:
+        try:
+            result = services.ingest(url, user=user)
+            title = result["title"]
+            if not Playlist.objects.filter(created_by=user, title=title).exists():
+                services.create_playlist_from_tracks(
+                    user=user,
+                    title=title,
+                    track_ids=[t.id for t in result["tracks"]],
+                    artwork_url=result.get("cover", ""),
+                )
+            out.append((title, len(result["tracks"]), None))
+        except Exception as e:  # noqa: BLE001 — best-effort; never fail the seed
+            out.append((url, 0, str(e)[:90]))
+    return out
+
+
 def seed_catalog() -> int:
     """Create a few sample public playlists (tracks + an active YouTube
     playback source each) so the /playlists UI has content out of the box.
@@ -195,6 +229,11 @@ class Command(BaseCommand):
             "--flush",
             action="store_true",
             help="Delete notes + non-superuser users before seeding.",
+        )
+        parser.add_argument(
+            "--skip-real-playlists",
+            action="store_true",
+            help="Skip importing the real Spotify/Apple seed playlists (offline-friendly).",
         )
         parser.add_argument(
             "--allow-in-prod",
@@ -250,6 +289,16 @@ class Command(BaseCommand):
         # 3. Sample catalog (shared, not per-user) — gives the /playlists UI
         #    content out of the box. Idempotent (create-if-empty).
         seed_catalog()
+
+        # 4. Real playlists (Spotify + Apple) into the dev account, so artwork +
+        #    playback can be checked against live data. Best-effort.
+        if not options["skip_real_playlists"]:
+            dev_user = User.objects.get(email=KNOWN_ACCOUNTS[0].email)
+            for title, count, err in seed_real_playlists(dev_user):
+                if err:
+                    self.stdout.write(self.style.WARNING(f"Skipped playlist {title}: {err}"))
+                else:
+                    self.stdout.write(self.style.SUCCESS(f"Imported playlist “{title}” ({count} tracks)"))
 
         # Summary.
         self.stdout.write(
