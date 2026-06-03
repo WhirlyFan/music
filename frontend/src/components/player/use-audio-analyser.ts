@@ -36,7 +36,7 @@ export function useAudioAnalyser(audioRef: React.RefObject<HTMLAudioElement | nu
       // no onward connection to analyse.
       const lowpass = ctx.createBiquadFilter()
       lowpass.type = 'lowpass'
-      lowpass.frequency.value = 200
+      lowpass.frequency.value = 150
       const node = ctx.createAnalyser()
       node.fftSize = 1024 // time-domain resolution for a smooth waveform
       source.connect(lowpass)

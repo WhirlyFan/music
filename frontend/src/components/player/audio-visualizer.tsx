@@ -10,8 +10,9 @@ const GAIN = 2.0 // pre-emphasis before a soft clip → peaks pop, quiet stays c
 // Attack/release envelope (NOT a spring — no momentum, so it can't overshoot or
 // wobble). Peaks/valleys form quickly (attack); they relax slowly (release) so the
 // whole thing moves like something thick and viscous.
-const ATTACK = 0.35 // how fast it reaches a new peak/valley
-const RELEASE = 0.05 // how slowly it settles back → thickness
+const PRE = 0.3 // temporal low-pass on the input → de-crunch the scrolling waveform
+const ATTACK = 0.22 // how fast it reaches a new peak/valley (lower = smoother, less crunchy)
+const RELEASE = 0.045 // how slowly it settles back → thickness
 const BANDS = 5 // colors sampled top→bottom for the artwork gradient
 
 type Pt = { px: number; py: number; nx: number; ny: number }
@@ -127,6 +128,7 @@ export function AudioVisualizer({
     const data = new Uint8Array(samples)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
     const buf = new Float32Array(POINTS) // current offset per point
+    const pre = new Float32Array(POINTS) // temporally pre-smoothed input
     const raw = new Float32Array(POINTS)
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
@@ -166,7 +168,8 @@ export function AudioVisualizer({
             raw[(i + 1) % POINTS] +
             raw[(i + 2) % POINTS]) /
           5
-        const target = Math.tanh(sm * GAIN) // pre-emphasis → expressive, soft-clipped peaks
+        pre[i] += (sm - pre[i]) * PRE // temporal low-pass → smooth, not crunchy
+        const target = Math.tanh(pre[i] * GAIN) // pre-emphasis → expressive, soft-clipped peaks
         // Move toward the target with no momentum (so it can't overshoot/wobble):
         // fast when growing a peak/valley, slow when relaxing → thick + viscous.
         const rate = Math.abs(target) > Math.abs(buf[i]) ? ATTACK : RELEASE
