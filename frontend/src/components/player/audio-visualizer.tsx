@@ -8,6 +8,7 @@ const BASE = BUFFER * 0.02 // thin resting ring (stays still when there's no sou
 const AMP = BUFFER * 0.1 // how far a hump pushes out on a loud frequency band
 const SPEC = 0.55 // fraction of the spectrum mapped into each lobe (skip the empty highs)
 const CYCLES = 4 // spectrum sweeps → that many humps spread evenly around the ring
+const UNDER = BUFFER * 0.04 // tuck the halo's inner edge under the cover (seamless)
 
 type Pt = { px: number; py: number; nx: number; ny: number }
 type Sampled = { colors: string[]; glow: string }
@@ -66,13 +67,14 @@ function sampleColors(img: HTMLImageElement): Sampled | null {
 }
 
 /**
- * A filled halo around the square cover that PULSES with the music. We read the
- * frequency spectrum (smoothed by the analyser) and drive a uniform breathing
- * motion from the bass — fast attack, slow release, so it pumps on the beat and
- * settles — plus a little per-edge frequency texture. Filled with a conic
- * gradient sampled from the cover's colors; a CSS drop-shadow glow pulses with
- * the same beat. The cover (on top) hides the inner fill, leaving the halo.
- * Animates only while mounted; respects reduced motion; falls back to the accent.
+ * A filled halo around the square cover that reacts to the music. The frequency
+ * spectrum is swept into several evenly-spaced humps around the ring (still when
+ * silent, bulging where there's energy — no autonomous animation). The halo is
+ * drawn as per-segment quads, each coloured by the artwork sampled at that
+ * position, with a CSS drop-shadow glow that swells with loudness. The cover (on
+ * top) hides the inner edge, leaving the halo. Animates only while mounted;
+ * respects reduced motion; falls back to the accent color when the artwork can't
+ * be sampled cross-origin.
  */
 export function AudioVisualizer({
   analyser,
@@ -109,7 +111,6 @@ export function AudioVisualizer({
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const c = BUFFER / 2
     const bins = analyser.frequencyBinCount
     const data = new Uint8Array(bins)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
@@ -117,41 +118,26 @@ export function AudioVisualizer({
     const buf = new Float32Array(POINTS) // eased per-point amplitude (temporal smoothing)
     const raw = new Float32Array(POINTS)
     const sm = new Float32Array(POINTS)
-    let gradient: CanvasGradient | null = null
-    let gradientFor: Sampled | null = null
     let raf = 0
-
-    const conicGradient = () => {
-      const s = sampledRef.current
-      if (!s || typeof ctx.createConicGradient !== 'function') return null
-      if (gradient && gradientFor === s) return gradient
-      const g = ctx.createConicGradient(-Math.PI / 2, c, c)
-      const stops = 36
-      for (let i = 0; i <= stops; i++) {
-        g.addColorStop(i / stops, s.colors[Math.floor((i / stops) * (s.colors.length - 1))])
-      }
-      gradient = g
-      gradientFor = s
-      return g
-    }
 
     const draw = () => {
       analyser.getByteFrequencyData(data)
 
-      // Sweep the spectrum CYCLES times around the ring (triangle wave, so it's
-      // seamless), with bass at each lobe centre → that many humps spread evenly,
-      // each one driven by the music. No autonomous animation: still when silent,
-      // bulges where there's energy.
+      // Sweep the spectrum CYCLES times around the ring (triangle wave → seamless),
+      // bass at each lobe centre → CYCLES humps spread evenly, each driven by the
+      // music. No autonomous animation: still when silent, bulges where energy is.
       for (let i = 0; i < POINTS; i++) {
-        const tri = 1 - Math.abs((((i / POINTS) * CYCLES) % 1) * 2 - 1) // 0..1..0 per lobe
+        const tri = 1 - Math.abs((((i / POINTS) * CYCLES) % 1) * 2 - 1)
         const bin = 1 + Math.floor((1 - tri) * (useBins - 1)) // bass at the lobe centre
         raw[i] = data[bin] / 255
       }
+
       let energy = 0
+      const ix = new Float32Array(POINTS)
+      const iy = new Float32Array(POINTS)
       const ox = new Float32Array(POINTS)
       const oy = new Float32Array(POINTS)
       for (let i = 0; i < POINTS; i++) {
-        // spatial smoothing (5-tap, wrapped) → clean humps instead of spikes
         sm[i] =
           (raw[(i - 2 + POINTS) % POINTS] +
             raw[(i - 1 + POINTS) % POINTS] +
@@ -163,23 +149,34 @@ export function AudioVisualizer({
         buf[i] += (target - buf[i]) * 0.25 // temporal easing (on top of analyser smoothing)
         energy += buf[i]
         const off = BASE + buf[i] * AMP
-        ox[i] = PERIM[i].px + PERIM[i].nx * off
-        oy[i] = PERIM[i].py + PERIM[i].ny * off
+        const p = PERIM[i]
+        ox[i] = p.px + p.nx * off
+        oy[i] = p.py + p.ny * off
+        ix[i] = p.px - p.nx * UNDER // inner edge, tucked under the cover
+        iy[i] = p.py - p.ny * UNDER
       }
       energy /= POINTS
 
       ctx.clearRect(0, 0, BUFFER, BUFFER)
       ctx.globalAlpha = 1
-      ctx.fillStyle = conicGradient() ?? fallback
-      ctx.beginPath()
-      // Smooth closed curve through the points (quadratic via segment midpoints).
-      ctx.moveTo((ox[POINTS - 1] + ox[0]) / 2, (oy[POINTS - 1] + oy[0]) / 2)
+      // Fill the halo per segment, each coloured by the artwork sampled at that
+      // position, so the colour follows the cover exactly. (A conic gradient is
+      // angular and doesn't line up with a square perimeter — hence the old skew.)
+      const s = sampledRef.current
       for (let i = 0; i < POINTS; i++) {
         const n = (i + 1) % POINTS
-        ctx.quadraticCurveTo(ox[i], oy[i], (ox[i] + ox[n]) / 2, (oy[i] + oy[n]) / 2)
+        ctx.fillStyle = s ? s.colors[i] : fallback
+        ctx.strokeStyle = ctx.fillStyle // seal sub-pixel seams between segments
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(ix[i], iy[i])
+        ctx.lineTo(ix[n], iy[n])
+        ctx.lineTo(ox[n], oy[n])
+        ctx.lineTo(ox[i], oy[i])
+        ctx.closePath()
+        ctx.fill()
+        ctx.stroke()
       }
-      ctx.closePath()
-      ctx.fill()
 
       // Glow swells with overall energy (cheap GPU drop-shadow, set imperatively).
       canvas.style.filter = `drop-shadow(0 0 ${10 + energy * 60}px ${glowRef.current ?? fallback})`
