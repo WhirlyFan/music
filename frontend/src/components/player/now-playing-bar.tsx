@@ -67,6 +67,11 @@ export function NowPlayingBar() {
   // starts undefined = "not hydrated yet"; the first real value is the restored
   // track and is deliberately not armed. (Adjust-state-during-render pattern —
   // not an effect — so it commits before paint with no flash.)
+  //
+  // Why state, not a ref/local: `armed` must survive the synchronous re-render
+  // that `setPrevItemId` triggers (a local would reset to false before commit),
+  // and `autoPlay` is read *during render* — reading a ref there would violate
+  // the Rules of React the compiler enforces.
   const [prevItemId, setPrevItemId] = useState<string | null | undefined>(undefined)
   const [armed, setArmed] = useState(false)
   if (room) {
