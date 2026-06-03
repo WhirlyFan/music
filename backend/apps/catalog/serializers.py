@@ -55,7 +55,7 @@ class PlaylistSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Playlist
-        fields = ["id", "title", "is_public", "track_count", "created_at"]
+        fields = ["id", "title", "artwork_url", "is_public", "track_count", "created_at"]
 
 
 class CreatePlaylistSerializer(serializers.Serializer):
@@ -63,6 +63,7 @@ class CreatePlaylistSerializer(serializers.Serializer):
 
     title = serializers.CharField(max_length=255)
     track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+    artwork_url = serializers.URLField(required=False, allow_blank=True, default="")
 
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
@@ -71,7 +72,10 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Playlist
-        fields = ["id", "title", "description", "is_public", "created_at", "track_count", "items"]
+        fields = [
+            "id", "title", "description", "artwork_url", "is_public",
+            "created_at", "track_count", "items",
+        ]
 
 
 class IngestSerializer(serializers.Serializer):
@@ -85,6 +89,7 @@ class ImportResultSerializer(serializers.Serializer):
     title = serializers.CharField(read_only=True)
     track_count = serializers.IntegerField(read_only=True)
     tracks = TrackSerializer(many=True, read_only=True)
+    cover = serializers.CharField(read_only=True, allow_blank=True, required=False)  # collection art
     # Optional advisory (e.g. "imported the first 50 — Spotify caps the preview").
     note = serializers.CharField(read_only=True, allow_null=True, required=False)
 

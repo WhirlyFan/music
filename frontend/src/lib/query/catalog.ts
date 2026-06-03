@@ -41,10 +41,10 @@ export function useIngest() {
 export function useCreatePlaylist() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (args: { title: string; trackIds: string[] }) =>
+    mutationFn: (args: { title: string; trackIds: string[]; artworkUrl?: string }) =>
       api<Playlist>('/catalog/playlists/', {
         method: 'POST',
-        body: { title: args.title, track_ids: args.trackIds },
+        body: { title: args.title, track_ids: args.trackIds, artwork_url: args.artworkUrl ?? '' },
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.list() }),
   })

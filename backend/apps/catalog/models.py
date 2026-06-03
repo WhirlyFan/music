@@ -119,6 +119,7 @@ class Playlist(BaseModel):
 
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    artwork_url = models.URLField(max_length=1024, blank=True)  # the playlist's own cover
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

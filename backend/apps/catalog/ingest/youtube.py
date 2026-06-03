@@ -85,12 +85,15 @@ def ingest_with_meta(url: str) -> dict:
             "external_id": info.get("id") or "",
             "kind": "playlist",
             "tracks": tracks,
+            "cover": tracks[0]["artwork"] if tracks else "",  # first video thumb as the cover
         }
+    one = [_entry(info)] if info.get("id") else []
     return {
         "title": info.get("title") or "YouTube video",
         "external_id": info.get("id") or "",
         "kind": "video",
-        "tracks": [_entry(info)] if info.get("id") else [],
+        "tracks": one,
+        "cover": one[0]["artwork"] if one else "",
     }
 
 

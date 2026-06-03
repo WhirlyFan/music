@@ -59,6 +59,7 @@ class IngestViewSet(viewsets.ViewSet):
             "title": result["title"],
             "track_count": len(result["tracks"]),
             "tracks": result["tracks"],
+            "cover": result.get("cover") or "",
             "note": result.get("note"),
         }
         return Response(ImportResultSerializer(data).data, status=status.HTTP_201_CREATED)
@@ -84,7 +85,10 @@ class PlaylistViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
         s = CreatePlaylistSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         playlist = create_playlist_from_tracks(
-            user=request.user, title=s.validated_data["title"], track_ids=s.validated_data["track_ids"]
+            user=request.user,
+            title=s.validated_data["title"],
+            track_ids=s.validated_data["track_ids"],
+            artwork_url=s.validated_data.get("artwork_url", ""),
         )
         playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
         return Response(PlaylistSerializer(playlist).data, status=status.HTTP_201_CREATED)

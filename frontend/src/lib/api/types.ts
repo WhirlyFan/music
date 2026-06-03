@@ -492,6 +492,11 @@ export interface components {
         CreatePlaylist: {
             title: string;
             track_ids: string[];
+            /**
+             * Format: uri
+             * @default
+             */
+            artwork_url: string;
         };
         /** @description The result of a paste: loose tracks the caller can play/queue/save. */
         ImportResult: {
@@ -500,6 +505,7 @@ export interface components {
             readonly title: string;
             readonly track_count: number;
             readonly tracks: components["schemas"]["Track"][];
+            readonly cover: string;
             readonly note: string | null;
         };
         Ingest: {
@@ -640,6 +646,8 @@ export interface components {
             /** Format: uuid */
             readonly id: string;
             title: string;
+            /** Format: uri */
+            artwork_url?: string;
             is_public?: boolean;
             readonly track_count: number;
             /** Format: date-time */
@@ -650,6 +658,8 @@ export interface components {
             readonly id: string;
             title: string;
             description?: string;
+            /** Format: uri */
+            artwork_url?: string;
             is_public?: boolean;
             /** Format: date-time */
             readonly created_at: string;

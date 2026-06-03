@@ -175,15 +175,16 @@ def ingest(url: str):
 
 
 def ingest_with_meta(url: str) -> dict:
-    """Return {title, external_id, kind, tracks} for persistence. Tracks inherit
-    the collection cover as artwork; album/track imports inherit the album name."""
+    """Return {title, external_id, kind, tracks, cover} for persistence. The cover
+    is the collection art; album/song tracks inherit it (it IS their art), but
+    playlist tracks don't (they get their own cover from the YouTube match on play)."""
     kind, external_id = _classify(url)
     title, image, album, tracks = _tracks(url)
     for t in tracks:
         t.pop("_id", None)
-        if image:
+        if image and kind != "playlist":  # album/song cover is the track's own art
             t["artwork"] = image
         if album:
             t["album"] = album
         t["source_url"] = url  # link back to the Apple Music album/playlist page
-    return {"title": title, "external_id": external_id, "kind": kind, "tracks": tracks}
+    return {"title": title, "external_id": external_id, "kind": kind, "tracks": tracks, "cover": image}

@@ -31,11 +31,18 @@ class UnsupportedSourceError(ValueError):
 
 
 @transaction.atomic
-def create_playlist_from_tracks(*, user, title: str, track_ids) -> Playlist:
+def create_playlist_from_tracks(*, user, title: str, track_ids, artwork_url: str = "") -> Playlist:
     """Create an owned, named playlist from a list of track ids (in order).
-    Unknown ids are skipped; duplicates collapse to first position."""
-    playlist = Playlist.objects.create(title=title, created_by=user)
+    Unknown ids are skipped; duplicates collapse to first position. The playlist's
+    own cover is used if given, else the first track that has artwork."""
     by_id = {str(t.id): t for t in Track.objects.filter(pk__in=track_ids)}
+    if not artwork_url:
+        for tid in track_ids:
+            t = by_id.get(str(tid))
+            if t and t.artwork_url:
+                artwork_url = t.artwork_url
+                break
+    playlist = Playlist.objects.create(title=title, created_by=user, artwork_url=artwork_url)
     position = 0
     for tid in track_ids:
         track = by_id.get(str(tid))
@@ -117,7 +124,12 @@ def _record(source: Source, parsed: dict, url: str, *, user=None, on_track=None)
         track_count=len(rows),
         status=PlaylistImport.Status.COMPLETED if rows else PlaylistImport.Status.FAILED,
     )
-    return {"import": imp, "title": parsed["title"] or "Imported", "tracks": tracks}
+    return {
+        "import": imp,
+        "title": parsed["title"] or "Imported",
+        "tracks": tracks,
+        "cover": parsed.get("cover") or "",  # the collection's own artwork
+    }
 
 
 def ingest_apple(url: str, *, user=None) -> dict:

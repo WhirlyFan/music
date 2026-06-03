@@ -115,9 +115,12 @@ function PlaylistsPage() {
               <Link
                 to="/playlists/$playlistId"
                 params={{ playlistId: playlist.id }}
-                className="border-border hover:bg-muted/50 flex items-center justify-between rounded-lg border p-4"
+                className="border-border hover:bg-muted/50 flex items-center gap-3 rounded-lg border p-4"
               >
-                <span className="font-medium">{playlist.title}</span>
+                <TrackArtwork
+                  track={{ artwork_url: playlist.artwork_url, title: playlist.title }}
+                />
+                <span className="flex-1 font-medium">{playlist.title}</span>
                 <span className="text-muted-foreground text-sm">
                   {playlist.track_count} track{playlist.track_count === 1 ? '' : 's'}
                 </span>
@@ -153,7 +156,7 @@ function ImportResultView({ result }: { result: ImportResult }) {
     })
     if (!name) return
     createPlaylist.mutate(
-      { title: name, trackIds },
+      { title: name, trackIds, artworkUrl: result.cover ?? undefined },
       { onSuccess: () => toast.success(`Saved “${name}”.`) },
     )
   }

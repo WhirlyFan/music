@@ -128,19 +128,20 @@ def _api_with_meta(kind: str, sid: str) -> dict:
     if kind == "track":
         t = _get(f"/tracks/{sid}", token)
         return {"title": t.get("name") or "", "external_id": sid, "kind": "track",
-                "tracks": [_normalize(t)]}
+                "tracks": [_normalize(t)], "cover": _pick_image((t.get("album") or {}).get("images"))}
     if kind == "album":
         album = _get(f"/albums/{sid}", token)
         items = _paginate(album.get("tracks") or {}, token)
         # Album-track items omit the nested album object — inject it so each track
         # inherits the cover art + album name.
         return {"title": album.get("name") or "", "external_id": sid, "kind": "album",
-                "tracks": [_normalize({**it, "album": album}) for it in items]}
+                "tracks": [_normalize({**it, "album": album}) for it in items],
+                "cover": _pick_image(album.get("images"))}
     playlist = _get(f"/playlists/{sid}", token)
     items = _paginate(playlist.get("tracks") or {}, token)
     tracks = [_normalize(it["track"]) for it in items if it.get("track")]
     return {"title": playlist.get("name") or "", "external_id": sid, "kind": "playlist",
-            "tracks": tracks}
+            "tracks": tracks, "cover": _pick_image(playlist.get("images"))}
 
 
 # ── Keyless embed scrape ──────────────────────────────────────────────────────
@@ -191,14 +192,15 @@ def _scrape(kind: str, sid: str) -> dict | None:
     except json.JSONDecodeError:
         return None
     track_list = _find(data, "trackList") or []
-    # The embed exposes no per-track art, but carries the collection cover — use it
-    # as a shared fallback (free; already in this payload). Per-track it does give a
-    # 30s `audioPreview` and an `isExplicit` flag.
+    # The embed has no per-track art — leave tracks' artwork empty so each gets its
+    # OWN cover from the YouTube match on play (never the playlist's). The collection
+    # cover is returned separately, for the playlist itself. Per-track the embed does
+    # give a 30s `audioPreview` and an `isExplicit` flag.
     cover = ((_find(data, "coverArt") or {}).get("sources") or [{}])[-1].get("url", "")
     tracks = [
         {"title": t.get("title") or "", "artist": t.get("subtitle") or "",
          "duration": t.get("duration"), "isrc": "",
-         "artwork": cover, "album": "", "explicit": bool(t.get("isExplicit")),
+         "artwork": "", "album": "", "explicit": bool(t.get("isExplicit")),
          "preview": (t.get("audioPreview") or {}).get("url") or "",
          # uri is "spotify:track:<id>" → a public track link.
          "source_url": f"https://open.spotify.com/track/{t['uri'].split(':')[-1]}"
@@ -209,7 +211,7 @@ def _scrape(kind: str, sid: str) -> dict | None:
     if not tracks:
         return None
     return {"title": _find(data, "name") or "Spotify import",
-            "external_id": sid, "kind": kind, "tracks": tracks}
+            "external_id": sid, "kind": kind, "tracks": tracks, "cover": cover}
 
 
 def ingest_with_meta(url: str) -> dict:
