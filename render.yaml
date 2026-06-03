@@ -189,6 +189,14 @@ services:
       - key: DEFAULT_FROM_EMAIL
         sync: false
 
+      # ── Spotify ingest (optional) ───────────────────────────────────────
+      # Free Spotify developer app (Client ID + Secret). Unset = Spotify paste
+      # returns "not configured"; Apple Music + YouTube need nothing.
+      - key: SPOTIFY_CLIENT_ID
+        sync: false                # dashboard-managed; encrypted at rest
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.
       # Left unset here so the file doesn't leak secrets if forked.

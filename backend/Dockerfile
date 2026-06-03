@@ -34,6 +34,11 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends libpq5 ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
+# Doppler CLI (static Go binary, pinned). Dev wraps startup in `doppler run` so
+# secrets are fetched from Doppler into the process env at boot — never a file,
+# never the compose allowlist. Unused in prod (Render injects env directly).
+COPY --from=dopplerhq/cli:3.76.0 /bin/doppler /usr/local/bin/doppler
+
 # Non-root user
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 

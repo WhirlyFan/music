@@ -57,16 +57,19 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+    # Secrets are fetched from Doppler *inside* the container at startup (see the
+    # `entrypoint` below), so they live only in the process — never in a file and
+    # never in this compose allowlist. Add a var in Doppler → it's here on the
+    # next `make up`, no edits. We only pass the bootstrap DOPPLER_* (from your
+    # shell, via `make up`) plus non-secret dev defaults; `doppler run` overrides
+    # the latter if the same key exists in Doppler.
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_URL_ADMIN: ${DATABASE_URL_ADMIN}
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DOPPLER_TOKEN: ${DOPPLER_TOKEN:-}
+      DOPPLER_PROJECT: ${DOPPLER_PROJECT:-}
+      DOPPLER_CONFIG: ${DOPPLER_CONFIG:-}
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.dev}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
       DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:-http://localhost}
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      MFA_FIELD_ENCRYPTION_KEY: ${MFA_FIELD_ENCRYPTION_KEY}
     volumes:
       - ./backend:/app
       # Anonymous volume to preserve the Linux .venv built into the image.
@@ -74,6 +77,10 @@ services:
       - /app/.venv
     ports:
       - "8000:8000"
+    # `doppler run` wraps the migrate-then-serve entrypoint so BOTH the migration
+    # step and the server see the fetched secrets. (Prod/Render doesn't override
+    # the entrypoint — it injects env directly, no Doppler in the loop.)
+    entrypoint: ["doppler", "run", "--", "/app/docker-entrypoint.sh"]
     command: python manage.py runserver 0.0.0.0:8000
     logging: *default-logging
 
