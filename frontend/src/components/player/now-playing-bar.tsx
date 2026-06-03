@@ -107,9 +107,9 @@ export function NowPlayingBar() {
   }
 
   return (
-    <div className="border-border bg-background/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur">
+    <div className="border-border bg-background/95 motion-safe:animate-slide-up fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur">
       {queueOpen && (
-        <div className="border-border mx-auto max-h-80 max-w-5xl overflow-y-auto border-b px-6 py-3">
+        <div className="border-border motion-safe:animate-slide-up mx-auto max-h-80 max-w-5xl overflow-y-auto border-b px-6 py-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
@@ -171,7 +171,12 @@ export function NowPlayingBar() {
             aria-label={playing ? 'Pause' : 'Play'}
             disabled={!audioSrc}
           >
-            {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
+            <span
+              key={playing ? 'pause' : 'play'}
+              className="motion-safe:animate-pop-in inline-flex"
+            >
+              {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
+            </span>
           </Button>
           <Button
             size="icon"
@@ -186,7 +191,8 @@ export function NowPlayingBar() {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-3">
+          <div className="flex items-center gap-2">
+            {playing && <Equalizer />}
             <p className="truncate text-sm font-medium">
               {track.title}
               <span className="text-muted-foreground ml-2 truncate text-xs font-normal">
@@ -283,7 +289,7 @@ function QueueSection({
           return (
             <li
               key={item.id}
-              className={`group flex items-center gap-2 rounded ${
+              className={`group flex items-center gap-2 rounded transition-colors duration-150 ${
                 isCurrent ? 'bg-muted' : 'hover:bg-muted/60'
               }`}
             >
@@ -309,7 +315,7 @@ function QueueSection({
                 type="button"
                 onClick={() => onRemove(item.id)}
                 aria-label={`Remove ${item.track.title}`}
-                className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
               >
                 <X className="size-4" />
               </button>
@@ -318,5 +324,21 @@ function QueueSection({
         })}
       </ol>
     </div>
+  )
+}
+
+/** Three bars bouncing while audio plays — a small music-specific flourish.
+ *  Static (full height) under reduce-motion; purely decorative. */
+function Equalizer() {
+  return (
+    <span className="flex h-3.5 shrink-0 items-end gap-[2px]" aria-hidden="true">
+      {[0, 0.2, 0.4].map((delay) => (
+        <span
+          key={delay}
+          className="bg-primary motion-safe:animate-equalize inline-block w-[3px] origin-bottom rounded-full"
+          style={{ height: '100%', animationDelay: `${delay}s` }}
+        />
+      ))}
+    </span>
   )
 }

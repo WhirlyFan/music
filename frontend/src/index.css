@@ -365,4 +365,76 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /*
+   * Motion system. Tailwind v4 turns `--ease-*` into `ease-*` utilities and
+   * `--animate-*` into `animate-*` utilities (keyframes defined below).
+   *
+   * Easing curves (https://easings.net): use ease-out for entrances (fast in,
+   * gentle stop), a touch of overshoot (`back`) for playful presses, and the
+   * Material `standard` curve for general state changes.
+   */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* general UI state changes */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1); /* snappy entrances */
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1); /* slight overshoot / pop */
+
+  --animate-fade-in: fade-in 0.2s var(--ease-out-quint) both;
+  --animate-slide-up: slide-up 0.28s var(--ease-out-quint) both;
+  --animate-pop-in: pop-in 0.18s var(--ease-out-back) both;
+  --animate-equalize: equalize 0.9s var(--ease-standard) infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+/* Now-playing equalizer bars (animated only while playing). */
+@keyframes equalize {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/*
+ * Accessibility: honor the OS "reduce motion" setting. Near-instant everything
+ * (keep a 1ms duration so transitionend/animationend still fire). This is the
+ * single most important animation best-practice.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
