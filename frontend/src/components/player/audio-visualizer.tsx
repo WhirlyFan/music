@@ -6,6 +6,7 @@ const POINTS = 160 // perimeter samples the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
 const BASE = BUFFER * 0.04 // baseline ring offset (peaks point out, valleys tuck behind)
 const AMP = BUFFER * 0.12 // waveform deflection (bigger → more expressive peaks)
+const MAX = BUFFER * 0.12 // hard cap on how far a loud beat can pull a peak out
 const GAIN = 2.0 // pre-emphasis before a soft clip → peaks pop, quiet stays calm
 // Attack/release envelope (NOT a spring — no momentum, so it can't overshoot or
 // wobble). Peaks/valleys form quickly (attack); they relax slowly (release) so the
@@ -140,7 +141,7 @@ export function AudioVisualizer({
       const s = sampledRef.current
       if (!s) return null
       if (gradient && gradientFor === s) return gradient
-      const span = HALF + BASE + AMP
+      const span = HALF + MAX
       const g = ctx.createLinearGradient(0, c - span, 0, c + span)
       s.palette.forEach((col, i) => g.addColorStop(i / (s.palette.length - 1), col))
       gradient = g
@@ -175,7 +176,8 @@ export function AudioVisualizer({
         const rate = Math.abs(target) > Math.abs(buf[i]) ? ATTACK : RELEASE
         buf[i] += (target - buf[i]) * rate
         energy += Math.abs(buf[i])
-        const off = BASE + buf[i] * AMP
+        // Clamp: never dip past the cover's border (≥ 0), and cap the stretch (≤ MAX).
+        const off = Math.max(0, Math.min(MAX, BASE + buf[i] * AMP))
         ox[i] = PERIM[i].px + PERIM[i].nx * off
         oy[i] = PERIM[i].py + PERIM[i].ny * off
       }
