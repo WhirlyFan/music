@@ -6,7 +6,8 @@ const POINTS = 140 // perimeter samples (35 per edge) the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
 const BASE = BUFFER * 0.02 // thin resting ring (stays still when there's no sound)
 const AMP = BUFFER * 0.1 // how far a hump pushes out on a loud frequency band
-const SPEC = 0.55 // fraction of the spectrum mapped around the ring (skip the empty highs)
+const SPEC = 0.55 // fraction of the spectrum mapped into each lobe (skip the empty highs)
+const CYCLES = 4 // spectrum sweeps → that many humps spread evenly around the ring
 
 type Pt = { px: number; py: number; nx: number; ny: number }
 type Sampled = { colors: string[]; glow: string }
@@ -112,7 +113,6 @@ export function AudioVisualizer({
     const bins = analyser.frequencyBinCount
     const data = new Uint8Array(bins)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const halfP = POINTS / 2
     const useBins = Math.max(8, Math.floor(bins * SPEC))
     const buf = new Float32Array(POINTS) // eased per-point amplitude (temporal smoothing)
     const raw = new Float32Array(POINTS)
@@ -138,12 +138,13 @@ export function AudioVisualizer({
     const draw = () => {
       analyser.getByteFrequencyData(data)
 
-      // Map the spectrum (low→high→low, mirrored for symmetry) around the ring, so
-      // each hump IS a frequency band — the shape is the music, with no autonomous
-      // animation. Still when silent; bulges where there's energy.
+      // Sweep the spectrum CYCLES times around the ring (triangle wave, so it's
+      // seamless), with bass at each lobe centre → that many humps spread evenly,
+      // each one driven by the music. No autonomous animation: still when silent,
+      // bulges where there's energy.
       for (let i = 0; i < POINTS; i++) {
-        const m = i < halfP ? i : POINTS - 1 - i // mirror → symmetric
-        const bin = 1 + Math.floor((m / (halfP - 1)) * (useBins - 1))
+        const tri = 1 - Math.abs((((i / POINTS) * CYCLES) % 1) * 2 - 1) // 0..1..0 per lobe
+        const bin = 1 + Math.floor((1 - tri) * (useBins - 1)) // bass at the lobe centre
         raw[i] = data[bin] / 255
       }
       let energy = 0
