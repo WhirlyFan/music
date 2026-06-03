@@ -224,7 +224,10 @@ export function NowPlayingBar() {
 
         <button
           type="button"
-          onClick={() => setExpanded(true)}
+          onClick={() => {
+            connectAnalyser() // ensure the analyser is wired + context resumed before the view opens
+            setExpanded(true)
+          }}
           aria-label="Open now playing"
           className="hover:scale-105 motion-safe:transition-transform"
         >
