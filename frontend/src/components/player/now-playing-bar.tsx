@@ -29,7 +29,8 @@ function fmt(seconds: number): string {
 /**
  * Persistent player (mounted in the root layout, so playback + the queue survive
  * navigation). The DB-backed room is the single source of truth: now-playing +
- * a single queue (history behind the cursor, up-next ahead).
+ * two up-next layers — the explicit "Next in queue" and the "Next from: …"
+ * context (the playlist remaining).
  *
  * Custom transport (prev / play-pause / next) + a seek bar drive a hidden
  * <audio> element. Audio is matched on demand (lazy) and streamed ad-free
@@ -79,8 +80,10 @@ export function NowPlayingBar() {
   if (!authed || !track) return null
 
   const audioSrc = matched ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
-  const queue = room?.queue ?? []
-  const history = room?.history ?? []
+  const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
+  const context = room?.context ?? [] // the playlist/album remaining ("Next from")
+  const contextLabel = room?.context_label ?? ''
+  const upcoming = queue.length + context.length
 
   function togglePlay() {
     const el = audioRef.current
@@ -110,8 +113,8 @@ export function NowPlayingBar() {
                 size="sm"
                 variant="ghost"
                 onClick={() => shuffle.mutate()}
-                aria-disabled={queue.length < 2 || undefined}
-                disabled={queue.length < 2}
+                aria-disabled={context.length < 2 || undefined}
+                disabled={context.length < 2}
               >
                 <Shuffle className="mr-1 size-4" /> Shuffle
               </Button>
@@ -134,35 +137,27 @@ export function NowPlayingBar() {
             </div>
           </div>
 
-          <QueueSection
-            label="Up next"
-            items={queue}
-            onPlay={(id) => jump.mutate(id)}
-            onRemove={(id) => removeItem.mutate(id)}
-            emptyHint="Nothing queued."
-          />
-          {history.length > 0 && (
+          {queue.length > 0 && (
             <QueueSection
-              label="Recently played"
-              items={[...history].reverse()}
-              muted
+              label="Next in queue"
+              items={queue}
               onPlay={(id) => jump.mutate(id)}
               onRemove={(id) => removeItem.mutate(id)}
             />
           )}
+          <QueueSection
+            label={contextLabel ? `Next from: ${contextLabel}` : 'Next up'}
+            items={context}
+            onPlay={(id) => jump.mutate(id)}
+            onRemove={(id) => removeItem.mutate(id)}
+            emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
+          />
         </div>
       )}
 
       <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-2">
         <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={handlePrevious}
-            aria-label="Previous"
-            aria-disabled={history.length === 0 || undefined}
-            disabled={history.length === 0}
-          >
+          <Button size="icon" variant="ghost" onClick={handlePrevious} aria-label="Previous">
             <SkipBack className="size-5" />
           </Button>
           <Button
@@ -178,8 +173,8 @@ export function NowPlayingBar() {
             variant="ghost"
             onClick={() => next.mutate()}
             aria-label="Next"
-            aria-disabled={queue.length === 0 || undefined}
-            disabled={queue.length === 0}
+            aria-disabled={upcoming === 0 || undefined}
+            disabled={upcoming === 0}
           >
             <SkipForward className="size-5" />
           </Button>
@@ -227,7 +222,7 @@ export function NowPlayingBar() {
           onClick={() => setQueueOpen((o) => !o)}
           aria-label="Toggle queue"
         >
-          <ListMusic className="mr-1 size-4" /> {queue.length}
+          <ListMusic className="mr-1 size-4" /> {upcoming}
         </Button>
       </div>
 

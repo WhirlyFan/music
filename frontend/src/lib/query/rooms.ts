@@ -37,12 +37,16 @@ export function usePlayNow() {
   )
 }
 
-/** Replace the queue with a list and play from `startIndex` (Play playlist / all). */
+/** Replace the context with a list and play from `startIndex` (Play playlist / all). */
 export function usePlay() {
-  return useRoomMutation((args: { trackIds: string[]; startIndex?: number }) =>
+  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) =>
     api<Room>('/rooms/play/', {
       method: 'POST',
-      body: { track_ids: args.trackIds, start_index: args.startIndex ?? 0 },
+      body: {
+        track_ids: args.trackIds,
+        start_index: args.startIndex ?? 0,
+        label: args.label ?? '',
+      },
     }),
   )
 }

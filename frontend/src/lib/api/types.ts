@@ -491,6 +491,12 @@ export interface components {
             url: string;
         };
         /**
+         * @description * `context` - From context
+         *     * `queue` - User queue
+         * @enum {string}
+         */
+        KindEnum: "context" | "queue";
+        /**
          * @description * `video_id` - YouTube video id
          *     * `storage_key` - Object-storage key
          *     * `url` - Direct URL
@@ -582,13 +588,15 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
-        /** @description Replace the queue with `track_ids` and play from `start_index`. */
+        /** @description Replace the context with `track_ids` and play from `start_index`. */
         Play: {
             track_ids: string[];
             /** @default 0 */
             start_index: number;
+            /** @default  */
+            label: string;
         };
-        /** @description Play a single track now (insert at the cursor). */
+        /** @description Play a single track now (context becomes just that song). */
         PlayNow: {
             /** Format: uuid */
             track_id: string;
@@ -636,7 +644,7 @@ export interface components {
             position: number;
             readonly track: components["schemas"]["Track"];
         };
-        /** @description Add tracks to the queue. `play_next` inserts right after current. */
+        /** @description Add tracks to the user queue. `play_next` puts them at the head. */
         Queue: {
             track_ids: string[];
             /** @default false */
@@ -645,17 +653,20 @@ export interface components {
         QueueItem: {
             /** Format: uuid */
             readonly id: string;
+            kind?: components["schemas"]["KindEnum"];
             position: number;
             readonly track: components["schemas"]["Track"];
         };
-        /** @description Reference an existing queue item (for jump / remove). */
+        /** @description Reference an existing queue/context item (for jump / remove). */
         QueueItemRef: {
             /** Format: uuid */
             item_id: string;
         };
         /**
-         * @description The room as the player needs it: now-playing + the single queue split into
-         *     already-played `history` and upcoming `queue`, around the current cursor.
+         * @description The room as the player needs it: now-playing + two up-next layers —
+         *     `queue` (explicit "Next in queue") and `context` (the playlist remaining,
+         *     "Next from: …"). Already-played context tracks are not surfaced (they stay in
+         *     the context, reachable via Previous).
          */
         Room: {
             /** Format: uuid */
@@ -665,8 +676,9 @@ export interface components {
             readonly current_item_id: string | null;
             readonly is_playing: boolean;
             readonly position_ms: number;
-            readonly history: components["schemas"]["QueueItem"][];
+            readonly context_label: string;
             readonly queue: components["schemas"]["QueueItem"][];
+            readonly context: components["schemas"]["QueueItem"][];
         };
         SaveAsPlaylist: {
             title: string;

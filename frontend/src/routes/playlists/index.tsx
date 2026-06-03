@@ -146,7 +146,10 @@ function ImportResultView({ result }: { result: ImportResult }) {
           <Button
             size="sm"
             onClick={() =>
-              play.mutate({ trackIds }, { onSuccess: () => toast.success('Playing.') })
+              play.mutate(
+                { trackIds, label: result.title },
+                { onSuccess: () => toast.success('Playing.') },
+              )
             }
           >
             Play all
