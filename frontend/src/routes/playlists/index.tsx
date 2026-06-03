@@ -41,8 +41,7 @@ function PlaylistsPage() {
     validators: { onSubmit: schema },
     onSubmit: async ({ value, formApi }) => {
       const result = await ingest.mutateAsync(value.url)
-      setImported(result)
-      if (result.note) toast.info(result.note) // e.g. Spotify capped at 50
+      setImported(result) // a capped-import warning (result.note) renders in the result view
       formApi.reset()
     },
   })
@@ -199,6 +198,15 @@ function ImportResultView({ result }: { result: ImportResult }) {
           </Button>
         </div>
       </div>
+
+      {result.note && (
+        <p
+          role="status"
+          className="motion-safe:animate-in motion-safe:fade-in rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400"
+        >
+          {result.note}
+        </p>
+      )}
 
       <ol className="space-y-2">
         {result.tracks.map((track, i) => (

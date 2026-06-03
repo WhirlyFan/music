@@ -102,14 +102,19 @@ def ingest_apple(url: str, *, user=None) -> dict:
 
 def ingest_spotify(url: str, *, user=None) -> dict:
     """Spotify playlist/album/track → loose Tracks (matched to YouTube on play).
-    Scrape-first (keyless); the API fills in full playlists + ISRC when set. Sets
-    a `note` when we could only return the capped first 50."""
+    API-first (full list + ISRC when creds are set); for editorial playlists the
+    API refuses, we fall back to the keyless embed which caps at 50. `partial` is
+    set only on that capped fallback — so the `note` warns about possibly-missing
+    tracks only when we genuinely hit the 50 ceiling (never on API or <50 reads).
+    Spotify exposes no track total to a keyless reader, so we can't distinguish a
+    playlist that truly has 50 from one with more — hence the note hedges."""
     parsed = spotify.ingest_with_meta(url)
     result = _record(Source.objects.get(code=Source.SPOTIFY), parsed, url, user=user)
     if parsed.get("partial"):
         result["note"] = (
-            f"Imported the first {len(result['tracks'])} tracks — Spotify only exposes that many "
-            "of a playlist without connected credentials."
+            f"Imported the first {len(result['tracks'])} tracks. Spotify only lets us read 50 of "
+            "its editorial playlists without its own login, so any songs past #50 weren't included "
+            "— paste an album, artist, or user-made playlist for the full list."
         )
     return result
 
