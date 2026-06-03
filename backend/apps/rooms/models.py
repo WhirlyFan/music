@@ -39,14 +39,26 @@ class Room(BaseModel):
 
 
 class QueueItem(BaseModel):
-    """One track in a room's single ordered queue (a list + a current pointer —
-    the model used by most players). Items aren't deleted as they play: those
-    *behind* the `PlaybackState.current_item` are the history (so Previous walks
-    back), those *ahead* are up-next. `position` orders the whole list;
-    `created_at` = added time."""
+    """One entry in a room, in one of Spotify's two layers:
+
+    - CONTEXT: the list you're playing *from* (album/playlist/song). It is a
+      STABLE list with a position pointer (`PlaybackState.context_pos`) — it is
+      NOT consumed as you play, so moving forward/back just moves the pointer and
+      skipped tracks remain in the list (reachable via Previous). Replaced when
+      you start a new context.
+    - QUEUE: tracks you explicitly "Add to queue". Ephemeral — they play *before*
+      the context resumes, are deleted once consumed, and survive a context change.
+
+    `position` orders each layer; `created_at` = added time.
+    """
+
+    class Kind(models.TextChoices):
+        CONTEXT = "context", "From context"
+        QUEUE = "queue", "User queue"
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="items")
     track = models.ForeignKey(Track, on_delete=models.PROTECT, related_name="queue_items")
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.CONTEXT)
     position = models.IntegerField()
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -58,22 +70,26 @@ class QueueItem(BaseModel):
 
     class Meta:
         ordering = ["position"]
-        indexes = [models.Index(fields=["room", "position"])]
+        indexes = [models.Index(fields=["room", "kind", "position"])]
 
     def __str__(self) -> str:
-        return f"{self.room_id}[{self.position}] → {self.track_id}"
+        return f"{self.room_id}[{self.kind}:{self.position}] → {self.track_id}"
 
 
 class PlaybackState(BaseModel):
-    """Now-playing head for a room: a pointer into the queue (`current_item`).
-    Next/Previous move it forward/back; items behind it are history. In a shared
-    room the server is the clock authority (Phase B uses `position_ms` +
-    `updated_at` for drift correction)."""
+    """Now-playing head for a room. `current_item` is the playing row (a CONTEXT
+    or QUEUE item); `context_pos` is the pointer into the (stable) context list —
+    the position of the context track we're at, so the queue can play "on top"
+    and the context resumes after it. `context_label` feeds the "Next from: …"
+    line. In a shared room the server is the clock authority (Phase B uses
+    `position_ms` + `updated_at` for drift correction)."""
 
     room = models.OneToOneField(Room, on_delete=models.CASCADE, related_name="playback")
     current_item = models.ForeignKey(
         QueueItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    context_pos = models.IntegerField(null=True, blank=True)
+    context_label = models.CharField(max_length=255, blank=True)
     position_ms = models.IntegerField(default=0)
     is_playing = models.BooleanField(default=False)
 

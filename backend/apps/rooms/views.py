@@ -67,7 +67,13 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         tracks = _ordered_tracks(s.validated_data["track_ids"])
         room = services.get_active_room(request.user)
-        services.play(room, tracks, start=s.validated_data["start_index"], added_by=request.user)
+        services.play(
+            room,
+            tracks,
+            start=s.validated_data["start_index"],
+            added_by=request.user,
+            label=s.validated_data["label"],
+        )
         return self._respond(request.user)
 
     @extend_schema(request=PlayNowSerializer, responses=RoomSerializer)
