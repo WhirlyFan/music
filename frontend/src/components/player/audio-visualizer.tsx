@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 
 // All geometry is in canvas-buffer units; the canvas scales to fill its parent.
 const BUFFER = 600
 const POINTS = 140 // perimeter samples (35 per edge) the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
-const BASE = BUFFER * 0.03 // min ring thickness, so the fill never fully vanishes
-const AMP = BUFFER * 0.1 // wave deflection (out = peak / in = behind the cover)
+const BASE = BUFFER * 0.025 // resting ring thickness
+const PULSE_AMP = BUFFER * 0.085 // uniform breathing driven by bass (the dominant motion)
+const DETAIL_AMP = BUFFER * 0.03 // gentle per-edge frequency texture on top
 
 type Pt = { px: number; py: number; nx: number; ny: number }
 type Sampled = { colors: string[]; glow: string }
@@ -64,12 +65,12 @@ function sampleColors(img: HTMLImageElement): Sampled | null {
 }
 
 /**
- * An audio-reactive FILLED wave hugging the square artwork's outline, with a soft
- * glow around it. The live waveform is smoothed (spatially + over time, to cut
- * jitter) and wrapped around the perimeter; the region is filled opaquely with a
- * conic gradient sampled from the cover's edge colors, and a shadow-based glow
- * (colored by the cover's average, pulsing with loudness) radiates outward. The
- * cover (opaque, on top) hides the inner fill, leaving a wavy colored halo.
+ * A filled halo around the square cover that PULSES with the music. We read the
+ * frequency spectrum (smoothed by the analyser) and drive a uniform breathing
+ * motion from the bass — fast attack, slow release, so it pumps on the beat and
+ * settles — plus a little per-edge frequency texture. Filled with a conic
+ * gradient sampled from the cover's colors; a CSS drop-shadow glow pulses with
+ * the same beat. The cover (on top) hides the inner fill, leaving the halo.
  * Animates only while mounted; respects reduced motion; falls back to the accent.
  */
 export function AudioVisualizer({
@@ -81,23 +82,22 @@ export function AudioVisualizer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sampledRef = useRef<Sampled | null>(null)
-  const [glow, setGlow] = useState<string | null>(null) // drives the CSS drop-shadow color
+  const glowRef = useRef<string | null>(null)
 
   useEffect(() => {
     sampledRef.current = null
+    glowRef.current = null
     if (!artworkUrl) return
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
       const s = sampleColors(img)
       sampledRef.current = s
-      setGlow(s?.glow ?? null) // async callback → safe to setState
+      glowRef.current = s?.glow ?? null
     }
-    img.onerror = () => setGlow(null)
     img.src = artworkUrl
     return () => {
       img.onload = null
-      img.onerror = null
     }
   }, [artworkUrl])
 
@@ -109,10 +109,11 @@ export function AudioVisualizer({
     if (!ctx) return
 
     const c = BUFFER / 2
-    const samples = analyser.fftSize
-    const data = new Uint8Array(samples)
+    const bins = analyser.frequencyBinCount
+    const data = new Uint8Array(bins)
     const fallback = getComputedStyle(canvas).color // text-primary → rgb()
-    const smooth = new Float32Array(POINTS) // persists across frames → temporal smoothing
+    const bassCount = Math.max(2, Math.floor(bins * 0.08)) // sub-bass / kick range
+    let pulse = 0 // smoothed bass envelope, 0..1
     let gradient: CanvasGradient | null = null
     let gradientFor: Sampled | null = null
     let raf = 0
@@ -121,7 +122,7 @@ export function AudioVisualizer({
       const s = sampledRef.current
       if (!s || typeof ctx.createConicGradient !== 'function') return null
       if (gradient && gradientFor === s) return gradient
-      const g = ctx.createConicGradient(-Math.PI / 2, c, c) // start at top, clockwise
+      const g = ctx.createConicGradient(-Math.PI / 2, c, c)
       const stops = 36
       for (let i = 0; i <= stops; i++) {
         g.addColorStop(i / stops, s.colors[Math.floor((i / stops) * (s.colors.length - 1))])
@@ -132,34 +133,37 @@ export function AudioVisualizer({
     }
 
     const draw = () => {
-      analyser.getByteTimeDomainData(data)
-      const ox = new Float32Array(POINTS)
-      const oy = new Float32Array(POINTS)
-      for (let i = 0; i < POINTS; i++) {
-        const raw = (data[Math.floor((i / POINTS) * samples)] - 128) / 128 // -1..1
-        // light spatial smoothing + temporal easing → much less jitter
-        const prev =
-          (data[Math.floor((((i - 1 + POINTS) % POINTS) / POINTS) * samples)] - 128) / 128
-        const next = (data[Math.floor((((i + 1) % POINTS) / POINTS) * samples)] - 128) / 128
-        const target = 0.25 * prev + 0.5 * raw + 0.25 * next
-        smooth[i] += (target - smooth[i]) * 0.3
-        const off = BASE + smooth[i] * AMP
-        ox[i] = PERIM[i].px + PERIM[i].nx * off
-        oy[i] = PERIM[i].py + PERIM[i].ny * off
-      }
+      analyser.getByteFrequencyData(data)
+
+      // Bass envelope → the pulse. Fast attack, slow release = "breathing"/beat.
+      let bass = 0
+      for (let i = 1; i <= bassCount; i++) bass += data[i]
+      bass = bass / bassCount / 255
+      pulse += (bass - pulse) * (bass > pulse ? 0.45 : 0.08)
 
       ctx.clearRect(0, 0, BUFFER, BUFFER)
       ctx.globalAlpha = 1
-      ctx.fillStyle = conicGradient() ?? fallback // glow is a CSS drop-shadow (cheap on GPU)
-      // Smooth closed curve through the points (quadratic via segment midpoints).
+      ctx.fillStyle = conicGradient() ?? fallback
       ctx.beginPath()
+      const ox = new Float32Array(POINTS)
+      const oy = new Float32Array(POINTS)
+      for (let i = 0; i < POINTS; i++) {
+        const detail = data[Math.floor((i / POINTS) * bins * 0.5)] / 255 // low-mid texture
+        const off = BASE + pulse * PULSE_AMP + detail * DETAIL_AMP
+        ox[i] = PERIM[i].px + PERIM[i].nx * off
+        oy[i] = PERIM[i].py + PERIM[i].ny * off
+      }
+      // Smooth closed curve through the points (quadratic via segment midpoints).
       ctx.moveTo((ox[POINTS - 1] + ox[0]) / 2, (oy[POINTS - 1] + oy[0]) / 2)
       for (let i = 0; i < POINTS; i++) {
         const n = (i + 1) % POINTS
         ctx.quadraticCurveTo(ox[i], oy[i], (ox[i] + ox[n]) / 2, (oy[i] + oy[n]) / 2)
       }
       ctx.closePath()
-      ctx.fill() // the shadow casts the glow; the shape itself stays crisp
+      ctx.fill()
+
+      // Glow pulses with the same beat (cheap GPU drop-shadow, set imperatively).
+      canvas.style.filter = `drop-shadow(0 0 ${12 + pulse * 26}px ${glowRef.current ?? fallback})`
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
@@ -172,7 +176,6 @@ export function AudioVisualizer({
       width={BUFFER}
       height={BUFFER}
       aria-hidden
-      style={{ filter: `drop-shadow(0 0 18px ${(artworkUrl && glow) || 'currentColor'})` }}
       className="text-primary pointer-events-none absolute inset-0 size-full"
     />
   )
