@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // All geometry is in canvas-buffer units; the canvas scales to fill its parent.
 const BUFFER = 600
@@ -81,6 +81,7 @@ export function AudioVisualizer({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sampledRef = useRef<Sampled | null>(null)
+  const [glow, setGlow] = useState<string | null>(null) // drives the CSS drop-shadow color
 
   useEffect(() => {
     sampledRef.current = null
@@ -88,11 +89,15 @@ export function AudioVisualizer({
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      sampledRef.current = sampleColors(img)
+      const s = sampleColors(img)
+      sampledRef.current = s
+      setGlow(s?.glow ?? null) // async callback → safe to setState
     }
+    img.onerror = () => setGlow(null)
     img.src = artworkUrl
     return () => {
       img.onload = null
+      img.onerror = null
     }
   }, [artworkUrl])
 
@@ -130,7 +135,6 @@ export function AudioVisualizer({
       analyser.getByteTimeDomainData(data)
       const ox = new Float32Array(POINTS)
       const oy = new Float32Array(POINTS)
-      let energy = 0
       for (let i = 0; i < POINTS; i++) {
         const raw = (data[Math.floor((i / POINTS) * samples)] - 128) / 128 // -1..1
         // light spatial smoothing + temporal easing → much less jitter
@@ -139,18 +143,14 @@ export function AudioVisualizer({
         const next = (data[Math.floor((((i + 1) % POINTS) / POINTS) * samples)] - 128) / 128
         const target = 0.25 * prev + 0.5 * raw + 0.25 * next
         smooth[i] += (target - smooth[i]) * 0.3
-        energy += Math.abs(smooth[i])
         const off = BASE + smooth[i] * AMP
         ox[i] = PERIM[i].px + PERIM[i].nx * off
         oy[i] = PERIM[i].py + PERIM[i].ny * off
       }
-      energy /= POINTS // ~0..1 overall loudness
 
       ctx.clearRect(0, 0, BUFFER, BUFFER)
       ctx.globalAlpha = 1
-      ctx.fillStyle = conicGradient() ?? fallback
-      ctx.shadowColor = sampledRef.current?.glow ?? fallback
-      ctx.shadowBlur = BUFFER * (0.04 + energy * 0.08) // glow pulses with loudness
+      ctx.fillStyle = conicGradient() ?? fallback // glow is a CSS drop-shadow (cheap on GPU)
       // Smooth closed curve through the points (quadratic via segment midpoints).
       ctx.beginPath()
       ctx.moveTo((ox[POINTS - 1] + ox[0]) / 2, (oy[POINTS - 1] + oy[0]) / 2)
@@ -172,6 +172,7 @@ export function AudioVisualizer({
       width={BUFFER}
       height={BUFFER}
       aria-hidden
+      style={{ filter: `drop-shadow(0 0 18px ${(artworkUrl && glow) || 'currentColor'})` }}
       className="text-primary pointer-events-none absolute inset-0 size-full"
     />
   )

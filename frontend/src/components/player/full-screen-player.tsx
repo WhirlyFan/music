@@ -142,10 +142,10 @@ export function FullScreenPlayer({
             <img
               src={track.artwork_url}
               alt=""
-              className="aspect-square w-48 rounded-xl object-cover shadow-2xl"
+              className="relative z-10 aspect-square w-48 rounded-xl object-cover shadow-2xl"
             />
           ) : (
-            <div className="bg-muted aspect-square w-48 rounded-xl shadow-2xl" />
+            <div className="bg-muted relative z-10 aspect-square w-48 rounded-xl shadow-2xl" />
           )}
         </div>
 
