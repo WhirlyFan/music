@@ -30,7 +30,7 @@ def _score(track: Track, cand: dict) -> tuple[float, int | None]:
 
 
 @transaction.atomic
-def _backfill_artwork(track: Track, video_id: str) -> None:
+def backfill_artwork(track: Track, video_id: str) -> None:
     """Tracks imported before artwork existed (or from a source that gave none)
     have a blank cover. Once matched to a video, use its thumbnail so the player
     shows art instead of a placeholder. Only fills a blank — never overwrites."""
@@ -79,7 +79,7 @@ def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None
     best = scored[0][1]
     best.status = PlaybackSource.Status.ACTIVE  # exactly one active (DB-enforced)
     PlaybackSource.objects.bulk_create([ps for _, ps in scored])
-    _backfill_artwork(track, best.locator)
+    backfill_artwork(track, best.locator)
     return best
 
 
@@ -98,7 +98,7 @@ def set_manual_youtube_source(track: Track, video_id: str, *, user=None) -> Play
         status=PlaybackSource.Status.ACTIVE,
         selected_by=user,
     )
-    _backfill_artwork(track, video_id)
+    backfill_artwork(track, video_id)
     return ps
 
 
@@ -113,5 +113,5 @@ def promote_candidate(playback_source: PlaybackSource, *, user=None) -> Playback
     playback_source.origin = PlaybackSource.Origin.MATCHED_MANUAL
     playback_source.selected_by = user
     playback_source.save(update_fields=["status", "origin", "selected_by", "updated_at"])
-    _backfill_artwork(track, playback_source.locator)
+    backfill_artwork(track, playback_source.locator)
     return playback_source
