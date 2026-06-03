@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
+import { ApiError } from '@/lib/api/client'
 import { fieldErrorMessage } from '@/lib/auth/errors'
 import { promptText } from '@/lib/overlay'
 import type { ImportResult } from '@/lib/query/catalog'
@@ -19,8 +20,16 @@ export const Route = createFileRoute('/playlists/')({
 })
 
 const schema = z.object({
-  url: z.string().url('Paste a valid Apple Music playlist or album URL'),
+  url: z.string().url('Paste a valid Apple Music, Spotify, or YouTube link'),
 })
+
+/** Surface the backend's specific message (unsupported host, Spotify not
+ *  configured, unreadable link) instead of a generic one. */
+function ingestErrorMessage(error: unknown): string | null {
+  if (!error) return null
+  const detail = error instanceof ApiError ? (error.detail as { detail?: string })?.detail : null
+  return detail ?? 'Import failed — check the link and try again.'
+}
 
 function PlaylistsPage() {
   const { data, isLoading, error } = usePlaylists()
@@ -42,7 +51,8 @@ function PlaylistsPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Playlists</h1>
         <p className="text-muted-foreground text-sm">
-          Paste an Apple Music playlist or album link, then play or queue the tracks.
+          Paste an Apple Music, Spotify, or YouTube link (playlist, album, or track) — then play or
+          queue the tracks.
         </p>
       </header>
 
@@ -63,13 +73,13 @@ function PlaylistsPage() {
             return (
               <div className="space-y-1">
                 <label htmlFor={field.name} className="text-sm font-medium">
-                  Apple Music URL
+                  Playlist link
                 </label>
                 <Input
                   id={field.name}
                   type="url"
                   inputMode="url"
-                  placeholder="https://music.apple.com/us/playlist/…"
+                  placeholder="Apple Music · Spotify · YouTube link"
                   aria-invalid={errorMsg ? true : undefined}
                   aria-errormessage={errorMsg ? `${field.name}-error` : undefined}
                   value={field.state.value}
@@ -89,7 +99,7 @@ function PlaylistsPage() {
         >
           {ingest.isPending ? 'Importing…' : 'Import'}
         </Button>
-        <FormError message={ingest.error ? 'Import failed — check the URL and try again.' : null} />
+        <FormError message={ingestErrorMessage(ingest.error)} />
       </form>
 
       {imported && <ImportResultView result={imported} />}
