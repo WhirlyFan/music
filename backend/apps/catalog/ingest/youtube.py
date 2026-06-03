@@ -44,6 +44,51 @@ def resolve_audio(video_id: str) -> dict:
     return {"url": info["url"], "http_headers": dict(info.get("http_headers") or {})}
 
 
+_INGEST_OPTS = {
+    "quiet": True,
+    "no_warnings": True,
+    "extract_flat": "in_playlist",  # flatten playlist entries; resolve a lone video
+    "skip_download": True,
+    "retries": 5,
+    "sleep_interval_requests": 1,
+}
+
+
+def _entry(e: dict) -> dict:
+    duration = e.get("duration")
+    return {
+        "video_id": e.get("id"),
+        "title": e.get("title") or "",
+        "artist": e.get("channel") or e.get("uploader") or "",
+        # yt-dlp reports seconds; our Track stores milliseconds.
+        "duration": int(duration * 1000) if duration else None,
+    }
+
+
+def ingest_with_meta(url: str) -> dict:
+    """Ingest a YouTube playlist or video URL → {title, external_id, kind, tracks}.
+
+    Each track carries its `video_id` (the playback source is the video itself —
+    no search/match needed). Metadata only; no audio download.
+    """
+    with YoutubeDL(_INGEST_OPTS) as ydl:
+        info = ydl.extract_info(url, download=False) or {}
+    if info.get("entries") is not None:
+        tracks = [_entry(e) for e in info["entries"] if e and e.get("id")]
+        return {
+            "title": info.get("title") or "YouTube playlist",
+            "external_id": info.get("id") or "",
+            "kind": "playlist",
+            "tracks": tracks,
+        }
+    return {
+        "title": info.get("title") or "YouTube video",
+        "external_id": info.get("id") or "",
+        "kind": "video",
+        "tracks": [_entry(info)] if info.get("id") else [],
+    }
+
+
 def search(query: str, n: int = 5) -> list[dict]:
     """Return up to `n` YouTube candidates for `query`.
 

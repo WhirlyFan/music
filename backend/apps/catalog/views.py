@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from . import match, streaming
+from .ingest.spotify import SpotifyError
 from .models import PlaybackSource, Playlist, PlaylistTrack, Track
 from .serializers import (
     CreatePlaylistSerializer,
@@ -18,7 +19,8 @@ from .serializers import (
     SetSourceSerializer,
     TrackSerializer,
 )
-from .services import create_playlist_from_tracks, ingest_apple
+from .services import UnsupportedSourceError, create_playlist_from_tracks
+from .services import ingest as ingest_source
 
 # Prefetch playlist items (ordered) + each track's playback sources in one go.
 _DETAIL_PREFETCH = [
@@ -43,12 +45,15 @@ class IngestViewSet(viewsets.ViewSet):
         serializer = IngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         url = serializer.validated_data["url"]
-        if "music.apple.com" not in url:
+        try:
+            result = ingest_source(url, user=request.user)
+        except (UnsupportedSourceError, SpotifyError) as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:  # noqa: BLE001 — pasted URLs are untrusted; never 500 on a bad link
             return Response(
-                {"detail": "Only Apple Music URLs are supported for now."},
+                {"detail": "Couldn't read that link — check it's a public playlist and try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        result = ingest_apple(url, user=request.user)
         data = {
             "id": result["import"].id,
             "title": result["title"],

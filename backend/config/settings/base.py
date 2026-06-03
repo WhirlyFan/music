@@ -17,6 +17,12 @@ SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-insecure-change-me")
 DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
+# Spotify Web API (client-credentials) for ingesting public Spotify playlists/
+# albums/tracks. Optional — empty means Spotify ingest returns a clear
+# "not configured" message. Set both in Doppler.
+SPOTIFY_CLIENT_ID = env("SPOTIFY_CLIENT_ID", default="")
+SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
+
 # --- Apps ---
 DJANGO_APPS = [
     "django.contrib.admin",

@@ -55,9 +55,58 @@ def test_ingest_returns_loose_tracks(client, offline):
 
 
 @pytest.mark.django_db
-def test_ingest_rejects_non_apple(client):
+def test_ingest_rejects_unsupported_source(client):
+    r = client.post(INGEST, {"url": "https://example.com/playlist/abc"}, format="json")
+    assert r.status_code == 400
+    assert "apple music" in r.data["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_ingest_spotify_not_configured(client):
+    # No SPOTIFY_CLIENT_ID/SECRET in tests → clear error, no network call.
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/abc"}, format="json")
     assert r.status_code == 400
+    assert "configured" in r.data["detail"].lower()
+
+
+@pytest.mark.django_db
+def test_ingest_spotify(client, monkeypatch):
+    from apps.catalog.ingest import spotify
+
+    meta = {
+        "title": "Sp Mix",
+        "external_id": "sp1",
+        "kind": "playlist",
+        "tracks": [{"title": "X", "artist": "Y", "duration": 210000, "isrc": "US1234567890"}],
+    }
+    monkeypatch.setattr(spotify, "ingest_with_meta", lambda url: meta)
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/sp1"}, format="json")
+    assert r.status_code == 201
+    assert r.data["track_count"] == 1
+    assert r.data["tracks"][0]["active_source"] is None  # matched to YouTube lazily on play
+    assert Track.objects.get(title="X").isrc == "US1234567890"  # ISRC stored
+
+
+@pytest.mark.django_db
+def test_ingest_youtube_sets_direct_playback_source(client, monkeypatch):
+    from apps.catalog.ingest import youtube
+
+    meta = {
+        "title": "YT Playlist",
+        "external_id": "PL1",
+        "kind": "playlist",
+        "tracks": [
+            {"video_id": "abc11111111", "title": "Song A", "artist": "Chan", "duration": 200000},
+            {"video_id": "def22222222", "title": "Song B", "artist": "Chan", "duration": 180000},
+        ],
+    }
+    monkeypatch.setattr(youtube, "ingest_with_meta", lambda url: meta)
+    r = client.post(INGEST, {"url": "https://www.youtube.com/playlist?list=PL1"}, format="json")
+    assert r.status_code == 201
+    assert r.data["track_count"] == 2
+    # YouTube tracks are immediately playable — active source already set, no lazy match.
+    src = r.data["tracks"][0]["active_source"]
+    assert src["locator"] == "abc11111111" and src["locator_kind"] == "video_id"
 
 
 @pytest.mark.django_db
