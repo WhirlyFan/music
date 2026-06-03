@@ -16,7 +16,7 @@
 
 **Key reframes:**
 1. **Ingest ≠ playlist.** Ingesting a URL resolves **Track(s)** into the catalog and returns an *import result*. The user then chooses: **Play**, **Add to queue**, or **Save as playlist**. No playlist is created implicitly.
-2. **Single queue + a cursor** *(as built — the model most players use, e.g. Feishin)*. A room is one ordered list with a `current` pointer. Items aren't deleted as they play: those **behind** the cursor are history (so **Previous** works), those **ahead** are up-next. Clicking a song is **play-now** — it inserts that *one* song at the cursor and plays it; it does **not** drag in the surrounding list. Only **Play playlist / Play all** replace the queue with a list. *(We previously tried a two-layer context+queue; it was the wrong call — the single list gives Previous for free and matches "click = just that song".)*
+2. **Two layers, Spotify's model** *(as built)*. A room has a **context** (the album/playlist/song you play *from*) and a separate **user queue** (explicit "Add to queue"). The context is a **stable list + a position pointer** (`context_pos`) — it is **not** consumed: Next/Previous and clicking just move the pointer, so skipped tracks stay in the list (reachable via **Previous**) and are never shown as "played". The user queue is ephemeral, plays *before* the context resumes, and **survives a context change**. Clicking a single song is **play-now** (context becomes that one song); only **Play playlist / Play all** load a list as the context. *(Earlier attempts — a consumed two-layer, then a single flat queue — both felt wrong: the flat queue dumped skipped songs into a fake "recently played" and shrank destructively. The stable-context pointer is the fix.)*
 3. **Solo is a room of one.** Every user listens inside a **Session** (their private queue + now-playing). Starting a **Jam** just makes that session *shareable* (others join via link) — one code path, not two.
 4. **Playlists are owned + intentional** — created explicitly or via **"Save queue as playlist."**
 
@@ -32,17 +32,21 @@ Session (a.k.a. Room)        ← a listening context; solo or shared
   is_active       bool
   created_at, updated_at
 
-QueueItem                    ← one entry in the room's single ordered queue
+QueueItem                    ← one entry, in one of two layers
   id (uuid), room FK
   track           FK Track
-  position        int               (orders the whole list; history < cursor < up-next)
+  kind            context | queue   (context = stable source list; queue = explicit add)
+  position        int               (orders within its layer)
   added_by        FK user (attribution: "who queued this")
   created_at
-  -- items are NOT deleted as they play; the cursor moves. history = behind, up-next = ahead.
+  -- CONTEXT items are NOT deleted as they play (the pointer moves; skipped tracks stay).
+  -- QUEUE items are ephemeral: play before the context resumes, deleted once consumed.
 
 PlaybackState                ← now-playing head for a room (server = clock authority)
   room            FK (1:1)
-  current_item    FK QueueItem (nullable)   (the cursor; Next/Previous move it)
+  current_item    FK QueueItem (nullable)   (the playing row — context or queue)
+  context_pos     int (nullable)            (pointer into the stable context list)
+  context_label   str                       ("Next from: <label>")
   position_ms     int
   is_playing      bool
   updated_at                 (server timestamp drives client drift-correction)
@@ -62,15 +66,15 @@ Playlist (existing)          ← now strictly user-owned + intentional
 
 | Action | Endpoint | Effect |
 |--------|----------|--------|
-| **Play song (click a track)** | `play-now {track_id}` | insert that one song at the cursor + play; does **not** load the surrounding list |
-| **Play all / Play playlist** | `play {track_ids, start_index}` / `play-playlist {playlist_id}` | **replace** the queue with the list, play from the top |
-| **Add to queue / Play next** | `queue {track_ids, play_next}` | append (or insert after current); starts playback if idle |
-| **Next / Previous** | `next` / `previous` | move the cursor forward / back (Previous: UI restarts if >3s in) |
-| **Click a queue row** | `jump {item_id}` | play that item now (works for history or up-next) |
-| **Remove item** | `remove {item_id}` | drop a single queue item |
-| **Shuffle** | `shuffle` | randomize the up-next items (re-call to reshuffle) |
-| **Save queue as playlist** | `save-as-playlist {title}` | owned `Playlist` from the whole queue, in order |
-| **Clear** | `clear` | empty the queue, stop |
+| **Play song (click a track)** | `play-now {track_id}` | context becomes that one song + play; does **not** load the surrounding list |
+| **Play all / Play playlist** | `play {track_ids, start_index, label}` / `play-playlist {playlist_id}` | load the list as the **context**, play from the top; preserves the user queue |
+| **Add to queue / Play next** | `queue {track_ids, play_next}` | append (or insert at head of) the **user queue**; starts playback if idle |
+| **Next / Previous** | `next` / `previous` | next: queue first, then resume context; previous: walk the context back (UI restarts if >3s in) |
+| **Click a row** | `jump {item_id}` | context row → move the pointer there (skipped tracks kept); queue row → play it, consuming the ones above |
+| **Remove item** | `remove {item_id}` | drop a single item from either layer |
+| **Shuffle** | `shuffle` | randomize the upcoming **context** (re-call to reshuffle) |
+| **Save queue as playlist** | `save-as-playlist {title}` | owned `Playlist` from now-playing + queue + remaining context, in order |
+| **Clear** | `clear` | empty both layers, stop |
 | **Reorder (drag), repeat modes** | *(next)* | drag-to-reorder + off/all/one repeat (host-gated in shared sessions) |
 
 ## Real-time (the Jam) — architecture
@@ -84,7 +88,7 @@ Playlist (existing)          ← now strictly user-owned + intentional
 - **Attribution:** `QueueItem.added_by` → "added by Alice."
 
 ## Phasing (incremental, each shippable)
-- **Phase A — Session + queue (solo, no WS) ✅ shipped:** `Room`/`QueueItem`/`PlaybackState`; **decoupled ingest** (ingest → tracks + import result); **single queue + cursor** with play-now / play / play-playlist / queue / next / previous / jump / remove / shuffle / save-as-playlist; a real **player** (transport controls + seek bar) + interactive queue panel (Up next / Recently played); **ad-free `<audio>` playback** via the yt-dlp stream proxy (lazy match-on-play, no media stored — only `video_id`). *Fixed the "one song = one playlist" wart and the flat-queue grow bug; Previous comes free from the cursor.*
+- **Phase A — Session + queue (solo, no WS) ✅ shipped:** `Room`/`QueueItem`/`PlaybackState`; **decoupled ingest** (ingest → tracks + import result); **context + user queue** (stable context with a position pointer; ephemeral queue) with play-now / play / play-playlist / queue / next / previous / jump / remove / shuffle / save-as-playlist; a real **player** (transport controls + seek bar) + interactive queue panel ("Next in queue" / "Next from: …"); **ad-free `<audio>` playback** via the yt-dlp stream proxy (lazy match-on-play, no media stored — only `video_id`). *Fixed the "one song = one playlist" wart, the flat-queue grow bug, and the fake "recently played"; Previous walks the context.*
 - **Phase B — Real-time Jam:** Channels + Redis; share/join via code; shared queue + synced playback + drift correction; host controls + attribution.
 - **Phase C — Library polish:** liked tracks, playlist management/ownership UI, collaborators.
 
