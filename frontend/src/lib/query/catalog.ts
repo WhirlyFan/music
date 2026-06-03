@@ -48,6 +48,18 @@ export function useMatchPlaylist(id: string) {
   })
 }
 
+/** Lazily resolve a single track's YouTube source (used by Play). */
+export function useMatchTrack(playlistId?: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (trackId: string) =>
+      api<PlaybackSource>(`/catalog/tracks/${trackId}/match/`, { method: 'POST' }),
+    onSuccess: () => {
+      if (playlistId) qc.invalidateQueries({ queryKey: playlistKeys.detail(playlistId) })
+    },
+  })
+}
+
 /** Correct a track's active source — paste a video id or promote a candidate. */
 export function useSetSource(playlistId?: string) {
   const qc = useQueryClient()

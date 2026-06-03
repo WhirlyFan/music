@@ -77,6 +77,22 @@ def test_match_populates_active_source(client, offline, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_lazy_match_single_track(client, offline, monkeypatch):
+    client.post(INGEST, {"url": ALBUM_URL}, format="json")
+    track = Track.objects.first()
+    monkeypatch.setattr(
+        match.youtube,
+        "search",
+        lambda q, n=5: [{"video_id": "LAZY1", "title": q, "uploader": "y", "duration_sec": 240}],
+    )
+    r = client.post(f"/api/v1/catalog/tracks/{track.id}/match/")
+    assert r.status_code == 200
+    assert r.data["locator"] == "LAZY1"
+    # idempotent: second call returns the existing active source, no re-search
+    assert client.post(f"/api/v1/catalog/tracks/{track.id}/match/").data["locator"] == "LAZY1"
+
+
+@pytest.mark.django_db
 def test_set_source_correction(client, offline):
     client.post(INGEST, {"url": ALBUM_URL}, format="json")
     track = Track.objects.first()

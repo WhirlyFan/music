@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
-import { usePlaylist, useMatchPlaylist, useSetSource } from '@/lib/query/catalog'
+import type { PlaybackSource } from '@/lib/query/catalog'
+import { useMatchPlaylist, useMatchTrack, usePlaylist, useSetSource } from '@/lib/query/catalog'
 
 export const Route = createFileRoute('/playlists/$playlistId')({
   component: PlaylistDetailPage,
@@ -13,11 +15,27 @@ function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
   const matchAll = useMatchPlaylist(playlistId)
+  const matchTrack = useMatchTrack(playlistId)
   const setSource = useSetSource(playlistId)
   const [nowPlaying, setNowPlaying] = useState<string | null>(null)
 
   if (isLoading) return <p className="text-muted-foreground">Loading…</p>
   if (error || !playlist) return <FormError message="Failed to load playlist." />
+
+  // Play: if the track is already matched, play immediately; otherwise resolve
+  // its YouTube source on demand (lazy — only what you actually play), then play.
+  async function handlePlay(trackId: string, source: PlaybackSource | null) {
+    if (source && source.locator_kind === 'video_id') {
+      setNowPlaying(source.locator)
+      return
+    }
+    try {
+      const resolved = await matchTrack.mutateAsync(trackId)
+      if (resolved.locator_kind === 'video_id') setNowPlaying(resolved.locator)
+    } catch {
+      toast.error('Couldn’t find a YouTube match for this track.')
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -26,12 +44,15 @@ function PlaylistDetailPage() {
           <h1 className="text-2xl font-semibold tracking-tight">{playlist.title}</h1>
           <p className="text-muted-foreground text-sm">{playlist.track_count} tracks</p>
         </div>
+        {/* Optional: pre-resolve every track up front. Play resolves lazily, so
+            this is just a convenience for warming a whole playlist. */}
         <Button
+          variant="outline"
           onClick={() => matchAll.mutate()}
           aria-busy={matchAll.isPending || undefined}
           className={matchAll.isPending ? 'pointer-events-none opacity-60' : undefined}
         >
-          {matchAll.isPending ? 'Matching…' : 'Match on YouTube'}
+          {matchAll.isPending ? 'Matching…' : 'Match all'}
         </Button>
       </header>
 
@@ -51,8 +72,9 @@ function PlaylistDetailPage() {
 
       <ol className="space-y-2">
         {playlist.items.map((item) => {
-          const source = item.track.active_source
+          const source: PlaybackSource | null = item.track.active_source
           const videoId = source?.locator_kind === 'video_id' ? source.locator : null
+          const isMatching = matchTrack.isPending && matchTrack.variables === item.track.id
           return (
             <li
               key={item.track.id}
@@ -67,11 +89,16 @@ function PlaylistDetailPage() {
                   {item.track.primary_artist}
                 </p>
               </div>
-              {videoId ? (
-                <div className="flex items-center gap-2">
-                  <Button size="sm" onClick={() => setNowPlaying(videoId)}>
-                    Play
-                  </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => handlePlay(item.track.id, source)}
+                  aria-busy={isMatching || undefined}
+                  className={isMatching ? 'pointer-events-none opacity-60' : undefined}
+                >
+                  {isMatching ? 'Matching…' : 'Play'}
+                </Button>
+                {videoId && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -83,10 +110,8 @@ function PlaylistDetailPage() {
                   >
                     Wrong song?
                   </Button>
-                </div>
-              ) : (
-                <span className="text-muted-foreground text-sm">unmatched</span>
-              )}
+                )}
+              </div>
             </li>
           )
         })}

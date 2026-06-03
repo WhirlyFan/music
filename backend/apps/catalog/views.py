@@ -94,6 +94,25 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         )
         return Response(PlaybackSourceSerializer(rows, many=True).data)
 
+    @extend_schema(request=None, responses=PlaybackSourceSerializer)
+    @action(detail=True, methods=["post"])
+    def match(self, request, pk=None):
+        """Resolve this track's YouTube source on demand (lazy — used by Play).
+
+        Returns the existing active source if already matched (no wasted
+        YouTube search); otherwise resolves one; 404 if nothing fits.
+        """
+        track = get_object_or_404(Track, pk=pk)
+        ps = (
+            track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).first()
+            or match.match_track_to_youtube(track)
+        )
+        if ps is None:
+            return Response(
+                {"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(PlaybackSourceSerializer(ps).data)
+
     @extend_schema(request=SetSourceSerializer, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"], url_path="set-source")
     def set_source(self, request, pk=None):
