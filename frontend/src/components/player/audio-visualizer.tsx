@@ -4,15 +4,18 @@ import { useEffect, useRef } from 'react'
 const BUFFER = 600
 const POINTS = 160 // perimeter samples the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
-const BASE = BUFFER * 0.04 // baseline ring offset (peaks point out, valleys tuck behind)
-const AMP = BUFFER * 0.12 // waveform deflection (bigger → more expressive peaks)
-const MAX = BUFFER * 0.12 // hard cap on how far a loud beat can pull a peak out
+// BASE == AMP: valleys glide smoothly down to the border (offset 0) via the tanh
+// curve instead of slamming into a hard floor, and peaks soft-limit at 2·AMP via
+// tanh — so neither end ever forms a flat plateau that "tears" against the curve.
+const BASE = BUFFER * 0.08 // resting ring offset (= AMP)
+const AMP = BUFFER * 0.08 // half the border→peak span
+const MAX = BUFFER * 0.18 // safety ceiling only; tanh already soft-limits well below this
 const GAIN = 2.0 // pre-emphasis before a soft clip → peaks pop, quiet stays calm
 // Attack/release envelope (NOT a spring — no momentum, so it can't overshoot or
 // wobble). Peaks/valleys form quickly (attack); they relax slowly (release) so the
 // whole thing moves like something thick and viscous.
-const PRE = 0.3 // temporal low-pass on the input → de-crunch the scrolling waveform
-const ATTACK = 0.22 // how fast it reaches a new peak/valley (lower = smoother, less crunchy)
+const PRE = 0.28 // temporal low-pass on the input → de-crunch the scrolling waveform
+const ATTACK = 0.18 // how fast it reaches a new peak/valley (lower = smoother)
 const RELEASE = 0.045 // how slowly it settles back → thickness
 const BANDS = 5 // colors sampled top→bottom for the artwork gradient
 
@@ -161,14 +164,16 @@ export function AudioVisualizer({
       const ox = new Float32Array(POINTS)
       const oy = new Float32Array(POINTS)
       for (let i = 0; i < POINTS; i++) {
-        // 5-tap spatial smoothing (wrapped) + temporal easing → undulates, not jitters
+        // 7-tap spatial smoothing (wrapped) + temporal easing → undulates, not jitters
         const sm =
-          (raw[(i - 2 + POINTS) % POINTS] +
+          (raw[(i - 3 + POINTS) % POINTS] +
+            raw[(i - 2 + POINTS) % POINTS] +
             raw[(i - 1 + POINTS) % POINTS] +
             raw[i] +
             raw[(i + 1) % POINTS] +
-            raw[(i + 2) % POINTS]) /
-          5
+            raw[(i + 2) % POINTS] +
+            raw[(i + 3) % POINTS]) /
+          7
         pre[i] += (sm - pre[i]) * PRE // temporal low-pass → smooth, not crunchy
         const target = Math.tanh(pre[i] * GAIN) // pre-emphasis → expressive, soft-clipped peaks
         // Move toward the target with no momentum (so it can't overshoot/wobble):
