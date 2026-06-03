@@ -1,19 +1,25 @@
 """Queue / playback operations for a room (room-of-one, Phase A — no WebSockets).
 
-The play verbs from docs/design/queue-rooms.md: add / play-next / play-now,
-play-playlist, save-queue-as-playlist, advance, clear.
+Two layers, mirroring Spotify (see docs/design/queue-rooms.md):
+
+- **context** — the list you're playing *from*. `play()` replaces it; it shrinks
+  as you listen (consumed items are deleted) and is preserved when you only add
+  to the queue.
+- **user queue** — explicit "Add to queue" / "Play next" tracks. They play before
+  the context resumes and survive a context change.
+
+Play order (and therefore `advance`) is: user queue first, then context.
 """
 
 from __future__ import annotations
 
 from django.db import transaction
-from django.db.models import F, Max
+from django.db.models import Max, Min
 
 from .models import PlaybackState, QueueItem, Room
 
-ADD = "add"
-PLAY_NEXT = "play_next"
-PLAY_NOW = "play_now"
+CONTEXT = QueueItem.Kind.CONTEXT
+QUEUE = QueueItem.Kind.QUEUE
 
 
 def get_active_room(user) -> Room:
@@ -23,99 +29,126 @@ def get_active_room(user) -> Room:
     return room
 
 
-def _next_position(room: Room) -> int:
-    highest = room.items.aggregate(m=Max("position"))["m"]
-    return 0 if highest is None else highest + 1
+def _set_current(playback: PlaybackState, track, *, label: str | None = None) -> None:
+    playback.current_track = track
+    playback.position_ms = 0
+    playback.is_playing = track is not None
+    if label is not None:
+        playback.context_label = label
+    playback.save(
+        update_fields=["current_track", "position_ms", "is_playing", "context_label", "updated_at"]
+    )
 
 
 @transaction.atomic
-def enqueue(room: Room, track, *, added_by=None, mode: str = ADD) -> QueueItem:
-    """Add a track to the room's queue.
+def play(room: Room, tracks, *, start: int = 0, added_by=None, label: str = "") -> None:
+    """Start a new context at `tracks[start]`, with the rest as up-next context.
 
-    - ADD: append. PLAY_NEXT: insert right after the current item.
-    - PLAY_NOW: append and make it the now-playing head.
+    Replaces the current context (the user queue is preserved, Spotify-style).
+    No-op if `tracks` is empty or `start` is out of range.
     """
+    if not tracks or start >= len(tracks):
+        return
     playback, _ = PlaybackState.objects.get_or_create(room=room)
+    room.items.filter(kind=CONTEXT).delete()
+    QueueItem.objects.bulk_create(
+        [
+            QueueItem(room=room, track=t, kind=CONTEXT, position=i, added_by=added_by)
+            for i, t in enumerate(tracks[start + 1 :])
+        ]
+    )
+    _set_current(playback, tracks[start], label=label)
 
-    if mode == PLAY_NEXT and playback.current_item_id:
-        after = playback.current_item.position
-        room.items.filter(position__gt=after).update(position=F("position") + 1)
-        item = QueueItem.objects.create(
-            room=room, track=track, position=after + 1, added_by=added_by
-        )
+
+@transaction.atomic
+def enqueue(room: Room, track, *, added_by=None, play_next: bool = False) -> QueueItem:
+    """Add a track to the user queue. `play_next` puts it at the head (plays
+    before everything else queued); otherwise it appends. If nothing is playing,
+    playback kicks off from the queue."""
+    qs = room.items.filter(kind=QUEUE)
+    if play_next:
+        position = (qs.aggregate(m=Min("position"))["m"] or 0) - 1
     else:
-        item = QueueItem.objects.create(
-            room=room, track=track, position=_next_position(room), added_by=added_by
-        )
-
-    if mode == PLAY_NOW:
-        _set_current(playback, item)
+        position = (qs.aggregate(m=Max("position"))["m"] or -1) + 1
+    item = QueueItem.objects.create(
+        room=room, track=track, kind=QUEUE, position=position, added_by=added_by
+    )
+    playback, _ = PlaybackState.objects.get_or_create(room=room)
+    if playback.current_track_id is None:
+        advance(room)
     return item
 
 
-def _set_current(playback: PlaybackState, item: QueueItem | None) -> None:
-    playback.current_item = item
-    playback.position_ms = 0
-    playback.is_playing = item is not None
-    playback.save(update_fields=["current_item", "position_ms", "is_playing", "updated_at"])
+@transaction.atomic
+def enqueue_many(room: Room, tracks, *, added_by=None) -> int:
+    """Append several tracks to the user queue (Add all)."""
+    count = 0
+    for track in tracks:
+        enqueue(room, track, added_by=added_by)
+        count += 1
+    return count
 
 
 @transaction.atomic
-def clear_queue(room: Room) -> None:
+def advance(room: Room):
+    """Move the now-playing head to the next track: user queue first, then
+    context. The consumed item is removed (it leaves 'up next')."""
+    playback, _ = PlaybackState.objects.get_or_create(room=room)
+    nxt = (
+        room.items.filter(kind=QUEUE).order_by("position").first()
+        or room.items.filter(kind=CONTEXT).order_by("position").first()
+    )
+    if nxt is None:
+        _set_current(playback, None)
+        return None
+    track = nxt.track
+    nxt.delete()
+    _set_current(playback, track)
+    return track
+
+
+@transaction.atomic
+def clear(room: Room) -> None:
+    """Empty both layers and stop playback."""
     PlaybackState.objects.filter(room=room).update(
-        current_item=None, is_playing=False, position_ms=0
+        current_track=None, is_playing=False, position_ms=0, context_label=""
     )
     room.items.all().delete()
 
 
 @transaction.atomic
-def play_tracks(room: Room, tracks, *, added_by=None, replace: bool = True) -> int:
-    """Enqueue a batch of tracks (in order). If replace, reset the queue and
-    start at the first track (Play); otherwise append (Add to queue)."""
-    if replace:
-        clear_queue(room)
-    first = None
-    count = 0
-    for track in tracks:
-        item = QueueItem.objects.create(
-            room=room, track=track, position=_next_position(room), added_by=added_by
-        )
-        first = first or item
-        count += 1
-    if replace and first:
-        playback, _ = PlaybackState.objects.get_or_create(room=room)
-        _set_current(playback, first)
-    return count
-
-
-def play_playlist(room: Room, playlist, *, added_by=None, replace: bool = True) -> int:
-    """Load a playlist's tracks into the queue (see `play_tracks`)."""
+def play_playlist(room: Room, playlist, *, added_by=None) -> None:
+    """Play an owned playlist as the context, from the top."""
     tracks = [pt.track for pt in playlist.items.select_related("track").order_by("position")]
-    return play_tracks(room, tracks, added_by=added_by, replace=replace)
+    play(room, tracks, start=0, added_by=added_by, label=playlist.title)
+
+
+def upcoming(room: Room) -> dict:
+    """Ordered up-next, split by layer (for serialization)."""
+    items = list(room.items.select_related("track").all())
+    queue = sorted((i for i in items if i.kind == QUEUE), key=lambda i: i.position)
+    context = sorted((i for i in items if i.kind == CONTEXT), key=lambda i: i.position)
+    return {"queue": queue, "context": context}
 
 
 @transaction.atomic
-def advance(room: Room) -> QueueItem | None:
-    """Move the now-playing head to the next item by position."""
-    playback, _ = PlaybackState.objects.get_or_create(room=room)
-    after = playback.current_item.position if playback.current_item_id else -1
-    nxt = room.items.filter(position__gt=after).order_by("position").first()
-    _set_current(playback, nxt)
-    return nxt
-
-
-@transaction.atomic
-def save_queue_as_playlist(room: Room, user, title: str):
-    """Create an owned Playlist from the current queue (dedups repeats)."""
+def save_as_playlist(room: Room, user, title: str):
+    """Save what's lined up (now-playing + queue + remaining context) as an owned
+    playlist, in play order, de-duplicated."""
     from apps.catalog.models import Playlist, PlaylistTrack
+
+    playback = PlaybackState.objects.filter(room=room).first()
+    up = upcoming(room)
+    ordered_tracks = []
+    if playback and playback.current_track_id:
+        ordered_tracks.append(playback.current_track)
+    ordered_tracks += [i.track for i in up["queue"]] + [i.track for i in up["context"]]
 
     playlist = Playlist.objects.create(title=title or "Saved queue", created_by=user)
     position = 0
-    for item in room.items.select_related("track").order_by("position"):
+    for track in ordered_tracks:
         _, created = PlaylistTrack.objects.get_or_create(
-            playlist=playlist,
-            track=item.track,
-            defaults={"position": position, "added_by": user},
+            playlist=playlist, track=track, defaults={"position": position, "added_by": user}
         )
         if created:
             position += 1

@@ -10,33 +10,51 @@ class QueueItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QueueItem
-        fields = ["id", "position", "played", "track"]
+        fields = ["id", "kind", "position", "track"]
 
 
 class RoomSerializer(serializers.ModelSerializer):
-    items = QueueItemSerializer(many=True, read_only=True)
-    current_item = serializers.UUIDField(
-        source="playback.current_item_id", read_only=True, allow_null=True
-    )
+    """The room as the player needs it: now-playing track + the two up-next
+    layers (explicit `queue`, then the `context` it resumes into)."""
+
+    current = TrackSerializer(source="playback.current_track", read_only=True, allow_null=True)
     is_playing = serializers.BooleanField(source="playback.is_playing", read_only=True)
     position_ms = serializers.IntegerField(source="playback.position_ms", read_only=True)
+    context_label = serializers.CharField(source="playback.context_label", read_only=True)
+    queue = serializers.SerializerMethodField()
+    context = serializers.SerializerMethodField()
 
     class Meta:
         model = Room
-        fields = ["id", "current_item", "is_playing", "position_ms", "items"]
+        fields = ["id", "current", "is_playing", "position_ms", "context_label", "queue", "context"]
+
+    def _layer(self, room, kind):
+        # Uses the prefetched `items` (no extra query); ordered by position.
+        items = sorted(
+            (i for i in room.items.all() if i.kind == kind), key=lambda i: i.position
+        )
+        return QueueItemSerializer(items, many=True).data
+
+    def get_queue(self, room):
+        return self._layer(room, QueueItem.Kind.QUEUE)
+
+    def get_context(self, room):
+        return self._layer(room, QueueItem.Kind.CONTEXT)
 
 
-class EnqueueSerializer(serializers.Serializer):
-    track_id = serializers.UUIDField()
-    mode = serializers.ChoiceField(choices=["add", "play_next", "play_now"], default="add")
-
-
-class EnqueueBatchSerializer(serializers.Serializer):
-    """Enqueue many tracks (e.g. a pasted import). replace=True is Play (reset
-    the queue and start at the first); replace=False is Add to queue (append)."""
+class PlaySerializer(serializers.Serializer):
+    """Set the context to `track_ids` and start playing at `start_index`."""
 
     track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
-    replace = serializers.BooleanField(default=False)
+    start_index = serializers.IntegerField(min_value=0, default=0)
+    label = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+
+class QueueSerializer(serializers.Serializer):
+    """Add tracks to the user queue. `play_next` puts them at the head."""
+
+    track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+    play_next = serializers.BooleanField(default=False)
 
 
 class PlayPlaylistSerializer(serializers.Serializer):

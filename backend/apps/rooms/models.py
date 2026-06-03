@@ -39,10 +39,25 @@ class Room(BaseModel):
 
 
 class QueueItem(BaseModel):
-    """One entry in a room's queue (the 'up next'). `created_at` = added time."""
+    """One upcoming entry in a room, in one of two layers (Spotify's model):
+
+    - CONTEXT: the list you're playing *from* (album/playlist/import). It shrinks
+      as you play — consumed items are deleted — and is replaced when you start a
+      new context.
+    - QUEUE: tracks you explicitly "Add to queue". They play *before* the context
+      resumes and survive a context change.
+
+    Up-next render + advance order is: all QUEUE items, then all CONTEXT items,
+    each by `position`. `created_at` = added time.
+    """
+
+    class Kind(models.TextChoices):
+        CONTEXT = "context", "From context"
+        QUEUE = "queue", "User queue"
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="items")
     track = models.ForeignKey(Track, on_delete=models.PROTECT, related_name="queue_items")
+    kind = models.CharField(max_length=8, choices=Kind.choices, default=Kind.CONTEXT)
     position = models.IntegerField()
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -51,26 +66,29 @@ class QueueItem(BaseModel):
         blank=True,
         related_name="queued_items",
     )
-    played = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["position"]
-        indexes = [models.Index(fields=["room", "position"])]
+        indexes = [models.Index(fields=["room", "kind", "position"])]
 
     def __str__(self) -> str:
-        return f"{self.room_id}[{self.position}] → {self.track_id}"
+        return f"{self.room_id}[{self.kind}:{self.position}] → {self.track_id}"
 
 
 class PlaybackState(BaseModel):
-    """Now-playing head for a room. In a shared room the server is the clock
-    authority (Phase B uses `position_ms` + `updated_at` for drift correction)."""
+    """Now-playing head for a room. `current_track` is what's playing (a plain
+    Track — a consumed queue/context item is deleted, so the head can't dangle).
+    `context_label` is the source name for the "Next from: …" line. In a shared
+    room the server is the clock authority (Phase B uses `position_ms` +
+    `updated_at` for drift correction)."""
 
     room = models.OneToOneField(Room, on_delete=models.CASCADE, related_name="playback")
-    current_item = models.ForeignKey(
-        QueueItem, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    current_track = models.ForeignKey(
+        Track, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
+    context_label = models.CharField(max_length=255, blank=True)
     position_ms = models.IntegerField(default=0)
     is_playing = models.BooleanField(default=False)
 
     def __str__(self) -> str:
-        return f"Playback({self.room_id}, item={self.current_item_id}, playing={self.is_playing})"
+        return f"Playback({self.room_id}, track={self.current_track_id}, playing={self.is_playing})"
