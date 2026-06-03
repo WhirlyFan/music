@@ -5,10 +5,12 @@ const BUFFER = 600
 const POINTS = 160 // perimeter samples the wave is drawn through
 const HALF = BUFFER * 0.25 // artwork half-size — must match the <img> size in the layout
 const BASE = BUFFER * 0.04 // baseline ring offset (peaks point out, valleys tuck behind)
-const AMP = BUFFER * 0.11 // waveform deflection (bigger → more expressive peaks)
-const GAIN = 2.2 // pre-emphasis before a soft clip → peaks pop, quiet stays calm
-const STIFFNESS = 0.1 // spring pull toward the target
-const DAMPING = 0.78 // fraction of velocity kept each frame → viscous friction (no jitter)
+const AMP = BUFFER * 0.12 // waveform deflection (bigger → more expressive peaks)
+const GAIN = 2.0 // pre-emphasis before a soft clip → peaks pop, quiet stays calm
+const STIFFNESS = 0.08 // spring pull toward the target
+// Fraction of velocity kept each frame. LOWER = more friction. Kept well below
+// the overshoot threshold so it's overdamped — eases in like honey, never wobbles.
+const DAMPING = 0.55
 const BANDS = 5 // colors sampled top→bottom for the artwork gradient
 
 type Pt = { px: number; py: number; nx: number; ny: number }
