@@ -135,8 +135,8 @@ export function FullScreenPlayer({
         <X className="size-5" />
       </Button>
 
-      <div className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-sm flex-col items-center gap-5 px-6">
-        <div className="relative grid size-80 place-items-center">
+      <div className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6">
+        <div className="relative grid size-96 place-items-center">
           <AudioVisualizer analyser={analyser} artworkUrl={track.artwork_url} />
           {track.artwork_url ? (
             <img
