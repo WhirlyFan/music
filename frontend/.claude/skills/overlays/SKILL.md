@@ -40,7 +40,7 @@ The dividing line: **does the overlay need to position itself relative to a trig
 
 1. Anchored to a trigger element (tooltip, popover, dropdown)? → **Radix primitive**
 2. Toast surface? → **sonner**
-3. Survives refresh / linkable? → **nuqs**
+3. Survives refresh / linkable? → **a route + TanStack Router search params**
 4. Modal with one obvious nearby trigger and no Promise return? → **compound `<Dialog><DialogTrigger asChild />`**
 5. Triggered from async flows, multiple callers, or needs a Promise return? → **this pattern**
 6. Scoped to one component, no async? → **`useState`**
@@ -242,7 +242,7 @@ Radix Dialog / AlertDialog / Sheet handle the heavy lifting — focus trap on op
 2. Keep `useOverlayStore` private. Consumers see only `overlay.*`, `<OverlayRenderer />`, and `confirm()`.
 3. Wire `unmount` to Radix's `onCloseAutoFocus` on `DialogContent` / `AlertDialogContent` / `SheetContent`. Don't use `onAnimationEnd` (fires on child animations) and don't `e.preventDefault()` inside it (cancels focus restoration).
 4. `openAsync` resolves via `close(value)` — never through side channels.
-5. Don't use this for deep-linkable overlays (use nuqs) or structural compound UI (Tabs, Accordion).
+5. Don't use this for deep-linkable overlays (use a route + search params) or structural compound UI (Tabs, Accordion).
 
 ## Anti-patterns
 

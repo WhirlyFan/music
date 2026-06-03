@@ -1,13 +1,19 @@
 ---
 name: frontend-performance
-description: Frontend performance optimization for React and Next.js. Covers eliminating async waterfalls, bundle size optimization, re-render prevention, client-side data fetching patterns, JS performance, and Suspense boundaries. Use when optimizing performance, fixing waterfalls, or reducing bundle size.
+description: Frontend performance — eliminating async waterfalls, re-render prevention, bundle size, JS performance. Use when optimizing performance, fixing waterfalls, or reducing bundle size. Note this app is Vite (not Next.js) — the principles apply, but ignore the Next-specific examples (see banner).
 ---
 
 # Frontend Performance
 
-Frontend performance optimization for React and Next.js. 40+ rules across 8 categories, prioritized by impact.
+> **Stack note:** this is a **Vite + React 19** app, not Next.js. The *principles* below (waterfalls, re-renders, bundle size, JS perf) all apply, but several **examples are Next.js-specific and do NOT apply here** — ignore/translate them:
+> - `next/dynamic` → use `React.lazy()` + `<Suspense>` (Vite + `@tanstack/router-plugin` already code-splits routes via `autoCodeSplitting`).
+> - `next/image` → no such component; use plain `<img loading="lazy">` (we don't store/serve images anyway).
+> - `@next/bundle-analyzer` → use `rollup-plugin-visualizer` or read `vite build`'s output sizes.
+> - Server Components / `"use client"` / API routes / `posthog` → none exist here (telemetry is `@sentry/react`).
+>
+> *(This skill is slated for a fuller rewrite to drop the Next examples — see the skill audit.)*
 
-Adapted from Vercel Engineering's React Best Practices (v1.0.0, January 2026).
+40+ rules across 8 categories, prioritized by impact. Adapted from Vercel Engineering's React Best Practices (v1.0.0, January 2026).
 
 ### 1. Eliminating Waterfalls — CRITICAL
 
