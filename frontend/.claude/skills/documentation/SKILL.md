@@ -78,7 +78,7 @@ Key capabilities list. Keep it scannable:
 - **Type-safe** — Full TypeScript support with discriminated unions and generic types
 - **Theming support** — CSS variable-based design tokens, adapts to light/dark mode
 - **Lightweight** — No unnecessary dependencies, tree-shakeable
-- **SSR/SSG ready** — Works with Next.js Server Components and static generation
+- **Accessible by default** — keyboard + screen-reader support baked in (see `frontend-accessibility`)
 - **Well-documented** — Props reference, examples, accessibility notes, changelog
 ```
 

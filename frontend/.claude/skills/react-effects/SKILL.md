@@ -75,11 +75,12 @@ Every effect that subscribes, listens, sets a timer, or starts a fetch returns a
 
 ```typescript
 useEffect(() => {
-  const channel = supabase.channel(name).subscribe()
+  const socket = new WebSocket(url)
+  socket.addEventListener('message', onMessage)
   return () => {
-    supabase.removeChannel(channel)
+    socket.close() // and any listeners
   }
-}, [name])
+}, [url])
 ```
 
 Non-React Query fetches need an `ignore` flag in cleanup to avoid race conditions on rapid prop changes.
