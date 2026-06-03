@@ -242,6 +242,39 @@ def test_play_prefers_origin_art_then_youtube(monkeypatch):
 
 
 @pytest.mark.django_db
+def test_ingest_records_per_track_source_link(client, monkeypatch):
+    # Each song's own per-source link is stored (so we can re-resolve/refer later).
+    from apps.catalog.ingest import spotify
+    from apps.catalog.models import SourceLink
+
+    meta = {
+        "title": "M", "external_id": "pl", "kind": "playlist", "partial": False,
+        "tracks": [{
+            "title": "Z", "artist": "A", "duration": 1000,
+            "external_id": "sp123", "source_url": "https://open.spotify.com/track/sp123",
+        }],
+    }
+    monkeypatch.setattr(spotify, "ingest_with_meta", lambda url: meta)
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/pl"}, format="json")
+    assert r.status_code == 201
+    link = SourceLink.objects.get(external_id="sp123", track__isnull=False)
+    assert link.url == "https://open.spotify.com/track/sp123"
+    assert link.kind == "track"
+    assert str(link.track_id) == r.data["tracks"][0]["id"]
+
+
+@pytest.mark.django_db
+def test_refresh_artwork_self_heals(client, monkeypatch):
+    # A broken cover is re-resolved from the origin on demand.
+    track = TrackFactory(artwork_url="https://dead/x", source_url="https://open.spotify.com/track/abc")
+    PlaybackSourceFactory(track=track, locator="vid123")
+    monkeypatch.setattr(match, "_origin_artwork", lambda u: "https://i.scdn.co/NEW")
+    r = client.post(f"/api/v1/catalog/tracks/{track.id}/refresh-artwork/")
+    assert r.status_code == 200
+    assert r.data["artwork_url"] == "https://i.scdn.co/NEW"
+
+
+@pytest.mark.django_db
 def test_set_source_correction(client, offline):
     client.post(INGEST, {"url": ALBUM_URL}, format="json")
     track = Track.objects.first()

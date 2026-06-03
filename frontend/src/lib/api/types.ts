@@ -143,6 +143,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/tracks/{id}/refresh-artwork/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Self-heal a broken cover: clear it and re-resolve from the origin
+         *     (Spotify/Apple), falling back to the YouTube thumbnail. The frontend calls
+         *     this when an <img> fails to load (the CDN URL rotted).
+         */
+        post: operations["v1_catalog_tracks_refresh_artwork_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/tracks/{id}/set-source/": {
         parameters: {
             query?: never;
@@ -934,6 +955,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaybackSource"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_refresh_artwork_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Track"];
                 };
             };
         };

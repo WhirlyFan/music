@@ -169,6 +169,23 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         resp["Accept-Ranges"] = "bytes"
         return resp
 
+    @extend_schema(request=None, responses=TrackSerializer)
+    @action(detail=True, methods=["post"], url_path="refresh-artwork")
+    def refresh_artwork(self, request, pk=None):
+        """Self-heal a broken cover: clear it and re-resolve from the origin
+        (Spotify/Apple), falling back to the YouTube thumbnail. The frontend calls
+        this when an <img> fails to load (the CDN URL rotted)."""
+        track = get_object_or_404(Track, pk=pk)
+        track.artwork_url = ""
+        track.save(update_fields=["artwork_url"])
+        ps = track.playback_sources.filter(
+            status=PlaybackSource.Status.ACTIVE,
+            locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
+        ).first()
+        match.backfill_artwork(track, ps.locator if ps else "")
+        track.refresh_from_db()
+        return Response(TrackSerializer(track).data)
+
     @extend_schema(request=SetSourceSerializer, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"], url_path="set-source")
     def set_source(self, request, pk=None):

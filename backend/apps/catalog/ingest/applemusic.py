@@ -180,11 +180,20 @@ def ingest_with_meta(url: str) -> dict:
     playlist tracks don't (they get their own cover from the YouTube match on play)."""
     kind, external_id = _classify(url)
     title, image, album, tracks = _tracks(url)
+    path_parts = [p for p in urlparse(url).path.split("/") if p]
+    storefront = path_parts[0] if path_parts and len(path_parts[0]) == 2 else "us"
     for t in tracks:
-        t.pop("_id", None)
+        # Apple's id is "<component> - <albumId> - <songId>"; keep the song id so we
+        # can link/fetch each song directly (its own cover), not just the collection.
+        sid = t.pop("_id", None)
+        song_id = sid.split(" - ")[-1].strip() if sid else ""
         if image and kind != "playlist":  # album/song cover is the track's own art
             t["artwork"] = image
         if album:
             t["album"] = album
-        t["source_url"] = url  # link back to the Apple Music album/playlist page
+        if song_id:
+            t["external_id"] = song_id
+            t["source_url"] = f"https://music.apple.com/{storefront}/song/{song_id}"
+        else:
+            t["source_url"] = url  # fallback: the collection page
     return {"title": title, "external_id": external_id, "kind": kind, "tracks": tracks, "cover": image}

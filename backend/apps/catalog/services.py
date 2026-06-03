@@ -110,9 +110,19 @@ def _record(source: Source, parsed: dict, url: str, *, user=None, on_track=None)
         kind=parsed["kind"],
         defaults={"url": url, "is_active": True},
     )
+    track_kind = SourceLink.Kind.VIDEO if source.code == Source.YOUTUBE else SourceLink.Kind.TRACK
     tracks = []
     for row in rows:
         track = _upsert_track(row)
+        # Store this song's own link on this source, so we can refer to (and
+        # re-resolve) it per source later — independent of the collection link.
+        if row.get("external_id"):
+            SourceLink.objects.update_or_create(
+                source=source,
+                external_id=row["external_id"],
+                kind=track_kind,
+                defaults={"url": row.get("source_url") or "", "track": track, "is_active": True},
+            )
         if on_track is not None:
             on_track(track, row)
         tracks.append(track)

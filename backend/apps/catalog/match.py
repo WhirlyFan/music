@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from django.db import transaction
 
-from .ingest import spotify, youtube
+from .ingest import applemusic, spotify, youtube
 from .models import PlaybackSource, Source, Track
 
 # A duration this far off (ms) scores zero — filters covers / extended edits.
@@ -30,15 +30,20 @@ def _score(track: Track, cand: dict) -> tuple[float, int | None]:
 
 
 def _origin_artwork(source_url: str) -> str:
-    """The track's REAL cover from its origin platform — Spotify only (we store a
-    per-track Spotify URL; Apple's stored URL is the collection, not the song).
-    Best-effort: returns '' on any failure so play is never blocked."""
-    if "open.spotify.com/track/" in (source_url or ""):
+    """The track's REAL cover from its origin (Spotify track API, or the Apple song
+    page's og:image). Best-effort: '' on any failure so play is never blocked."""
+    u = source_url or ""
+    if "open.spotify.com/track/" in u:
         try:
-            sid = source_url.split("/track/")[1].split("?")[0].strip("/")
+            sid = u.split("/track/")[1].split("?")[0].strip("/")
             t = spotify._get(f"/tracks/{sid}", spotify._token())
             return spotify._pick_image((t.get("album") or {}).get("images"))
         except Exception:  # noqa: BLE001 — enrichment only, must never break playback
+            return ""
+    if "music.apple.com/" in u and "/song/" in u:
+        try:
+            return applemusic._extract_image(applemusic.fetch(u))
+        except Exception:  # noqa: BLE001
             return ""
     return ""
 
