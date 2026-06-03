@@ -14,3 +14,9 @@
 #     pnpm install --ignore-min-release-age
 # That bypass is loud + intentional, which is the point.
 minimumReleaseAge: 1440
+
+# Write EXACT versions on `pnpm add` (no ^/~), so a direct dep can't silently
+# drift into a newer — possibly compromised — release. (`.npmrc save-exact` is
+# NOT honored by pnpm 11; this is the real setting.) All deps are already pinned
+# exact in package.json; the lockfile pins the transitive tree.
+savePrefix: ''
