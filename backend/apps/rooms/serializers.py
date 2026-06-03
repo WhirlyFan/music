@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.catalog.serializers import TrackSerializer
@@ -35,9 +36,11 @@ class RoomSerializer(serializers.ModelSerializer):
         )
         return QueueItemSerializer(items, many=True).data
 
+    @extend_schema_field(QueueItemSerializer(many=True))
     def get_queue(self, room):
         return self._layer(room, QueueItem.Kind.QUEUE)
 
+    @extend_schema_field(QueueItemSerializer(many=True))
     def get_context(self, room):
         return self._layer(room, QueueItem.Kind.CONTEXT)
 

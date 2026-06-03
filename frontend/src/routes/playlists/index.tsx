@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { fieldErrorMessage } from '@/lib/auth/errors'
 import type { ImportResult } from '@/lib/query/catalog'
 import { useIngest, usePlaylists } from '@/lib/query/catalog'
-import { useEnqueue, useEnqueueBatch } from '@/lib/query/rooms'
+import { usePlay, useQueueTracks } from '@/lib/query/rooms'
 
 export const Route = createFileRoute('/playlists/')({
   component: PlaylistsPage,
@@ -125,8 +125,8 @@ function PlaylistsPage() {
 
 /** The just-imported tracks, with play / queue verbs (no playlist created). */
 function ImportResultView({ result }: { result: ImportResult }) {
-  const playAll = useEnqueueBatch()
-  const enqueue = useEnqueue()
+  const play = usePlay()
+  const queueTracks = useQueueTracks()
   const trackIds = result.tracks.map((t) => t.id)
 
   return (
@@ -145,8 +145,8 @@ function ImportResultView({ result }: { result: ImportResult }) {
           <Button
             size="sm"
             onClick={() =>
-              playAll.mutate(
-                { trackIds, replace: true },
+              play.mutate(
+                { trackIds, startIndex: 0, label: result.title },
                 { onSuccess: () => toast.success('Playing.') },
               )
             }
@@ -157,8 +157,8 @@ function ImportResultView({ result }: { result: ImportResult }) {
             size="sm"
             variant="outline"
             onClick={() =>
-              playAll.mutate(
-                { trackIds, replace: false },
+              queueTracks.mutate(
+                { trackIds },
                 { onSuccess: () => toast.success('Added to queue.') },
               )
             }
@@ -184,7 +184,7 @@ function ImportResultView({ result }: { result: ImportResult }) {
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                onClick={() => enqueue.mutate({ trackId: track.id, mode: 'play_now' })}
+                onClick={() => play.mutate({ trackIds, startIndex: i, label: result.title })}
               >
                 Play
               </Button>
@@ -192,8 +192,8 @@ function ImportResultView({ result }: { result: ImportResult }) {
                 size="sm"
                 variant="ghost"
                 onClick={() =>
-                  enqueue.mutate(
-                    { trackId: track.id, mode: 'add' },
+                  queueTracks.mutate(
+                    { trackIds: [track.id] },
                     { onSuccess: () => toast.success('Added to queue.') },
                   )
                 }

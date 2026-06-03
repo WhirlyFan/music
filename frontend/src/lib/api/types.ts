@@ -270,43 +270,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/rooms/enqueue/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * @description The caller's own listening room (room-of-one). All actions operate on
-         *     `request.user`'s active room — there is no other-user access.
-         */
-        post: operations["v1_rooms_enqueue_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/rooms/enqueue-batch/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Play (replace) or add a batch of tracks — e.g. a pasted import. */
-        post: operations["v1_rooms_enqueue_batch_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/rooms/me/": {
         parameters: {
             query?: never;
@@ -327,6 +290,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/play/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Play a list as the context, starting at `start_index` (per-track Play
+         *     sends the surrounding list + the clicked index).
+         */
+        post: operations["v1_rooms_play_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/play-playlist/": {
         parameters: {
             query?: never;
@@ -341,6 +324,23 @@ export interface paths {
          *     `request.user`'s active room — there is no other-user access.
          */
         post: operations["v1_rooms_play_playlist_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/queue/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Add one or more tracks to the user queue (`play_next` → at the head). */
+        post: operations["v1_rooms_queue_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -387,21 +387,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        Enqueue: {
-            /** Format: uuid */
-            track_id: string;
-            /** @default add */
-            mode: components["schemas"]["ModeEnum"];
-        };
-        /**
-         * @description Enqueue many tracks (e.g. a pasted import). replace=True is Play (reset
-         *     the queue and start at the first); replace=False is Add to queue (append).
-         */
-        EnqueueBatch: {
-            track_ids: string[];
-            /** @default false */
-            replace: boolean;
-        };
         /** @description The result of a paste: loose tracks the caller can play/queue/save. */
         ImportResult: {
             /** Format: uuid */
@@ -415,19 +400,18 @@ export interface components {
             url: string;
         };
         /**
+         * @description * `context` - From context
+         *     * `queue` - User queue
+         * @enum {string}
+         */
+        KindEnum: "context" | "queue";
+        /**
          * @description * `video_id` - YouTube video id
          *     * `storage_key` - Object-storage key
          *     * `url` - Direct URL
          * @enum {string}
          */
         LocatorKindEnum: "video_id" | "storage_key" | "url";
-        /**
-         * @description * `add` - add
-         *     * `play_next` - play_next
-         *     * `play_now` - play_now
-         * @enum {string}
-         */
-        ModeEnum: "add" | "play_next" | "play_now";
         Note: {
             readonly id: number;
             title: string;
@@ -513,6 +497,14 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description Set the context to `track_ids` and start playing at `start_index`. */
+        Play: {
+            track_ids: string[];
+            /** @default 0 */
+            start_index: number;
+            /** @default  */
+            label: string;
+        };
         PlayPlaylist: {
             /** Format: uuid */
             playlist_id: string;
@@ -556,21 +548,32 @@ export interface components {
             position: number;
             readonly track: components["schemas"]["Track"];
         };
+        /** @description Add tracks to the user queue. `play_next` puts them at the head. */
+        Queue: {
+            track_ids: string[];
+            /** @default false */
+            play_next: boolean;
+        };
         QueueItem: {
             /** Format: uuid */
             readonly id: string;
+            kind?: components["schemas"]["KindEnum"];
             position: number;
-            played?: boolean;
             readonly track: components["schemas"]["Track"];
         };
+        /**
+         * @description The room as the player needs it: now-playing track + the two up-next
+         *     layers (explicit `queue`, then the `context` it resumes into).
+         */
         Room: {
             /** Format: uuid */
             readonly id: string;
-            /** Format: uuid */
-            readonly current_item: string | null;
+            readonly current: components["schemas"]["Track"] | null;
             readonly is_playing: boolean;
             readonly position_ms: number;
-            readonly items: components["schemas"]["QueueItem"][];
+            readonly context_label: string;
+            readonly queue: components["schemas"]["QueueItem"][];
+            readonly context: components["schemas"]["QueueItem"][];
         };
         SaveAsPlaylist: {
             title: string;
@@ -983,56 +986,6 @@ export interface operations {
             };
         };
     };
-    v1_rooms_enqueue_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Enqueue"];
-                "application/x-www-form-urlencoded": components["schemas"]["Enqueue"];
-                "multipart/form-data": components["schemas"]["Enqueue"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Room"];
-                };
-            };
-        };
-    };
-    v1_rooms_enqueue_batch_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnqueueBatch"];
-                "application/x-www-form-urlencoded": components["schemas"]["EnqueueBatch"];
-                "multipart/form-data": components["schemas"]["EnqueueBatch"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Room"];
-                };
-            };
-        };
-    };
     v1_rooms_me_retrieve: {
         parameters: {
             query?: never;
@@ -1041,6 +994,31 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_play_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Play"];
+                "application/x-www-form-urlencoded": components["schemas"]["Play"];
+                "multipart/form-data": components["schemas"]["Play"];
+            };
+        };
         responses: {
             200: {
                 headers: {
@@ -1064,6 +1042,31 @@ export interface operations {
                 "application/json": components["schemas"]["PlayPlaylist"];
                 "application/x-www-form-urlencoded": components["schemas"]["PlayPlaylist"];
                 "multipart/form-data": components["schemas"]["PlayPlaylist"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_queue_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Queue"];
+                "application/x-www-form-urlencoded": components["schemas"]["Queue"];
+                "multipart/form-data": components["schemas"]["Queue"];
             };
         };
         responses: {

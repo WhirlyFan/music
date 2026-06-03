@@ -1,21 +1,27 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { useMatchTrack } from '@/lib/query/catalog'
-import { useAdvance, useClearQueue, useRoom, useSaveQueueAsPlaylist } from '@/lib/query/rooms'
+import {
+  type QueueItem,
+  useAdvance,
+  useClearQueue,
+  useRoom,
+  useSaveQueueAsPlaylist,
+} from '@/lib/query/rooms'
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 
 /**
  * Persistent now-playing bar (mounted in the root layout, so playback + the
- * queue survive navigation). Reads the room — the DB-backed queue — as the
- * single source of truth.
+ * queue survive navigation). Reads the room — the DB-backed two-layer queue —
+ * as the single source of truth.
  *
  * Playback path: the current track's audio is matched on demand (lazy) and
  * streamed ad-free through the backend proxy via a plain <audio> element. When
- * a track ends we advance to the next queued item.
+ * a track ends we advance to the next track (user queue first, then context).
  */
 export function NowPlayingBar() {
   const { data: session } = useSession()
@@ -28,10 +34,8 @@ export function NowPlayingBar() {
   const save = useSaveQueueAsPlaylist()
   const [queueOpen, setQueueOpen] = useState(false)
 
-  const current = useMemo(() => room?.items.find((i) => i.id === room.current_item) ?? null, [room])
-  const track = current?.track ?? null
-  const source = track?.active_source ?? null
-  const matched = source?.locator_kind === 'video_id'
+  const track = room?.current ?? null
+  const matched = track?.active_source?.locator_kind === 'video_id'
 
   // Lazy match-on-play: when a new track becomes current and isn't matched yet,
   // resolve its YouTube source once. On failure, skip to the next track.
@@ -54,14 +58,16 @@ export function NowPlayingBar() {
   if (!authed || !track) return null
 
   const audioSrc = matched ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
-  const upNext = room ? room.items.filter((i) => i.position > (current?.position ?? -1)) : []
+  const queue = room?.queue ?? []
+  const context = room?.context ?? []
+  const upcoming = queue.length + context.length
 
   return (
     <div className="border-border bg-background/95 fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur">
       {queueOpen && (
-        <div className="border-border mx-auto max-h-64 max-w-5xl overflow-y-auto border-b px-6 py-3">
+        <div className="border-border mx-auto max-h-72 max-w-5xl overflow-y-auto border-b px-6 py-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-medium">Queue · {room?.items.length ?? 0}</p>
+            <p className="text-sm font-medium">Up next</p>
             <div className="flex gap-2">
               <Button
                 size="sm"
@@ -81,20 +87,15 @@ export function NowPlayingBar() {
               </Button>
             </div>
           </div>
-          <ol className="space-y-1">
-            {room?.items.map((item) => (
-              <li
-                key={item.id}
-                className={`flex items-center gap-2 rounded px-2 py-1 text-sm ${
-                  item.id === room.current_item ? 'bg-muted font-medium' : 'text-muted-foreground'
-                }`}
-              >
-                <span className="w-5 text-right tabular-nums">{item.position + 1}</span>
-                <span className="truncate">{item.track.title}</span>
-                <span className="truncate text-xs opacity-70">{item.track.primary_artist}</span>
-              </li>
-            ))}
-          </ol>
+
+          {queue.length > 0 && <QueueSection label="Next in queue" items={queue} />}
+          {context.length > 0 && (
+            <QueueSection
+              label={room?.context_label ? `Next from: ${room.context_label}` : 'Next up'}
+              items={context}
+            />
+          )}
+          {upcoming === 0 && <p className="text-muted-foreground py-2 text-sm">Nothing queued.</p>}
         </div>
       )}
 
@@ -121,15 +122,36 @@ export function NowPlayingBar() {
           size="sm"
           variant="outline"
           onClick={() => advance.mutate()}
-          aria-disabled={upNext.length === 0 || undefined}
-          disabled={upNext.length === 0}
+          aria-disabled={upcoming === 0 || undefined}
+          disabled={upcoming === 0}
         >
           Skip
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setQueueOpen((o) => !o)}>
-          Queue · {room?.items.length ?? 0}
+          Queue · {upcoming}
         </Button>
       </div>
+    </div>
+  )
+}
+
+function QueueSection({ label, items }: { label: string; items: QueueItem[] }) {
+  return (
+    <div className="mb-2">
+      <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
+        {label}
+      </p>
+      <ol className="space-y-1">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className="text-muted-foreground flex items-center gap-2 rounded px-2 py-1 text-sm"
+          >
+            <span className="truncate">{item.track.title}</span>
+            <span className="truncate text-xs opacity-70">{item.track.primary_artist}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
