@@ -14,7 +14,7 @@ from apps.users.tests.factories import UserFactory
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "applemusic_album_clipse.html"
 ALBUM_URL = "https://music.apple.com/us/album/p-o-v/1816313639"
-INGEST = "/api/v1/catalog/playlists/ingest/"
+INGEST = "/api/v1/catalog/ingest/"
 
 
 @pytest.fixture
@@ -39,42 +39,25 @@ def test_requires_auth(db):
 
 
 @pytest.mark.django_db
-def test_ingest_then_list_and_detail(client, offline):
+def test_ingest_returns_loose_tracks(client, offline):
+    # Pasting a URL yields loose tracks — no playlist is created (decoupled).
     r = client.post(INGEST, {"url": ALBUM_URL}, format="json")
     assert r.status_code == 201, r.content
     assert r.data["track_count"] == 13
-    assert len(r.data["items"]) == 13
-    assert r.data["items"][0]["track"]["title"] == "The Birds Don't Sing"
-    assert r.data["items"][0]["track"]["active_source"] is None  # not matched yet
+    assert len(r.data["tracks"]) == 13
+    assert r.data["tracks"][0]["title"] == "The Birds Don't Sing"
+    assert r.data["tracks"][0]["active_source"] is None  # not matched yet (lazy on play)
+    assert r.data["id"]  # the import id
 
-    pid = r.data["id"]
+    # No playlist materialized by the paste.
     rl = client.get("/api/v1/catalog/playlists/")
-    assert rl.status_code == 200
-    assert any(p["id"] == pid for p in rl.data["results"])
-
-    rd = client.get(f"/api/v1/catalog/playlists/{pid}/")
-    assert rd.status_code == 200 and rd.data["track_count"] == 13
+    assert rl.status_code == 200 and rl.data["results"] == []
 
 
 @pytest.mark.django_db
 def test_ingest_rejects_non_apple(client):
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/abc"}, format="json")
     assert r.status_code == 400
-
-
-@pytest.mark.django_db
-def test_match_populates_active_source(client, offline, monkeypatch):
-    pid = client.post(INGEST, {"url": ALBUM_URL}, format="json").data["id"]
-    monkeypatch.setattr(
-        match.youtube,
-        "search",
-        lambda q, n=5: [{"video_id": "VID1", "title": q, "uploader": "y", "duration_sec": 240}],
-    )
-    rm = client.post(f"/api/v1/catalog/playlists/{pid}/match/")
-    assert rm.status_code == 200 and rm.data["matched"] == 13
-
-    rd = client.get(f"/api/v1/catalog/playlists/{pid}/")
-    assert rd.data["items"][0]["track"]["active_source"]["locator"] == "VID1"
 
 
 @pytest.mark.django_db

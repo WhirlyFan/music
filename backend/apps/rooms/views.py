@@ -11,6 +11,7 @@ from apps.catalog.serializers import PlaylistSerializer
 from . import services
 from .models import QueueItem, Room
 from .serializers import (
+    EnqueueBatchSerializer,
     EnqueueSerializer,
     PlayPlaylistSerializer,
     RoomSerializer,
@@ -54,6 +55,21 @@ class RoomViewSet(viewsets.ViewSet):
         track = get_object_or_404(Track, pk=s.validated_data["track_id"])
         room = services.get_active_room(request.user)
         services.enqueue(room, track, added_by=request.user, mode=s.validated_data["mode"])
+        return self._respond(request.user)
+
+    @extend_schema(request=EnqueueBatchSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"], url_path="enqueue-batch")
+    def enqueue_batch(self, request):
+        """Play (replace) or add a batch of tracks — e.g. a pasted import."""
+        s = EnqueueBatchSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        track_ids = s.validated_data["track_ids"]
+        by_id = {str(t.id): t for t in Track.objects.filter(pk__in=track_ids)}
+        ordered = [by_id[str(tid)] for tid in track_ids if str(tid) in by_id]
+        room = services.get_active_room(request.user)
+        services.play_tracks(
+            room, ordered, added_by=request.user, replace=s.validated_data["replace"]
+        )
         return self._respond(request.user)
 
     @extend_schema(request=PlayPlaylistSerializer, responses=RoomSerializer)

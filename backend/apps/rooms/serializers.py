@@ -31,6 +31,14 @@ class EnqueueSerializer(serializers.Serializer):
     mode = serializers.ChoiceField(choices=["add", "play_next", "play_now"], default="add")
 
 
+class EnqueueBatchSerializer(serializers.Serializer):
+    """Enqueue many tracks (e.g. a pasted import). replace=True is Play (reset
+    the queue and start at the first); replace=False is Add to queue (append)."""
+
+    track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
+    replace = serializers.BooleanField(default=False)
+
+
 class PlayPlaylistSerializer(serializers.Serializer):
     playlist_id = serializers.UUIDField()
 

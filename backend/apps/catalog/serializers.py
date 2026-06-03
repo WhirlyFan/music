@@ -67,8 +67,13 @@ class IngestSerializer(serializers.Serializer):
     url = serializers.URLField()
 
 
-class MatchResultSerializer(serializers.Serializer):
-    matched = serializers.IntegerField()
+class ImportResultSerializer(serializers.Serializer):
+    """The result of a paste: loose tracks the caller can play/queue/save."""
+
+    id = serializers.UUIDField(read_only=True)  # the PlaylistImport id
+    title = serializers.CharField(read_only=True)
+    track_count = serializers.IntegerField(read_only=True)
+    tracks = TrackSerializer(many=True, read_only=True)
 
 
 class SetSourceSerializer(serializers.Serializer):

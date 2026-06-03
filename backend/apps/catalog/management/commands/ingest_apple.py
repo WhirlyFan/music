@@ -6,7 +6,7 @@ Usage (admin DB role wires up via the Makefile pattern):
 
 from django.core.management.base import BaseCommand
 
-from apps.catalog.services import ingest_apple_playlist
+from apps.catalog.services import ingest_apple
 
 
 class Command(BaseCommand):
@@ -16,10 +16,10 @@ class Command(BaseCommand):
         parser.add_argument("url", help="Apple Music playlist/album/song URL")
 
     def handle(self, *args, **options):
-        playlist = ingest_apple_playlist(options["url"])
+        result = ingest_apple(options["url"])
         self.stdout.write(
             self.style.SUCCESS(
-                f"Ingested '{playlist.title}' — {playlist.items.count()} tracks "
-                f"→ playlist {playlist.id}"
+                f"Ingested '{result['title']}' — {len(result['tracks'])} tracks "
+                f"→ import {result['import'].id}"
             )
         )

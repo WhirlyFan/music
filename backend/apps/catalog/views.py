@@ -9,15 +9,15 @@ from rest_framework.response import Response
 from . import match, streaming
 from .models import PlaybackSource, Playlist, PlaylistTrack, Track
 from .serializers import (
+    ImportResultSerializer,
     IngestSerializer,
-    MatchResultSerializer,
     PlaybackSourceSerializer,
     PlaylistDetailSerializer,
     PlaylistSerializer,
     SetSourceSerializer,
     TrackSerializer,
 )
-from .services import ingest_apple_playlist
+from .services import ingest_apple
 
 # Prefetch playlist items (ordered) + each track's playback sources in one go.
 _DETAIL_PREFETCH = [
@@ -29,8 +29,36 @@ _DETAIL_PREFETCH = [
 ]
 
 
+class IngestViewSet(viewsets.ViewSet):
+    """Paste a source URL → loose catalog Tracks (no playlist created).
+
+    The client then chooses what to do with them: play, add to queue, or save
+    as a playlist (all handled by the rooms API)."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(request=IngestSerializer, responses=ImportResultSerializer)
+    def create(self, request):
+        serializer = IngestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        url = serializer.validated_data["url"]
+        if "music.apple.com" not in url:
+            return Response(
+                {"detail": "Only Apple Music URLs are supported for now."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        result = ingest_apple(url, user=request.user)
+        data = {
+            "id": result["import"].id,
+            "title": result["title"],
+            "track_count": len(result["tracks"]),
+            "tracks": result["tracks"],
+        }
+        return Response(ImportResultSerializer(data).data, status=status.HTTP_201_CREATED)
+
+
 class PlaylistViewSet(viewsets.ReadOnlyModelViewSet):
-    """List/retrieve playlists, plus ingest + match actions."""
+    """List/retrieve owned playlists (created via save-as-playlist)."""
 
     permission_classes = [permissions.IsAuthenticated]
 
@@ -42,39 +70,6 @@ class PlaylistViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_serializer_class(self):
         return PlaylistDetailSerializer if self.action == "retrieve" else PlaylistSerializer
-
-    def _detail_response(self, playlist, status_code=status.HTTP_200_OK):
-        playlist = (
-            Playlist.objects.annotate(track_count=Count("items"))
-            .prefetch_related(*_DETAIL_PREFETCH)
-            .get(pk=playlist.pk)
-        )
-        return Response(PlaylistDetailSerializer(playlist).data, status=status_code)
-
-    @extend_schema(request=IngestSerializer, responses=PlaylistDetailSerializer)
-    @action(detail=False, methods=["post"])
-    def ingest(self, request):
-        serializer = IngestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        url = serializer.validated_data["url"]
-        if "music.apple.com" not in url:
-            return Response(
-                {"detail": "Only Apple Music URLs are supported for now."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        playlist = ingest_apple_playlist(url, user=request.user)
-        return self._detail_response(playlist, status.HTTP_201_CREATED)
-
-    @extend_schema(request=None, responses=MatchResultSerializer)
-    @action(detail=True, methods=["post"])
-    def match(self, request, pk=None):
-        """Resolve YouTube playback sources for this playlist's unmatched tracks."""
-        playlist = get_object_or_404(Playlist, pk=pk)
-        matched = 0
-        for item in playlist.items.select_related("track"):
-            if match.match_track_to_youtube(item.track):
-                matched += 1
-        return Response({"matched": matched})
 
 
 class TrackViewSet(viewsets.ReadOnlyModelViewSet):

@@ -49,6 +49,32 @@ def test_enqueue_play_now_sets_now_playing(client):
 
 
 @pytest.mark.django_db
+def test_enqueue_batch_play_then_add(client):
+    api, _ = client
+    a, b, c = TrackFactory(), TrackFactory(), TrackFactory()
+
+    # Play (replace): resets queue, starts at the first track.
+    r = api.post(
+        "/api/v1/rooms/enqueue-batch/",
+        {"track_ids": [str(a.id), str(b.id)], "replace": True},
+        format="json",
+    )
+    assert r.status_code == 200
+    assert len(r.data["items"]) == 2
+    assert r.data["current_item"] == str(r.data["items"][0]["id"])
+    assert r.data["is_playing"] is True
+
+    # Add to queue (append): does not disturb now-playing.
+    r = api.post(
+        "/api/v1/rooms/enqueue-batch/",
+        {"track_ids": [str(c.id)], "replace": False},
+        format="json",
+    )
+    assert len(r.data["items"]) == 3
+    assert r.data["current_item"] == str(r.data["items"][0]["id"])
+
+
+@pytest.mark.django_db
 def test_play_playlist_then_save_as_playlist(client):
     api, user = client
     playlist = PlaylistFactory(created_by=user)

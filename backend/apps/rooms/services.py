@@ -69,16 +69,16 @@ def clear_queue(room: Room) -> None:
 
 
 @transaction.atomic
-def play_playlist(room: Room, playlist, *, added_by=None, replace: bool = True) -> int:
-    """Load a playlist's tracks into the queue; if replace, reset the queue and
-    start at the first track."""
+def play_tracks(room: Room, tracks, *, added_by=None, replace: bool = True) -> int:
+    """Enqueue a batch of tracks (in order). If replace, reset the queue and
+    start at the first track (Play); otherwise append (Add to queue)."""
     if replace:
         clear_queue(room)
     first = None
     count = 0
-    for pt in playlist.items.select_related("track").order_by("position"):
+    for track in tracks:
         item = QueueItem.objects.create(
-            room=room, track=pt.track, position=_next_position(room), added_by=added_by
+            room=room, track=track, position=_next_position(room), added_by=added_by
         )
         first = first or item
         count += 1
@@ -86,6 +86,12 @@ def play_playlist(room: Room, playlist, *, added_by=None, replace: bool = True) 
         playback, _ = PlaybackState.objects.get_or_create(room=room)
         _set_current(playback, first)
     return count
+
+
+def play_playlist(room: Room, playlist, *, added_by=None, replace: bool = True) -> int:
+    """Load a playlist's tracks into the queue (see `play_tracks`)."""
+    tracks = [pt.track for pt in playlist.items.select_related("track").order_by("position")]
+    return play_tracks(room, tracks, added_by=added_by, replace=replace)
 
 
 @transaction.atomic

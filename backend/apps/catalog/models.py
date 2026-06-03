@@ -257,15 +257,18 @@ class PlaylistTrack(BaseModel):
 
 
 class PlaylistImport(BaseModel):
-    """Provenance: a point-in-time snapshot of one paste/ingest into a playlist
-    (created_at = import time)."""
+    """Provenance: a point-in-time snapshot of one paste/ingest (created_at =
+    import time). `playlist` is null for a loose paste (the default flow); it is
+    set only when an import is bound to an owned playlist."""
 
     class Status(models.TextChoices):
         COMPLETED = "completed", "Completed"
         PARTIAL = "partial", "Partial"
         FAILED = "failed", "Failed"
 
-    playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE, related_name="imports")
+    playlist = models.ForeignKey(
+        Playlist, on_delete=models.CASCADE, null=True, blank=True, related_name="imports"
+    )
     source = models.ForeignKey(Source, on_delete=models.PROTECT, related_name="imports")
     source_url = models.TextField()
     source_external_id = models.CharField(max_length=255, blank=True)
