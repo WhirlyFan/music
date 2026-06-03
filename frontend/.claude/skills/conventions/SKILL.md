@@ -34,7 +34,7 @@ Core quick-reference for the **Vite + React 19** frontend (`frontend/`). Not Nex
 | Styled markup | shadcn/ui (`components/ui/`) | HTML + Tailwind; you own the code |
 | Variant logic | CVA | No raw Tailwind for primitives |
 | Class merging | `cn()` = `twMerge(clsx(...))` | Always wrap so consumer overrides win |
-| User-facing errors | `sonner` (`toast.error(...)`) | Telemetry is `@sentry/react`, opt-in via DSN env — no PostHog |
+| User-facing errors | `sonner` (`toast.error(...)`) | Render errors bubble to `RootErrorBoundary`; `@sentry/react` is planned (docs) but not yet installed — no PostHog |
 | Motion | CSS + `--ease-*` / `animate-*` tokens | No `framer-motion`. See `frontend-motion` |
 
 The API client (`@/lib/api/client.ts`) throws `ApiError` on non-2xx; types are generated from the backend OpenAPI schema via `pnpm gen:api` — **don't hand-edit `src/lib/api/types.ts`**.
@@ -45,7 +45,7 @@ Direct deps in `package.json` are **exact-pinned** (no `^`/`~`). `.npmrc` sets `
 
 ## Lint discipline
 
-`.githooks/pre-push` runs ESLint + `tsc` on push. **Fix every lint error in files you touch, even pre-existing ones** — and fix the underlying issue, don't silence it (`// eslint-disable`, `_`-prefix, `?? ''`). `no-console` is an **error** — surface problems to the user via a `toast` and let real errors throw (Sentry captures uncaught errors when its DSN is set).
+`.githooks/pre-push` runs ESLint + `tsc` on push. **Fix every lint error in files you touch, even pre-existing ones** — and fix the underlying issue, don't silence it (`// eslint-disable`, `_`-prefix, `?? ''`). `no-console` is an **error** — surface problems to the user via a `toast` and let real errors throw (uncaught render errors hit `RootErrorBoundary`).
 
 ## React Compiler (enabled)
 
