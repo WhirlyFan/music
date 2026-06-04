@@ -28,7 +28,7 @@ SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
 # SPOTIFY_TOKEN_KEY is the Fernet key that encrypts it at rest (Doppler-only; without
 # it a DB leak is just ciphertext). SPOTIFY_REDIRECT_URI must match the Spotify app.
 SPOTIFY_TOKEN_KEY = env("SPOTIFY_TOKEN_KEY", default="")
-SPOTIFY_REDIRECT_URI = env("SPOTIFY_REDIRECT_URI", default="http://127.0.0.1:8000/spotify/callback")
+SPOTIFY_REDIRECT_URI = env("SPOTIFY_REDIRECT_URI", default="http://127.0.0.1:8975/spotify/callback")
 
 # Base URL of the bgutil PO-token provider sidecar (bgutil-ytdlp-pot-provider).
 # yt-dlp fetches YouTube proof-of-origin tokens from it to avoid throttling under

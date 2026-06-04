@@ -29,32 +29,54 @@ _SCOPE = ""  # public playlist reads need no scopes
 class Command(BaseCommand):
     help = "One-time: authorize a Spotify account; save its refresh token (encrypted) to the DB."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--code-url",
+            help="Full URL you were redirected to (contains ?code=). Omit for step 1 (prints the auth URL).",
+        )
+        parser.add_argument(
+            "--redirect-uri",
+            help="Override SPOTIFY_REDIRECT_URI for this run (only used during authorize). "
+            "Must match the URI registered in the Spotify app, and be the SAME in both steps.",
+        )
+
     def handle(self, *args, **options):
         cid = settings.SPOTIFY_CLIENT_ID
         secret = settings.SPOTIFY_CLIENT_SECRET
-        redirect = settings.SPOTIFY_REDIRECT_URI
+        redirect = options.get("redirect_uri") or settings.SPOTIFY_REDIRECT_URI
         if not (cid and secret):
             raise CommandError("Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET (Doppler) first.")
 
-        auth_url = f"{_AUTH_URL}?" + urllib.parse.urlencode(
-            {"client_id": cid, "response_type": "code", "redirect_uri": redirect, "scope": _SCOPE}
-        )
-        self.stdout.write("")
-        self.stdout.write("1) Make sure this redirect URI is registered in your Spotify app:")
-        self.stdout.write(self.style.WARNING(f"   {redirect}"))
-        self.stdout.write("")
-        self.stdout.write("2) Open this URL, log in with the DEDICATED account, and click Agree:")
-        self.stdout.write(self.style.HTTP_INFO(auth_url))
-        self.stdout.write("")
-        self.stdout.write(
-            f"3) Your browser lands on {redirect}?code=... (an error/404 page is fine — "
-            "the code is in the address bar)."
-        )
-        redirected = input("4) Paste the FULL URL you were redirected to: ").strip()
+        # Two non-interactive steps (no stdin prompt, so it's scriptable):
+        #   step 1 (no --code-url): print the auth URL to open + approve;
+        #   step 2 (--code-url "…"): exchange the redirected URL and save the token.
+        code_url = options.get("code_url")
+        if not code_url:
+            auth_url = f"{_AUTH_URL}?" + urllib.parse.urlencode(
+                {
+                    "client_id": cid,
+                    "response_type": "code",
+                    "redirect_uri": redirect,
+                    "scope": _SCOPE,
+                }
+            )
+            self.stdout.write("")
+            self.stdout.write(f"Redirect URI (must be registered in the Spotify app): {redirect}")
+            self.stdout.write("")
+            self.stdout.write("Open this URL, log in as the DEDICATED account, click Agree:")
+            self.stdout.write(self.style.HTTP_INFO(auth_url))
+            self.stdout.write("")
+            self.stdout.write(
+                f"You'll land on {redirect}?code=... (a 404/error page is fine). Then re-run:"
+            )
+            self.stdout.write(
+                '  manage.py spotify_authorize --code-url "<the FULL redirected URL>"'
+            )
+            return
 
-        code = urllib.parse.parse_qs(urllib.parse.urlparse(redirected).query).get("code", [None])[0]
+        code = urllib.parse.parse_qs(urllib.parse.urlparse(code_url).query).get("code", [None])[0]
         if not code:
-            raise CommandError("No ?code= found in that URL — paste the whole redirected URL.")
+            raise CommandError("No ?code= found in that URL — pass the whole redirected URL.")
 
         auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
         data = urllib.parse.urlencode(
