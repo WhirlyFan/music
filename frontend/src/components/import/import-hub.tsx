@@ -1,9 +1,8 @@
-import { Search } from 'lucide-react'
+import { Music, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { SongRow } from '@/components/track/song-row'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +13,7 @@ import { promptText } from '@/lib/overlay'
 import type { ImportResult } from '@/lib/query/catalog'
 import { useCreatePlaylist, useIngest, useSongSearch } from '@/lib/query/catalog'
 import { usePlay, usePlayNow, useQueueTracks } from '@/lib/query/rooms'
+import { cn } from '@/lib/utils'
 
 const urlSchema = z.string().url()
 
@@ -26,10 +26,11 @@ function ingestErrorMessage(error: unknown): string | null {
 }
 
 /**
- * The home hub: one centered box that does both. Paste a Spotify / Apple Music /
- * YouTube link → import it. Type anything else → search songs (Spotify metadata,
- * YouTube audio on play) and pick what to play. URL imports fire on submit (you
- * might still be pasting); text searches run live as you type (React Query caches).
+ * The home hub: one box that does both. Paste a Spotify / Apple Music / YouTube
+ * link → import it; type anything else → search songs. Google-style: it starts as
+ * a centered hero (heading + box), and once you search or import it moves up into
+ * a results/list view. Searching happens on submit (Enter or the button), not as
+ * you type — React Query caches by term, so re-searching is free.
  */
 export function ImportHub() {
   const ingest = useIngest()
@@ -37,23 +38,18 @@ export function ImportHub() {
   const queueTracks = useQueueTracks()
   const [imported, setImported] = useState<ImportResult | null>(null)
   const [text, setText] = useState('')
+  const [q, setQ] = useState('') // the submitted search term (drives the query)
   const fieldRef = useRef<HTMLDivElement>(null)
 
   const trimmed = text.trim()
   const isUrl = urlSchema.safeParse(trimmed).success
-
-  // Debounced query that drives the live search; Enter promotes it immediately.
-  const [q, setQ] = useState('')
-  useEffect(() => {
-    const id = setTimeout(() => setQ(trimmed), 350)
-    return () => clearTimeout(id)
-  }, [trimmed])
-  // Don't search a URL (that's an import) — only free text.
-  const search = useSongSearch(isUrl ? '' : q)
+  const search = useSongSearch(q)
+  const hasResults = q.length > 0 || imported !== null // → move to the list view
 
   async function doImport() {
     try {
       const result = await ingest.mutateAsync(trimmed)
+      setQ('')
       setImported(result) // a capped-import warning (result.note) renders in the result view
       setText('')
     } catch (err) {
@@ -66,7 +62,8 @@ export function ImportHub() {
     if (isUrl) {
       doImport()
     } else if (trimmed) {
-      setQ(trimmed) // search now (don't wait for the debounce)
+      setImported(null)
+      setQ(trimmed)
     } else {
       // Empty submit → wiggle the field (the placeholder says what to do).
       const el = fieldRef.current
@@ -81,22 +78,28 @@ export function ImportHub() {
   const queue = (id: string) =>
     queueTracks.mutate({ trackIds: [id] }, { onSuccess: () => toast.success('Added to queue.') })
 
-  const searching = !isUrl && trimmed.length > 0
-
   return (
-    <div className="space-y-8">
-      <section className="mx-auto flex max-w-xl flex-col items-center pt-10 text-center sm:pt-16">
-        <h1 className="shimmer-text text-3xl font-semibold tracking-tight">
-          What do you want to hear?
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm">
-          Search for a song, or paste a Spotify, Apple Music, or YouTube link.
-        </p>
+    <div className={cn('flex flex-col', hasResults ? 'gap-6 pt-2' : 'min-h-[60vh] justify-center gap-8')}>
+      <section className="mx-auto w-full max-w-xl text-center">
+        {!hasResults && (
+          <>
+            <h1 className="shimmer-text text-3xl font-semibold tracking-tight">
+              What do you want to hear?
+            </h1>
+            <p className="text-muted-foreground mt-2 text-sm">
+              Search for a song, or paste a Spotify, Apple Music, or YouTube link.
+            </p>
+          </>
+        )}
 
-        <form onSubmit={onSubmit} aria-label="Search or import" className="mt-6 w-full space-y-3">
+        <form
+          onSubmit={onSubmit}
+          aria-label="Search or import"
+          className={cn('flex w-full items-center gap-2', !hasResults && 'mt-6')}
+        >
           <div
             ref={fieldRef}
-            className="relative"
+            className="relative flex-1"
             onAnimationEnd={(e) => e.currentTarget.classList.remove('animate-wiggle')}
           >
             <Search
@@ -113,23 +116,19 @@ export function ImportHub() {
               className="h-12 rounded-full pr-4 pl-11 text-base shadow-sm"
             />
           </div>
-          {/* The Import button appears only once the input is a real link — plain
-              text searches live below, no button needed. */}
-          {isUrl && (
-            <RainbowButton
-              type="submit"
-              size="lg"
-              aria-busy={ingest.isPending || undefined}
-              aria-disabled={ingest.isPending || undefined}
-              className={`rounded-full ${ingest.isPending ? 'pointer-events-none opacity-60' : ''}`}
-            >
-              {ingest.isPending ? 'Importing…' : 'Import'}
-            </RainbowButton>
-          )}
+          {/* One button, labelled for what the input is: a link → Import, text → Search. */}
+          <RainbowButton
+            type="submit"
+            size="lg"
+            aria-busy={ingest.isPending || undefined}
+            className={cn('h-12 shrink-0 rounded-full', ingest.isPending && 'pointer-events-none opacity-60')}
+          >
+            {ingest.isPending ? 'Importing…' : isUrl ? 'Import' : 'Search'}
+          </RainbowButton>
         </form>
       </section>
 
-      {searching ? (
+      {q.length > 0 ? (
         <SearchResults search={search} q={q} onPlay={playNow.mutate} onQueue={queue} />
       ) : (
         imported && <ImportResultView result={imported} />
@@ -138,7 +137,7 @@ export function ImportHub() {
   )
 }
 
-/** Live song-search results for the home box (free-text, not a link). */
+/** Song-search results for the home box (free text, not a link). */
 function SearchResults({
   search,
   q,
@@ -150,18 +149,18 @@ function SearchResults({
   onPlay: (id: string) => void
   onQueue: (id: string) => void
 }) {
-  // Toast + nothing-inline on failure (e.g. Spotify down/rate-limited).
+  // Toast on failure (e.g. Spotify down/rate-limited) — no inline red text.
   useEffect(() => {
     if (search.isError)
       toast.error(ingestErrorMessage(search.error) ?? 'Search failed.', { id: 'song-search-error' })
   }, [search.isError, search.error])
 
   const results = search.data ?? []
-  const showSkeleton = q.length > 0 && search.isLoading
-  const empty = q.length > 0 && !search.isPending && !search.isError && results.length === 0
+  const showSkeleton = search.isLoading
+  const empty = !search.isPending && !search.isError && results.length === 0
 
   return (
-    <section aria-label="Search results" className="mx-auto max-w-2xl space-y-2 pb-28">
+    <section aria-label="Search results" className="mx-auto w-full max-w-2xl space-y-2 pb-28">
       {empty && <p className="text-muted-foreground text-center text-sm">No songs match “{q}”.</p>}
       <SkeletonZone active={showSkeleton}>
         <ol className="space-y-2">
@@ -178,7 +177,9 @@ function SearchResults({
   )
 }
 
-/** The just-imported tracks, with play / queue verbs (no playlist created). */
+/** Just-imported tracks, presented like a playlist detail page: cover + title +
+ *  count + actions, then the track rows (shared SongRow). No playlist is created
+ *  until "Save as playlist". */
 function ImportResultView({ result }: { result: ImportResult }) {
   const play = usePlay()
   const playNow = usePlayNow()
@@ -186,8 +187,10 @@ function ImportResultView({ result }: { result: ImportResult }) {
   const createPlaylist = useCreatePlaylist()
   const trackIds = result.tracks.map((t) => t.id)
 
+  const queue = (id: string) =>
+    queueTracks.mutate({ trackIds: [id] }, { onSuccess: () => toast.success('Added to queue.') })
+
   async function saveAsPlaylist() {
-    // Prompt for a name, pre-filled with the source's title (editable / optional).
     const name = await promptText({
       title: 'Save as playlist',
       label: 'Playlist name',
@@ -202,38 +205,42 @@ function ImportResultView({ result }: { result: ImportResult }) {
   }
 
   return (
-    <section
-      aria-labelledby="import-result-heading"
-      className="border-border mx-auto max-w-2xl space-y-3 rounded-lg border p-4"
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-        <div>
-          <h2 id="import-result-heading" className="font-medium">
+    <section aria-labelledby="import-result-heading" className="mx-auto w-full max-w-2xl space-y-4 pb-28">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+        <div className="bg-muted size-28 shrink-0 overflow-hidden rounded-lg shadow-md sm:size-36">
+          {result.cover ? (
+            <img src={result.cover} alt="" className="size-full object-cover" />
+          ) : (
+            <div className="grid size-full place-items-center">
+              <Music className="text-muted-foreground size-8" aria-hidden />
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Imported</p>
+          <h2 id="import-result-heading" className="truncate text-2xl font-semibold tracking-tight">
             {result.title}
           </h2>
-          <p className="text-muted-foreground text-sm">{result.track_count} tracks imported</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => play.mutate({ trackIds, label: result.title })}
-          >
-            Play all
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full sm:w-auto"
-            onClick={() =>
-              queueTracks.mutate({ trackIds }, { onSuccess: () => toast.success('Added to queue.') })
-            }
-          >
-            Add all to queue
-          </Button>
-          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={saveAsPlaylist}>
-            Save as playlist
-          </Button>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {result.track_count} track{result.track_count === 1 ? '' : 's'}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => play.mutate({ trackIds, label: result.title })}>
+              Play all
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                queueTracks.mutate({ trackIds }, { onSuccess: () => toast.success('Added to queue.') })
+              }
+            >
+              Add all to queue
+            </Button>
+            <Button size="sm" variant="outline" onClick={saveAsPlaylist}>
+              Save as playlist
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -247,39 +254,8 @@ function ImportResultView({ result }: { result: ImportResult }) {
       )}
 
       <ol className="space-y-2">
-        {result.tracks.map((track, i) => (
-          <li key={track.id} className="border-border flex items-center gap-3 rounded-lg border p-3">
-            <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
-              {i + 1}
-            </span>
-            <TrackArtwork track={track} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                {track.is_explicit && <ExplicitBadge />}
-                <p className="truncate font-medium">{track.title}</p>
-              </div>
-              <p className="text-muted-foreground truncate text-sm">
-                {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" onClick={() => playNow.mutate(track.id)}>
-                Play
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  queueTracks.mutate(
-                    { trackIds: [track.id] },
-                    { onSuccess: () => toast.success('Added to queue.') },
-                  )
-                }
-              >
-                Add
-              </Button>
-            </div>
-          </li>
+        {result.tracks.map((track) => (
+          <SongRow key={track.id} track={track} onPlay={playNow.mutate} onQueue={queue} />
         ))}
       </ol>
     </section>
