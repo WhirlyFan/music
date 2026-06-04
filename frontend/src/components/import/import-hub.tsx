@@ -116,15 +116,22 @@ export function ImportHub() {
               className="h-12 rounded-full pr-4 pl-11 text-base shadow-sm"
             />
           </div>
-          {/* One button, labelled for what the input is: a link → Import, text → Search. */}
-          <RainbowButton
-            type="submit"
-            size="lg"
-            aria-busy={ingest.isPending || undefined}
-            className={cn('h-12 shrink-0 rounded-full', ingest.isPending && 'pointer-events-none opacity-60')}
-          >
-            {ingest.isPending ? 'Importing…' : isUrl ? 'Import' : 'Search'}
-          </RainbowButton>
+          {/* A button only for the explicit action — importing a pasted link.
+              Searching is just Enter (it's a search box; a "Search" button would be
+              redundant). */}
+          {isUrl && (
+            <RainbowButton
+              type="submit"
+              size="lg"
+              aria-busy={ingest.isPending || undefined}
+              className={cn(
+                'h-12 shrink-0 rounded-full',
+                ingest.isPending && 'pointer-events-none opacity-60',
+              )}
+            >
+              {ingest.isPending ? 'Importing…' : 'Import'}
+            </RainbowButton>
+          )}
         </form>
       </section>
 

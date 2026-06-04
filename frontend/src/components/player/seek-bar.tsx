@@ -1,10 +1,14 @@
 import { useState } from 'react'
 
 function fmt(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '0:00'
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${s.toString().padStart(2, '0')}`
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const total = Math.floor(seconds)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  // Show hours for long videos (a 24h stream would read as 1477 *minutes* otherwise).
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
 /**
@@ -34,7 +38,7 @@ export function SeekBar({
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-muted-foreground w-9 text-right text-[11px] tabular-nums">
+      <span className="text-muted-foreground min-w-9 text-right text-[11px] tabular-nums">
         {fmt(value)}
       </span>
       <input
@@ -49,7 +53,7 @@ export function SeekBar({
         aria-label="Seek"
         className="accent-primary h-1 flex-1 cursor-pointer"
       />
-      <span className="text-muted-foreground w-9 text-[11px] tabular-nums">{fmt(duration)}</span>
+      <span className="text-muted-foreground min-w-9 text-[11px] tabular-nums">{fmt(duration)}</span>
     </div>
   )
 }
