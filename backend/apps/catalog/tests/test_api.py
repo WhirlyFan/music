@@ -437,15 +437,17 @@ def test_playlists_scoped_to_owner(client):
 
 
 @pytest.mark.django_db
-def test_playlist_search_by_title_and_song(client):
+def test_playlist_search_by_title_only(client):
+    # The playlists list searches playlist titles only; searching within a
+    # playlist's songs is the detail page's job (test_playlist_tracks_server_side_search).
     _make_playlist(
         client, "Jazz Vibes", [TrackFactory(title="Blue Train", primary_artist="John Coltrane")]
     )
     _make_playlist(client, "Rock", [TrackFactory(title="Smoke", primary_artist="Deep Purple")])
     by_title = client.get(PLAYLISTS, {"search": "jazz"}).data["results"]
     assert [p["title"] for p in by_title] == ["Jazz Vibes"]
-    by_song = client.get(PLAYLISTS, {"search": "coltrane"}).data["results"]
-    assert [p["title"] for p in by_song] == ["Jazz Vibes"]  # matched a contained song
+    # A contained song's artist does NOT surface the playlist here.
+    assert client.get(PLAYLISTS, {"search": "coltrane"}).data["results"] == []
     assert client.get(PLAYLISTS, {"search": "zzzznope"}).data["results"] == []
 
 

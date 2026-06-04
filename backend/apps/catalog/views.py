@@ -82,10 +82,10 @@ class PlaylistViewSet(
     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT)."""
 
     permission_classes = [permissions.IsAuthenticated]
-    # `?search=` matches a playlist by title OR by a song it contains. SearchFilter
-    # adds DISTINCT for the to-many join; Count(distinct=True) keeps track_count right.
+    # `?search=` matches a playlist by title. (Searching *within* a playlist's songs
+    # lives on the playlist detail page's track search, not here.)
     filter_backends = [filters.SearchFilter]
-    search_fields = ["title", "items__track__title", "items__track__primary_artist"]
+    search_fields = ["title"]
 
     def get_queryset(self):
         qs = (
@@ -124,7 +124,10 @@ class PlaylistViewSet(
         tracks here so opening a long playlist doesn't inline every track.
         `?search=` narrows to tracks whose title or artist matches (server-side).
         """
-        playlist = self.get_object()
+        # Fetch via get_queryset (owner-scoped) but NOT self.get_object(), which runs
+        # filter_queryset — the title SearchFilter would 404 the playlist whenever a
+        # track `?search=` doesn't also match the playlist's title.
+        playlist = get_object_or_404(self.get_queryset(), pk=pk)
         qs = (
             playlist.items.select_related("track")
             .prefetch_related("track__playback_sources")

@@ -76,7 +76,7 @@ function PlaylistsPage() {
           <Input
             type="search"
             aria-label="Search your playlists"
-            placeholder="Search playlists and songs"
+            placeholder="Search playlists"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="bg-background/80 h-12 rounded-full pr-4 pl-11 shadow-lg backdrop-blur"

@@ -21,9 +21,9 @@ export type ImportResult = components['schemas']['ImportResult']
 export type PlaylistUpdate = components['schemas']['PlaylistUpdate']
 
 /**
- * Paginated playlists (25/page), with optional server-side search. `search`
- * matches a playlist by title OR by a song it contains; it's part of the query
- * key so each term is its own infinite list.
+ * Paginated playlists (25/page), with optional server-side search over playlist
+ * titles (searching within a playlist's songs is the detail page's job). `search`
+ * is part of the query key so each term is its own infinite list.
  */
 export function useInfinitePlaylists(search = '') {
   const q = search.trim()

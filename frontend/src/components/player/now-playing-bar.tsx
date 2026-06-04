@@ -221,7 +221,7 @@ export function NowPlayingBar() {
           queueOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
-        <div ref={queuePanelRef} className="overflow-hidden">
+        <div ref={queuePanelRef} className="min-h-0 overflow-hidden">
           <div
             inert={!queueOpen}
             className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"

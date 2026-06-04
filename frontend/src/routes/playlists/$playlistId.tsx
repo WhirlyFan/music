@@ -164,9 +164,9 @@ function PlaylistDetailPage() {
       )}
 
       {playlist.track_count > 0 && (
-        <div className="relative max-w-md">
+        <div className="relative mx-auto w-full max-w-md">
           <Search
-            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"
             aria-hidden
           />
           <Input
@@ -175,7 +175,7 @@ function PlaylistDetailPage() {
             placeholder="Search this playlist"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
+            className="bg-background/80 h-12 rounded-full pr-4 pl-11 shadow-lg backdrop-blur"
           />
         </div>
       )}
