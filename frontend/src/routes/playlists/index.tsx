@@ -8,6 +8,7 @@ import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { useDeletePlaylist, useInfinitePlaylists } from '@/lib/query/catalog'
 import { useRoom } from '@/lib/query/rooms'
+import { usePlayerUi } from '@/lib/query/ui'
 
 export const Route = createFileRoute('/playlists/')({
   component: PlaylistsPage,
@@ -31,8 +32,11 @@ function PlaylistsPage() {
   const playlists = useInfinitePlaylists(q)
   const del = useDeletePlaylist()
   const { data: room } = useRoom()
-  // The search pill stacks above the player pill when something's playing.
+  const { queueOpen } = usePlayerUi()
+  // The search pill stacks above the player pill — and higher still when the
+  // queue panel is open above the player.
   const playerShown = Boolean(room?.current)
+  const pillBottom = playerShown && queueOpen ? 'bottom-[22rem]' : playerShown ? 'bottom-24' : 'bottom-4'
 
   // The wall tiles a finite pool, so the first page is plenty — no scroll paging.
   const pool = playlists.data?.pages[0]?.results ?? []
@@ -68,9 +72,7 @@ function PlaylistsPage() {
       {/* Floating rounded search — centered (matches the player pill), stacks
           above it when something's playing. */}
       <div
-        className={`absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 ${
-          playerShown ? 'bottom-24' : 'bottom-4'
-        }`}
+        className={`absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-300 ${pillBottom}`}
       >
         <div className="relative">
           <Search

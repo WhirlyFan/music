@@ -55,6 +55,15 @@ export const roomKeys = {
  * mutation `onSuccess` to invalidate the whole surface in one call. Individual
  * hooks read the specific entries below.
  */
+/**
+ * Ephemeral player UI state shared across components (e.g. the queue panel being
+ * open) — a client-only cache key used as a tiny store, no fetcher. Lets the
+ * player and the playlists search pill read one source of truth. See lib/query/ui.ts.
+ */
+export const uiKeys = {
+  player: () => ['ui', 'player'] as const,
+}
+
 export const mfaKeys = {
   all: () => ['mfa'] as const,
   authenticators: () => ['mfa', 'authenticators'] as const,

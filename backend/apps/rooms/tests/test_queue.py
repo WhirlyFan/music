@@ -148,7 +148,7 @@ def test_play_now_different_track_replaces_context():
 
 
 @pytest.mark.django_db
-def test_shuffle_includes_current_and_keeps_it_playing():
+def test_shuffle_includes_all_and_plays_from_top():
     user = UserFactory()
     room = services.get_active_room(user)
     playlist = PlaylistFactory(created_by=user)
@@ -157,17 +157,12 @@ def test_shuffle_includes_current_and_keeps_it_playing():
         PlaylistTrackFactory(playlist=playlist, track=t, position=i)
     services.play_playlist(room, playlist, start_track_id=tracks[2].id, added_by=user)
 
-    room.refresh_from_db()
-    cur_item = room.playback.current_item_id
-    cur_track = room.playback.current_item.track_id
-
     services.shuffle(room)
     room.refresh_from_db()
 
-    # Same row still current + same song still playing.
-    assert room.playback.current_item_id == cur_item
-    assert room.playback.current_item.track_id == cur_track
-    # The pointer follows the current track to its new position.
-    assert room.playback.context_pos == room.playback.current_item.position
+    # Spotify-style: play from the top of the freshly-shuffled order.
+    assert room.playback.context_pos == 0
+    assert room.playback.current_item.position == 0
+    assert room.playback.position_ms == 0
     # All 6 context tracks remain, positions stay a contiguous 0..5 permutation.
     assert sorted(i.position for i in _ctx(room)) == [0, 1, 2, 3, 4, 5]

@@ -137,6 +137,10 @@ not a store.
   `eslint-plugin-react-compiler` rule flags code the compiler can't optimize —
   fix those rather than memoizing around them.
 
+Full rules + the "is this really an effect?" decision tree live in the
+[`react-effects` skill](../.claude/skills/react-effects/SKILL.md) — read it before
+writing or reviewing a `useEffect`.
+
 ## Loading skeletons (colocation)
 
 Loading states use **skeletons, not spinners**. Primitives live in

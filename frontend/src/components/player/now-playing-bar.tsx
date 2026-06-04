@@ -1,4 +1,14 @@
-import { ListMusic, Pause, Play, Shuffle, SkipBack, SkipForward, Trash2, X } from 'lucide-react'
+import {
+  ListMusic,
+  Loader2,
+  Pause,
+  Play,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -10,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
+import { usePlayerUi } from '@/lib/query/ui'
 import {
   playIntent,
   type QueueItem,
@@ -55,9 +66,14 @@ export function NowPlayingBar() {
   const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  // Playback status, driven by the <audio> element's own events (DOM state):
+  // `loading` = buffering/resolving (button shows a spinner, disabled);
+  // `playing` flips on the real `playing` event so the icon matches reality.
   const [playing, setPlaying] = useState(false)
-  const [queueOpen, setQueueOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  // Queue-open lives in the Query cache (shared with the playlists search pill).
+  const { queueOpen, setQueueOpen } = usePlayerUi()
 
   // Click outside the player pill collapses the open queue panel.
   useEffect(() => {
@@ -73,38 +89,23 @@ export function NowPlayingBar() {
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
 
-  // Autoplay gate: NEVER autoplay the track restored from a previous session on
-  // load/login — only tracks the user actually starts or advances to. We arm
-  // autoplay the first time the current item *changes* after the initial
-  // hydration (any change is user-driven: play / next / jump). `prevItemId`
-  // starts undefined = "not hydrated yet"; the first real value is the restored
-  // track and is deliberately not armed. (Adjust-state-during-render pattern —
-  // not an effect — so it commits before paint with no flash.)
-  //
-  // Why state, not a ref/local: `armed` must survive the synchronous re-render
-  // that `setPrevItemId` triggers (a local would reset to false before commit),
-  // and `autoPlay` is read *during render* — reading a ref there would violate
-  // the Rules of React the compiler enforces.
-  const [prevItemId, setPrevItemId] = useState<string | null | undefined>(undefined)
+  // Autoplay gate: NEVER autoplay the track restored from a previous session —
+  // only tracks the user actually starts or advances to. `armed` drives the
+  // <audio autoPlay>. The decision (and the playIntent module flag) is handled
+  // entirely in an effect so render reads no refs / no module-mutable state
+  // (react-compiler rules — see the react-effects skill). `prevItem` is undefined
+  // until the room first loads; the first observed item is the restored one and
+  // is armed only if a deliberate play set playIntent.
   const [armed, setArmed] = useState(false)
-  if (room) {
-    if (prevItemId === undefined) {
-      setPrevItemId(itemId)
-      // First mount: autoplay only if this was a deliberate play (e.g. the
-      // player mounting *because* the user clicked a song). A track merely
-      // restored on page load leaves playIntent false → no autoplay.
-      if (playIntent.value) setArmed(true)
-    } else if (itemId !== prevItemId) {
-      setPrevItemId(itemId)
-      setArmed(true) // a post-hydration change → user-initiated → autoplay
-    }
-  }
-
-  // Consume the one-shot play intent once the new item has rendered. Mutating
-  // the module flag belongs in an effect, not render (react-compiler rule).
+  const prevItem = useRef<string | null | undefined>(undefined)
   useEffect(() => {
-    playIntent.value = false
-  }, [itemId])
+    if (!room) return
+    const firstObservation = prevItem.current === undefined
+    const changed = !firstObservation && itemId !== prevItem.current
+    prevItem.current = itemId
+    if (firstObservation ? playIntent.value : changed) setArmed(true)
+    playIntent.value = false // one-shot — consumed
+  }, [room, itemId])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
@@ -136,10 +137,6 @@ export function NowPlayingBar() {
     artAttempted.current = track.id
     refreshArtwork.mutate(track.id)
   }, [track, refreshArtwork])
-
-  // If playback ends/clears, make sure the queue panel doesn't linger open into
-  // the next thing the user plays.
-  if (!track && queueOpen) setQueueOpen(false)
 
   if (!authed || !track) return null
 
@@ -257,10 +254,17 @@ export function NowPlayingBar() {
             size="icon"
             variant="shadow"
             onClick={togglePlay}
-            aria-label={playing ? 'Pause' : 'Play'}
-            disabled={!audioSrc}
+            aria-label={loading ? 'Loading' : playing ? 'Pause' : 'Play'}
+            aria-busy={loading || undefined}
+            disabled={!audioSrc || loading}
           >
-            {playing ? <Pause className="size-5" /> : <Play className="size-5" />}
+            {loading ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : playing ? (
+              <Pause className="size-5" />
+            ) : (
+              <Play className="size-5" />
+            )}
           </Button>
           <Button
             size="icon"
@@ -304,12 +308,12 @@ export function NowPlayingBar() {
         </div>
 
         <Button
-          size="sm"
+          size="icon"
           variant="ghost"
           onClick={() => setQueueOpen((o) => !o)}
           aria-label="Toggle queue"
         >
-          <ListMusic className="mr-1 size-4" /> {upcoming}
+          <ListMusic className="size-4" />
         </Button>
       </div>
 
@@ -340,10 +344,15 @@ export function NowPlayingBar() {
           onLoadStart={() => {
             setCurrentTime(0)
             setDuration(0)
+            setLoading(true) // resolving + buffering the stream
           }}
-          onPlay={() => {
+          onWaiting={() => setLoading(true)} // re-buffering mid-track
+          onPlay={() => connectAnalyser()} // wire the visualizer on the first play gesture
+          onPlaying={() => {
+            // Real playback started — flip to "playing" exactly now so the button
+            // can't be mis-clicked during the resolve/buffer gap.
+            setLoading(false)
             setPlaying(true)
-            connectAnalyser() // wire the visualizer on first play (user gesture)
           }}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -351,6 +360,7 @@ export function NowPlayingBar() {
           onEnded={() => next.mutate()}
           onError={() => {
             // The stream failed to load (couldn't extract audio from YouTube).
+            setLoading(false)
             setPlaying(false)
             toast.error(`Couldn't load audio for “${track.title}” — try again shortly.`)
           }}
