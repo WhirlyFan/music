@@ -1,13 +1,14 @@
-"""Spotify ingest. **API-first**, preferring a one-time-authorized *user* token (a
-dedicated account; its refresh token is stored encrypted in the SpotifyAuth DB row)
-which reads full playlists Spotify now withholds from app-only tokens; it falls back
-to client-credentials. The API returns the *full* playlist (paginated) + ISRC. Only
-when the API still can't read it (no user token AND the app-only token is
-blocked/empty for that playlist) do we fall back to the public **embed scrape**
-(keyless, ~100-track cap) — the larger read is reconciled in ingest_with_meta.
+"""Spotify ingest.
 
-Playback is resolved to YouTube lazily on play either way (Spotify doesn't hand
-us a playable stream)."""
+- **Playlists** → the keyless web-player pathfinder API (`spotify_web`), which reads
+  *any* public playlist in full (the official Web API 403s other users' playlists for
+  app-only tokens since Spotify's 2024 lockdown). Falls back to the embed scrape
+  (≤100 tracks) if pathfinder ever breaks; a private playlist gets a clear message.
+- **Albums / single tracks** → the official Web API (client-credentials); these
+  aren't restricted and it carries ISRC. Embed scrape as a fallback.
+- **Search** → the official Web API (clean top-10).
+
+Playback is resolved to YouTube lazily on play (Spotify doesn't hand us a stream)."""
 
 from __future__ import annotations
 
@@ -20,6 +21,8 @@ import urllib.request
 
 from django.conf import settings
 from django.core.cache import cache
+
+from apps.catalog.ingest import spotify_web
 
 
 class SpotifyError(Exception):
@@ -57,57 +60,6 @@ def _token() -> str:
     token = body["access_token"]
     cache.set("spotify:app_token", token, max(60, body.get("expires_in", 3600) - 60))
     return token
-
-
-def _user_token() -> str | None:
-    """Access token minted from the one-time-authorized *user* refresh token (a
-    dedicated account, stored encrypted in the SpotifyAuth DB row). A user token
-    reads full playlists that the app-only token can't. The short-lived access token
-    is cached; on a rotation we persist the new refresh token. None when not set up
-    (→ caller falls back to client-credentials)."""
-    cid = settings.SPOTIFY_CLIENT_ID
-    secret = settings.SPOTIFY_CLIENT_SECRET
-    if not (cid and secret):
-        return None
-    cached = cache.get("spotify:user_token")
-    if cached:
-        return cached
-    from apps.catalog.models import SpotifyAuth  # local import: avoid app-load cycle
-
-    refresh = SpotifyAuth.get_refresh_token()
-    if not refresh:
-        return None
-    auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
-    data = urllib.parse.urlencode(
-        {"grant_type": "refresh_token", "refresh_token": refresh}
-    ).encode()
-    req = urllib.request.Request(
-        _TOKEN_URL,
-        data=data,
-        headers={
-            "Authorization": f"Basic {auth}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as r:
-            body = json.loads(r.read())
-    except urllib.error.HTTPError as e:
-        raise SpotifyError(
-            "Spotify rejected the saved login — re-run `manage.py spotify_authorize`."
-        ) from e
-    token = body["access_token"]
-    cache.set("spotify:user_token", token, max(60, body.get("expires_in", 3600) - 60))
-    rotated = body.get("refresh_token")
-    if rotated and rotated != refresh:  # Spotify rotated it → persist the new one
-        SpotifyAuth.set_refresh_token(rotated)
-    return token
-
-
-def _access_token() -> str:
-    """Prefer the authorized user token (full playlist access); else the app-only
-    client-credentials token."""
-    return _user_token() or _token()
 
 
 def _get(url_or_path: str, token: str) -> dict:
@@ -196,7 +148,7 @@ def search_tracks(query: str, limit: int = 20) -> list[dict]:
     q = query.strip()
     if not q:
         return []
-    token = _access_token()
+    token = _token()
     # Spotify caps search `limit` at 10 for our (client-credentials) token —
     # anything higher 400s with "Invalid limit" (despite the docs' max of 50).
     params = urllib.parse.urlencode({"q": q, "type": "track", "limit": max(1, min(limit, 10))})
@@ -205,12 +157,12 @@ def search_tracks(query: str, limit: int = 20) -> list[dict]:
 
 
 def _api_with_meta(kind: str, sid: str) -> dict:
-    """Full fetch via the Web API (paginated, with ISRC). Requires credentials.
+    """Full album/track fetch via the official Web API (with ISRC). Requires creds.
 
-    `partial` is True only when the API *capped* a playlist read — Spotify exposes
-    only part of its own/editorial playlists to other apps, so pagination ends with
-    fewer tracks than the playlist reports having. Albums/tracks are never partial."""
-    token = _access_token()
+    Only albums and single tracks — those aren't restricted. Playlists go through the
+    keyless pathfinder API (`spotify_web`) instead, since the Web API 403s other
+    users' playlists for app-only tokens."""
+    token = _token()
     if kind == "track":
         t = _get(f"/tracks/{sid}", token)
         return {
@@ -219,34 +171,17 @@ def _api_with_meta(kind: str, sid: str) -> dict:
             "kind": "track",
             "tracks": [_normalize(t)],
             "cover": _pick_image((t.get("album") or {}).get("images")),
-            "partial": False,
         }
-    if kind == "album":
-        album = _get(f"/albums/{sid}", token)
-        items = _paginate(album.get("tracks") or {}, token)
-        # Album-track items omit the nested album object — inject it so each track
-        # inherits the cover art + album name.
-        return {
-            "title": album.get("name") or "",
-            "external_id": sid,
-            "kind": "album",
-            "tracks": [_normalize({**it, "album": album}) for it in items],
-            "cover": _pick_image(album.get("images")),
-            "partial": False,
-        }
-    playlist = _get(f"/playlists/{sid}", token)
-    tracks_obj = playlist.get("tracks") or {}
-    total = tracks_obj.get("total")
-    tracks = [_normalize(it["track"]) for it in _paginate(tracks_obj, token) if it.get("track")]
-    # Capped if Spotify says the playlist has more than the API let us read.
-    partial = isinstance(total, int) and len(tracks) < total
+    album = _get(f"/albums/{sid}", token)
+    items = _paginate(album.get("tracks") or {}, token)
+    # Album-track items omit the nested album object — inject it so each track
+    # inherits the cover art + album name.
     return {
-        "title": playlist.get("name") or "",
+        "title": album.get("name") or "",
         "external_id": sid,
-        "kind": "playlist",
-        "tracks": tracks,
-        "cover": _pick_image(playlist.get("images")),
-        "partial": partial,
+        "kind": "album",
+        "tracks": [_normalize({**it, "album": album}) for it in items],
+        "cover": _pick_image(album.get("images")),
     }
 
 
@@ -334,26 +269,43 @@ def _scrape(kind: str, sid: str) -> dict | None:
     }
 
 
-def ingest_with_meta(url: str) -> dict:
-    """API-first. Returns {title, external_id, kind, tracks}.
+def _ingest_playlist(sid: str) -> dict:
+    """Playlists: keyless pathfinder (full, any length) → embed scrape if it breaks."""
+    try:
+        result = spotify_web.fetch_playlist(sid)
+        if result["tracks"]:
+            return result
+    except spotify_web.PlaylistNotFound as e:
+        raise SpotifyError(
+            "That playlist is private — set it to Public (or Collaborative) in "
+            "Spotify, then paste the link again."
+        ) from e
+    except spotify_web.SpotifyWebError:
+        pass  # pathfinder broke (TOTP/hash rotation) → fall back to the keyless scrape
+    scraped = _scrape("playlist", sid)
+    if scraped and scraped["tracks"]:
+        return scraped
+    raise SpotifyError("Couldn't read that Spotify playlist — make sure it's public.")
 
-    With creds, fetch the *full* list via the Web API (includes ISRC, paginates all
-    tracks). When the API gives a complete read, use it. Otherwise — it refused
-    (editorial 404), returned no tracks, or *capped* a playlist (Spotify shares only
-    part of its own/editorial playlists with apps) — fall back to the keyless embed
-    scrape, which isn't subject to that cap, and keep whichever read has more tracks.
-    No warning: we just recover as many tracks as we can."""
+
+def ingest_with_meta(url: str) -> dict:
+    """Returns {title, external_id, kind, tracks, cover}.
+
+    Playlists use the keyless pathfinder API (reads any public playlist in full),
+    falling back to the embed scrape. Albums/tracks use the official Web API (full +
+    ISRC), also falling back to the scrape. Playback resolves to YouTube on play."""
     kind, sid = _classify(url)
+    if kind == "playlist":
+        return _ingest_playlist(sid)
     api = None
     if _configured():
         try:
             api = _api_with_meta(kind, sid)
-            if api["tracks"] and not api.get("partial"):
-                return api  # complete API read — full list + ISRC, no need to scrape
+            if api["tracks"]:
+                return api  # full Web API read (with ISRC)
         except SpotifyError:
-            api = None  # API refused (e.g. editorial 404) → scrape only
+            api = None  # API refused → scrape only
     scraped = _scrape(kind, sid)
-    # API was capped/empty/unavailable → take whichever source returned more tracks.
     best = max(
         (c for c in (api, scraped) if c and c["tracks"]),
         key=lambda c: len(c["tracks"]),

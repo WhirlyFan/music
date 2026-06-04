@@ -74,9 +74,13 @@ def test_ingest_rejects_unsupported_source(client):
 
 @pytest.mark.django_db
 def test_ingest_spotify_unreadable(client, monkeypatch):
-    # No creds (API skipped) + scrape can't read it → friendly 400, no real network.
-    from apps.catalog.ingest import spotify
+    # Pathfinder fails AND the scrape can't read it → friendly 400, no real network.
+    from apps.catalog.ingest import spotify, spotify_web
 
+    def boom(sid):
+        raise spotify_web.SpotifyWebError("pathfinder down")
+
+    monkeypatch.setattr(spotify_web, "fetch_playlist", boom)
     monkeypatch.setattr(spotify, "_scrape", lambda kind, sid: None)
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/abc"}, format="json")
     assert r.status_code == 400
@@ -84,70 +88,36 @@ def test_ingest_spotify_unreadable(client, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_spotify_user_token_db_backed_and_encrypted(monkeypatch, settings):
-    # The authorized refresh token lives encrypted in the DB; _user_token() reads it,
-    # mints + caches a short-lived access token, and never stores plaintext at rest.
-    from cryptography.fernet import Fernet
-    from django.core.cache import cache
+def test_ingest_spotify_playlist_pathfinder_full(client, monkeypatch):
+    # Playlists read in full via the keyless pathfinder API — any length, any owner.
+    from apps.catalog.ingest import spotify_web
 
-    from apps.catalog.ingest import spotify
-    from apps.catalog.models import SpotifyAuth
-
-    settings.SPOTIFY_TOKEN_KEY = Fernet.generate_key().decode()
-    settings.SPOTIFY_CLIENT_ID = "cid"
-    settings.SPOTIFY_CLIENT_SECRET = "secret"
-    cache.clear()
-
-    SpotifyAuth.set_refresh_token("rt-secret")
-    stored = SpotifyAuth.objects.get().refresh_token
-    assert stored.startswith("fernet:") and "rt-secret" not in stored  # encrypted at rest
-    assert SpotifyAuth.get_refresh_token() == "rt-secret"  # round-trips
-
-    class _Resp:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read(self):
-            return b'{"access_token": "at-xyz", "expires_in": 3600}'
-
-    monkeypatch.setattr(spotify.urllib.request, "urlopen", lambda *a, **k: _Resp())
-    assert spotify._user_token() == "at-xyz"
-    assert cache.get("spotify:user_token") == "at-xyz"
-
-
-@pytest.mark.django_db
-def test_ingest_spotify_api_first_full_list(client, monkeypatch):
-    # Creds set → API returns the full list (no cap, no note).
-    from apps.catalog.ingest import spotify
-
-    monkeypatch.setattr(spotify, "_configured", lambda: True)
+    tracks = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(150)]
     monkeypatch.setattr(
-        spotify,
-        "_api_with_meta",
-        lambda kind, sid: {
-            "title": "User PL",
+        spotify_web,
+        "fetch_playlist",
+        lambda sid: {
+            "title": "vibey coffee shop",
             "external_id": sid,
             "kind": "playlist",
-            "tracks": [{"title": "X", "artist": "Y", "duration": 1000, "isrc": "US000"}],
+            "tracks": tracks,
+            "cover": "https://img/cover",
         },
     )
-    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/userpl"}, format="json")
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/vibey"}, format="json")
     assert r.status_code == 201
-    assert r.data["track_count"] == 1
-    assert not r.data.get("note")  # full list → no advisory
+    assert r.data["track_count"] == 150  # full list (past the embed's ~100 cap)
 
 
 @pytest.mark.django_db
-def test_ingest_spotify_scrape_has_no_partial_warning(client, monkeypatch):
-    # No creds (or API refused) → keyless scrape. The scrape isn't subject to the
-    # API's per-playlist cap, so there's NO partial warning.
-    from apps.catalog.ingest import spotify
+def test_ingest_spotify_playlist_pathfinder_breaks_falls_back_to_scrape(client, monkeypatch):
+    # If pathfinder breaks (TOTP/hash rotation), fall back to the keyless embed scrape.
+    from apps.catalog.ingest import spotify, spotify_web
 
-    tracks = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(80)]
-    monkeypatch.setattr(spotify, "_configured", lambda: False)
+    def boom(sid):
+        raise spotify_web.SpotifyWebError("pathfinder down")
+
+    monkeypatch.setattr(spotify_web, "fetch_playlist", boom)
     monkeypatch.setattr(
         spotify,
         "_scrape",
@@ -155,90 +125,29 @@ def test_ingest_spotify_scrape_has_no_partial_warning(client, monkeypatch):
             "title": "Mix",
             "external_id": sid,
             "kind": "playlist",
-            "tracks": tracks,
-        },
-    )
-    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/usermade"}, format="json")
-    assert r.status_code == 201
-    assert r.data["track_count"] == 80
-    assert not r.data.get("note")  # scraped → no "couldn't read all of it" warning
-
-
-@pytest.mark.django_db
-def test_ingest_spotify_api_capped_playlist_falls_back_to_scrape(client, monkeypatch):
-    # Spotify's own/editorial playlists: the API caps the read (partial). We fall
-    # back to the keyless scrape (not subject to that cap) and keep the larger read —
-    # no warning, just more tracks.
-    from apps.catalog.ingest import spotify
-
-    monkeypatch.setattr(spotify, "_configured", lambda: True)
-    monkeypatch.setattr(
-        spotify,
-        "_api_with_meta",
-        lambda kind, sid: {
-            "title": "Today's Top Hits",
-            "external_id": sid,
-            "kind": "playlist",
-            "tracks": [
-                {"title": f"A{i}", "artist": "X", "duration": 200000, "isrc": ""} for i in range(50)
-            ],
-            "cover": "https://img/x",
-            "partial": True,
-        },
-    )
-    monkeypatch.setattr(
-        spotify,
-        "_scrape",
-        lambda kind, sid: {
-            "title": "Today's Top Hits",
-            "external_id": sid,
-            "kind": "playlist",
-            "tracks": [
-                {"title": f"B{i}", "artist": "X", "duration": 200000, "isrc": ""}
-                for i in range(100)
-            ],
-        },
-    )
-    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/37i9top"}, format="json")
-    assert r.status_code == 201
-    assert r.data["track_count"] == 100  # the scrape's larger read won
-    assert not r.data.get("note")  # no partial warning anymore
-
-
-@pytest.mark.django_db
-def test_ingest_spotify_empty_api_tracks_falls_back_to_scrape(client, monkeypatch):
-    # Spotify increasingly serves a playlist's metadata + cover but an EMPTY track
-    # list to apps (200 OK, no error). We must fall back to the keyless scrape so the
-    # import isn't "cover but no songs".
-    from apps.catalog.ingest import spotify
-
-    monkeypatch.setattr(spotify, "_configured", lambda: True)
-    monkeypatch.setattr(
-        spotify,
-        "_api_with_meta",
-        lambda kind, sid: {
-            "title": "vibey coffee shop",
-            "external_id": sid,
-            "kind": "playlist",
-            "tracks": [],  # restricted — no tracks from the API
-            "cover": "https://img/cover",
-        },
-    )
-    monkeypatch.setattr(
-        spotify,
-        "_scrape",
-        lambda kind, sid: {
-            "title": "vibey coffee shop",
-            "external_id": sid,
-            "kind": "playlist",
             "tracks": [{"title": "Locket", "artist": "Crumb", "duration": 200000, "isrc": ""}],
             "cover": "https://img/cover",
         },
     )
-    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/abc"}, format="json")
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/usermade"}, format="json")
     assert r.status_code == 201
     assert r.data["track_count"] == 1
     assert r.data["tracks"][0]["title"] == "Locket"
+
+
+@pytest.mark.django_db
+def test_ingest_spotify_private_playlist_message(client, monkeypatch):
+    # A private/deleted playlist isn't readable without the owner's session → a clear,
+    # actionable message rather than a cryptic failure.
+    from apps.catalog.ingest import spotify_web
+
+    def not_found(sid):
+        raise spotify_web.PlaylistNotFound(sid)
+
+    monkeypatch.setattr(spotify_web, "fetch_playlist", not_found)
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/priv"}, format="json")
+    assert r.status_code == 400
+    assert "private" in r.data["detail"].lower()
 
 
 @pytest.mark.django_db
@@ -391,7 +300,6 @@ def test_ingest_records_per_track_source_link(client, monkeypatch):
         "title": "M",
         "external_id": "pl",
         "kind": "playlist",
-        "partial": False,
         "tracks": [
             {
                 "title": "Z",

@@ -12,20 +12,12 @@ meant to be shared; visibility (is_public) is enforced in the app layer. Runtime
 `app_user` gets DML via ALTER DEFAULT PRIVILEGES (see postgres/init.sql).
 """
 
-from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.db import models
 from django_rls import RLSModel
 
 from apps.core.models import BaseModel
 from apps.core.rls import owner_scoped_policy, public_readable_policy
-
-
-def _token_fernet() -> Fernet | None:
-    """Fernet from SPOTIFY_TOKEN_KEY (Doppler) for encrypting the stored Spotify
-    refresh token at rest. None when unset (dev) → stored as plaintext."""
-    key = settings.SPOTIFY_TOKEN_KEY
-    return Fernet(key.encode()) if key else None
 
 
 # ---------------------------------------------------------------------------
@@ -318,54 +310,3 @@ class PlaylistImport(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.source.code} import → {self.playlist_id} ({self.track_count} tracks)"
-
-
-_ENC_PREFIX = "fernet:"  # marks an encrypted value (vs a legacy/dev plaintext one)
-
-
-class SpotifyAuth(BaseModel):
-    """The one-time-authorized Spotify *user* refresh token (one dedicated account),
-    used server-side to read full playlists the app-only token can't. Singleton —
-    one row. App-global config (NOT user data, so no RLS). Stored in the DB so it
-    survives restarts/redeploys (unlike the ephemeral cache) and can capture a
-    rotated refresh token; short-lived access tokens live in the cache, not here.
-
-    Locked down: NEVER exposed via any serializer / API / admin, never logged, and
-    encrypted at rest (Fernet, key in Doppler) — a DB dump/backup leak yields only
-    ciphertext, useless without the key. Read/write only through the methods below."""
-
-    # Encrypted ciphertext at rest (when SPOTIFY_TOKEN_KEY is set); the plaintext
-    # token never lives in a column. Access via get/set_refresh_token only.
-    refresh_token = models.TextField()
-
-    def __str__(self) -> str:  # never include the token
-        return f"SpotifyAuth(updated={self.updated_at:%Y-%m-%d})"
-
-    @classmethod
-    def get_refresh_token(cls) -> str:
-        row = cls.objects.first()
-        stored = row.refresh_token if row else ""
-        if not stored:
-            return ""
-        if stored.startswith(_ENC_PREFIX):
-            f = _token_fernet()
-            if not f:
-                return ""  # encrypted but no key configured → can't use it
-            try:
-                return f.decrypt(stored[len(_ENC_PREFIX) :].encode()).decode()
-            except InvalidToken:
-                return ""  # wrong/rotated key
-        return stored  # plaintext (dev, no key)
-
-    @classmethod
-    def set_refresh_token(cls, token: str) -> None:
-        """Upsert the single row (authorize command + rotation capture). Encrypts
-        when a key is configured."""
-        f = _token_fernet()
-        stored = f"{_ENC_PREFIX}{f.encrypt(token.encode()).decode()}" if f else token
-        row = cls.objects.first()
-        if row:
-            row.refresh_token = stored
-            row.save(update_fields=["refresh_token", "updated_at"])
-        else:
-            cls.objects.create(refresh_token=stored)
