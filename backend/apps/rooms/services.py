@@ -210,17 +210,28 @@ def remove(room: Room, item_id) -> bool:
 
 
 @transaction.atomic
+@transaction.atomic
 def shuffle(room: Room) -> None:
-    """Randomize the upcoming context (tracks after `context_pos`). History +
-    now-playing + user queue are untouched."""
+    """Shuffle the whole context — *including* the currently playing track. The
+    current track keeps playing; the context pointer follows it to its new spot,
+    so the rest of the list is randomized around it. The user queue is untouched."""
     playback, _ = PlaybackState.objects.get_or_create(room=room)
-    base = playback.context_pos if playback.context_pos is not None else -1
-    upcoming = list(_ctx(room).filter(position__gt=base))
-    positions = [i.position for i in upcoming]
+    items = list(_ctx(room))
+    if not items:
+        return
+    positions = [i.position for i in items]
     random.shuffle(positions)
-    for item, pos in zip(upcoming, positions, strict=True):
+    for item, pos in zip(items, positions, strict=True):
         item.position = pos
-    QueueItem.objects.bulk_update(upcoming, ["position"])
+    QueueItem.objects.bulk_update(items, ["position"])
+
+    # Keep the current track playing — repoint context_pos at its new position.
+    cur_id = playback.current_item_id
+    if cur_id is not None:
+        new_pos = next((i.position for i in items if i.id == cur_id), None)
+        if new_pos is not None and new_pos != playback.context_pos:
+            playback.context_pos = new_pos
+            playback.save(update_fields=["context_pos"])
 
 
 @transaction.atomic

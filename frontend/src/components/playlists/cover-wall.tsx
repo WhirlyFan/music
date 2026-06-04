@@ -128,7 +128,11 @@ export function CoverWall({
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+    // Re-run when `loading` flips: while loading we render the skeleton grid (no
+    // container), so the observer must (re)attach once the interactive tree —
+    // and its containerRef — actually mounts. Without this, a cold load directly
+    // on /playlists never measures and the wall stays empty.
+  }, [loading])
 
   // Redraw whenever the grid or the item pool changes.
   useEffect(() => {

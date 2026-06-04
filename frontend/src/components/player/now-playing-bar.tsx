@@ -11,6 +11,7 @@ import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
 import {
+  playIntent,
   type QueueItem,
   useClearQueue,
   useJump,
@@ -50,12 +51,23 @@ export function NowPlayingBar() {
   const save = useSaveQueueAsPlaylist()
 
   const audioRef = useRef<HTMLAudioElement>(null)
+  const barRef = useRef<HTMLDivElement>(null)
   const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [queueOpen, setQueueOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
+
+  // Click outside the player pill collapses the open queue panel.
+  useEffect(() => {
+    if (!queueOpen) return
+    const onDown = (e: PointerEvent) => {
+      if (barRef.current && !barRef.current.contains(e.target as Node)) setQueueOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [queueOpen])
 
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'
@@ -77,12 +89,22 @@ export function NowPlayingBar() {
   const [armed, setArmed] = useState(false)
   if (room) {
     if (prevItemId === undefined) {
-      setPrevItemId(itemId) // first load → capture, leave un-armed (no autoplay)
+      setPrevItemId(itemId)
+      // First mount: autoplay only if this was a deliberate play (e.g. the
+      // player mounting *because* the user clicked a song). A track merely
+      // restored on page load leaves playIntent false → no autoplay.
+      if (playIntent.value) setArmed(true)
     } else if (itemId !== prevItemId) {
       setPrevItemId(itemId)
       setArmed(true) // a post-hydration change → user-initiated → autoplay
     }
   }
+
+  // Consume the one-shot play intent once the new item has rendered. Mutating
+  // the module flag belongs in an effect, not render (react-compiler rule).
+  useEffect(() => {
+    playIntent.value = false
+  }, [itemId])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
@@ -114,6 +136,10 @@ export function NowPlayingBar() {
     artAttempted.current = track.id
     refreshArtwork.mutate(track.id)
   }, [track, refreshArtwork])
+
+  // If playback ends/clears, make sure the queue panel doesn't linger open into
+  // the next thing the user plays.
+  if (!track && queueOpen) setQueueOpen(false)
 
   if (!authed || !track) return null
 
@@ -154,7 +180,10 @@ export function NowPlayingBar() {
   }
 
   return (
-    <div className="border-border bg-background/90 motion-safe:animate-slide-up fixed bottom-4 left-1/2 z-40 w-[min(95%,42rem)] -translate-x-1/2 rounded-2xl border shadow-lg backdrop-blur">
+    <div
+      ref={barRef}
+      className="border-border bg-background/90 motion-safe:animate-slide-up fixed bottom-4 left-1/2 z-40 w-[min(95%,42rem)] -translate-x-1/2 rounded-2xl border shadow-lg backdrop-blur"
+    >
       {queueOpen && (
         <div className="border-border bg-background/95 motion-safe:animate-slide-up absolute inset-x-0 bottom-full mb-2 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80">
           <div className="mb-2 flex items-center justify-between">
@@ -187,7 +216,14 @@ export function NowPlayingBar() {
               >
                 Save
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => clear.mutate()}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setQueueOpen(false)
+                  clear.mutate()
+                }}
+              >
                 <Trash2 className="size-4" />
               </Button>
             </div>

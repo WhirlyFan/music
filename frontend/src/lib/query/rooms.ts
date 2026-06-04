@@ -8,6 +8,14 @@ export type Room = components['schemas']['Room']
 export type QueueItem = components['schemas']['QueueItem']
 type Playlist = components['schemas']['Playlist']
 
+/**
+ * Set by the explicit play actions (play / play-now / play-playlist) so the
+ * player autoplays even on its *first* mount — distinguishing a deliberate play
+ * from the track restored on page load (which must NOT autoplay). The player
+ * consumes (clears) it. Module-scoped so it survives the player mounting.
+ */
+export const playIntent = { value: false }
+
 /** The caller's room: now-playing + a single queue (history behind the cursor,
  *  up-next ahead). Source of truth for the player; rehydrates on load so
  *  playback survives navigation. */
@@ -32,23 +40,25 @@ function useRoomMutation<TArgs = void>(fn: (args: TArgs) => Promise<Room>) {
 /** Play one song now (clicking a track): inserts it at the cursor and plays it —
  *  does NOT pull in the surrounding list. */
 export function usePlayNow() {
-  return useRoomMutation((trackId: string) =>
-    api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } }),
-  )
+  return useRoomMutation((trackId: string) => {
+    playIntent.value = true
+    return api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } })
+  })
 }
 
 /** Replace the context with a list and play from `startIndex` (Play playlist / all). */
 export function usePlay() {
-  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) =>
-    api<Room>('/rooms/play/', {
+  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) => {
+    playIntent.value = true
+    return api<Room>('/rooms/play/', {
       method: 'POST',
       body: {
         track_ids: args.trackIds,
         start_index: args.startIndex ?? 0,
         label: args.label ?? '',
       },
-    }),
-  )
+    })
+  })
 }
 
 /**
@@ -56,12 +66,13 @@ export function usePlay() {
  * `startTrackId` when given (clicking a song row plays the playlist from there).
  */
 export function usePlayPlaylist() {
-  return useRoomMutation((args: { playlistId: string; startTrackId?: string }) =>
-    api<Room>('/rooms/play-playlist/', {
+  return useRoomMutation((args: { playlistId: string; startTrackId?: string }) => {
+    playIntent.value = true
+    return api<Room>('/rooms/play-playlist/', {
       method: 'POST',
       body: { playlist_id: args.playlistId, start_track_id: args.startTrackId },
-    }),
-  )
+    })
+  })
 }
 
 /** Add tracks to the queue (`playNext` inserts right after current). */

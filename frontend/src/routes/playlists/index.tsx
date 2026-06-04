@@ -65,9 +65,10 @@ function PlaylistsPage() {
         />
       )}
 
-      {/* Floating rounded search — stacks above the player pill when present. */}
+      {/* Floating rounded search — centered (matches the player pill), stacks
+          above it when something's playing. */}
       <div
-        className={`absolute right-4 left-4 z-10 mx-auto w-auto max-w-md sm:left-1/2 sm:w-[28rem] sm:-translate-x-1/2 ${
+        className={`absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 ${
           playerShown ? 'bottom-24' : 'bottom-4'
         }`}
       >

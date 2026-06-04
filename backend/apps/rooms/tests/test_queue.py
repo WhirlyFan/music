@@ -145,3 +145,29 @@ def test_play_now_different_track_replaces_context():
     services.play_now(room, b, added_by=user)
     ctx = room.items.filter(kind=QueueItem.Kind.CONTEXT)
     assert ctx.count() == 1 and ctx.first().track_id == b.id
+
+
+@pytest.mark.django_db
+def test_shuffle_includes_current_and_keeps_it_playing():
+    user = UserFactory()
+    room = services.get_active_room(user)
+    playlist = PlaylistFactory(created_by=user)
+    tracks = [TrackFactory() for _ in range(6)]
+    for i, t in enumerate(tracks):
+        PlaylistTrackFactory(playlist=playlist, track=t, position=i)
+    services.play_playlist(room, playlist, start_track_id=tracks[2].id, added_by=user)
+
+    room.refresh_from_db()
+    cur_item = room.playback.current_item_id
+    cur_track = room.playback.current_item.track_id
+
+    services.shuffle(room)
+    room.refresh_from_db()
+
+    # Same row still current + same song still playing.
+    assert room.playback.current_item_id == cur_item
+    assert room.playback.current_item.track_id == cur_track
+    # The pointer follows the current track to its new position.
+    assert room.playback.context_pos == room.playback.current_item.position
+    # All 6 context tracks remain, positions stay a contiguous 0..5 permutation.
+    assert sorted(i.position for i in _ctx(room)) == [0, 1, 2, 3, 4, 5]

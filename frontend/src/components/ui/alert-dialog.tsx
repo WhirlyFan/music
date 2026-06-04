@@ -1,7 +1,7 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
 import * as React from 'react'
 
-import { buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const AlertDialog = AlertDialogPrimitive.Root
@@ -99,33 +99,31 @@ function AlertDialogDescription({
   )
 }
 
+// asChild → render our <Button> so dialog actions get the same press ripple.
 function AlertDialogAction({
   className,
-  ref,
   ...props
 }: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Action>) {
   return (
-    <AlertDialogPrimitive.Action
-      ref={ref}
-      data-slot="alert-dialog-action"
-      className={cn(buttonVariants(), className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Action asChild>
+      <Button data-slot="alert-dialog-action" className={className} {...props} />
+    </AlertDialogPrimitive.Action>
   )
 }
 
 function AlertDialogCancel({
   className,
-  ref,
   ...props
 }: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Cancel>) {
   return (
-    <AlertDialogPrimitive.Cancel
-      ref={ref}
-      data-slot="alert-dialog-cancel"
-      className={cn(buttonVariants({ variant: 'outline' }), 'mt-2 sm:mt-0', className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Cancel asChild>
+      <Button
+        variant="outline"
+        data-slot="alert-dialog-cancel"
+        className={cn('mt-2 sm:mt-0', className)}
+        {...props}
+      />
+    </AlertDialogPrimitive.Cancel>
   )
 }
 

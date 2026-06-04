@@ -40,9 +40,13 @@ export function ImportHub() {
     defaultValues: { url: '' },
     validators: { onSubmit: schema },
     onSubmit: async ({ value, formApi }) => {
-      const result = await ingest.mutateAsync(value.url)
-      setImported(result) // a capped-import warning (result.note) renders in the result view
-      formApi.reset()
+      try {
+        const result = await ingest.mutateAsync(value.url)
+        setImported(result) // a capped-import warning (result.note) renders in the result view
+        formApi.reset()
+      } catch (err) {
+        toast.error(ingestErrorMessage(err) ?? 'Import failed — check the link and try again.')
+      }
     },
   })
 
@@ -100,7 +104,6 @@ export function ImportHub() {
           >
             {ingest.isPending ? 'Importing…' : 'Import'}
           </Button>
-          <FormError message={ingestErrorMessage(ingest.error)} />
         </form>
       </section>
 
@@ -148,12 +151,7 @@ function ImportResultView({ result }: { result: ImportResult }) {
           <Button
             size="sm"
             className="w-full sm:w-auto"
-            onClick={() =>
-              play.mutate(
-                { trackIds, label: result.title },
-                { onSuccess: () => toast.success('Playing.') },
-              )
-            }
+            onClick={() => play.mutate({ trackIds, label: result.title })}
           >
             Play all
           </Button>

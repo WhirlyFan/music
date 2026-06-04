@@ -122,9 +122,7 @@ function PlaylistDetailPage() {
           <div className="flex items-center gap-2">
             <Button
               disabled={!playlist.track_count}
-              onClick={() =>
-                playPlaylist.mutate({ playlistId }, { onSuccess: () => toast.success('Playing.') })
-              }
+              onClick={() => playPlaylist.mutate({ playlistId })}
             >
               Play
             </Button>
