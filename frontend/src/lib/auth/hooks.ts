@@ -23,10 +23,11 @@ export function useLogin() {
   return useMutation({
     mutationFn: ({ identifier, password }: { identifier: string; password: string }) =>
       auth.login(identifier, password),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionKeys.all() })
-      qc.invalidateQueries({ queryKey: emailKeys.all() })
-    },
+    // Flush ALL cached query data so the new user never inherits the previous
+    // user's room/queue/playlists; every query (incl. the user-scoped room)
+    // refetches fresh for this session. Mutations are untouched, so the
+    // multi-step login/MFA flow (which reads mutation responses) keeps working.
+    onSuccess: () => qc.removeQueries(),
   })
 }
 
@@ -35,10 +36,7 @@ export function useSignup() {
   return useMutation({
     mutationFn: (params: { email: string; username: string; password: string }) =>
       auth.signup(params),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionKeys.all() })
-      qc.invalidateQueries({ queryKey: emailKeys.all() })
-    },
+    onSuccess: () => qc.removeQueries(), // fresh session → flush any stale cached data
   })
 }
 
@@ -46,10 +44,9 @@ export function useLogout() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => auth.logout(),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionKeys.all() })
-      qc.invalidateQueries({ queryKey: emailKeys.all() })
-    },
+    // Flush ALL cached data on logout so nothing belonging to the user lingers in
+    // memory for whoever logs in next (room/queue, playlists, search, emails…).
+    onSuccess: () => qc.removeQueries(),
   })
 }
 
@@ -62,10 +59,7 @@ export function useMfaAuthenticate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (code: string) => auth.mfaAuthenticate(code),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionKeys.all() })
-      qc.invalidateQueries({ queryKey: emailKeys.all() })
-    },
+    onSuccess: () => qc.removeQueries(), // completes login → flush stale cache for the new session
   })
 }
 
@@ -115,10 +109,7 @@ export function useMfaTrust() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (trust: boolean) => auth.mfaTrust(trust),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: sessionKeys.all() })
-      qc.invalidateQueries({ queryKey: emailKeys.all() })
-    },
+    onSuccess: () => qc.removeQueries(), // completes login → flush stale cache for the new session
   })
 }
 
