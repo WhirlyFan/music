@@ -36,7 +36,8 @@ export const noteKeys = {
 
 export const playlistKeys = {
   all: () => ['playlists'] as const,
-  list: () => ['playlists', 'list'] as const,
+  // `search` is part of the key so each query string is its own infinite list.
+  list: (search = '') => ['playlists', 'list', search] as const,
   detail: (id: string) => ['playlists', 'detail', id] as const,
   // Paginated tracks of one playlist (useInfiniteQuery). Nested under detail so
   // invalidating the playlist refreshes both its metadata and its track pages.

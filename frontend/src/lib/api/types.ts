@@ -34,14 +34,24 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description List/retrieve owned playlists, and create a named one from track ids
-         *     (e.g. saving an import).
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
+         *
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
         get: operations["v1_catalog_playlists_list"];
         put?: never;
         /**
-         * @description List/retrieve owned playlists, and create a named one from track ids
-         *     (e.g. saving an import).
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
+         *
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
         post: operations["v1_catalog_playlists_create"];
         delete?: never;
@@ -58,12 +68,81 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description List/retrieve owned playlists, and create a named one from track ids
-         *     (e.g. saving an import).
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
+         *
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
         get: operations["v1_catalog_playlists_retrieve"];
-        put?: never;
+        /**
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
+         *
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         */
+        put: operations["v1_catalog_playlists_update"];
         post?: never;
+        /**
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
+         *
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         */
+        delete: operations["v1_catalog_playlists_destroy"];
+        options?: never;
+        head?: never;
+        /**
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
+         *
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         */
+        patch: operations["v1_catalog_playlists_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/remove-track/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Remove one track from this playlist and re-pack positions. The global
+         *     Track row is untouched — only the membership (PlaylistTrack) is dropped.
+         */
+        post: operations["v1_catalog_playlists_remove_track_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/reorder/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Move one track to an absolute position; renumber the rest 0..n-1. */
+        post: operations["v1_catalog_playlists_reorder_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -625,6 +704,12 @@ export interface components {
             /** Format: date-time */
             readonly updated_at?: string;
         };
+        /** @description Edit a playlist's own metadata (rename / describe / visibility). */
+        PatchedPlaylistUpdate: {
+            title?: string;
+            description?: string;
+            is_public?: boolean;
+        };
         /** @description Replace the context with `track_ids` and play from `start_index`. */
         Play: {
             track_ids: string[];
@@ -685,6 +770,12 @@ export interface components {
         PlaylistTrack: {
             position: number;
             readonly track: components["schemas"]["Track"];
+        };
+        /** @description Edit a playlist's own metadata (rename / describe / visibility). */
+        PlaylistUpdate: {
+            title: string;
+            description?: string;
+            is_public?: boolean;
         };
         /** @description Add tracks to the user queue. `play_next` puts them at the head. */
         Queue: {
@@ -790,6 +881,8 @@ export interface operations {
             query?: {
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description A search term. */
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -837,7 +930,6 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description A UUID string identifying this playlist. */
                 id: string;
             };
             cookie?: never;
@@ -854,15 +946,130 @@ export interface operations {
             };
         };
     };
+    v1_catalog_playlists_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlaylistUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlaylistUpdate"];
+                "multipart/form-data": components["schemas"]["PlaylistUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistUpdate"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedPlaylistUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPlaylistUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedPlaylistUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistUpdate"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_remove_track_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_reorder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_catalog_playlists_tracks_list: {
         parameters: {
             query?: {
                 /** @description A page number within the paginated result set. */
                 page?: number;
+                /** @description A search term. */
+                search?: string;
             };
             header?: never;
             path: {
-                /** @description A UUID string identifying this playlist. */
                 id: string;
             };
             cookie?: never;

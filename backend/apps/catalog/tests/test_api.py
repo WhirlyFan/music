@@ -8,8 +8,12 @@ from rest_framework.test import APIClient
 
 from apps.catalog import match, streaming
 from apps.catalog.ingest import applemusic
-from apps.catalog.models import Track
-from apps.catalog.tests.factories import PlaybackSourceFactory, TrackFactory
+from apps.catalog.models import PlaybackSource, Playlist, Track
+from apps.catalog.tests.factories import (
+    PlaybackSourceFactory,
+    PlaylistFactory,
+    TrackFactory,
+)
 from apps.users.tests.factories import UserFactory
 
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "applemusic_album_clipse.html"
@@ -359,6 +363,95 @@ def test_create_playlist_from_tracks(client):
     assert r.status_code == 201
     assert r.data["title"] == "My Mix"
     assert r.data["track_count"] == 3
+
+
+PLAYLISTS = "/api/v1/catalog/playlists/"
+
+
+def _make_playlist(client, title, tracks):
+    """Create a playlist owned by the client's user from given Track objects."""
+    r = client.post(
+        PLAYLISTS, {"title": title, "track_ids": [str(t.id) for t in tracks]}, format="json"
+    )
+    assert r.status_code == 201, r.content
+    return r.data["id"]
+
+
+@pytest.mark.django_db
+def test_playlists_scoped_to_owner(client):
+    _make_playlist(client, "Mine", [TrackFactory()])
+    PlaylistFactory(created_by=UserFactory(), title="Theirs")  # another user's
+    titles = [p["title"] for p in client.get(PLAYLISTS).data["results"]]
+    assert "Mine" in titles and "Theirs" not in titles
+
+
+@pytest.mark.django_db
+def test_playlist_search_by_title_and_song(client):
+    _make_playlist(client, "Jazz Vibes", [TrackFactory(title="Blue Train", primary_artist="John Coltrane")])
+    _make_playlist(client, "Rock", [TrackFactory(title="Smoke", primary_artist="Deep Purple")])
+    by_title = client.get(PLAYLISTS, {"search": "jazz"}).data["results"]
+    assert [p["title"] for p in by_title] == ["Jazz Vibes"]
+    by_song = client.get(PLAYLISTS, {"search": "coltrane"}).data["results"]
+    assert [p["title"] for p in by_song] == ["Jazz Vibes"]  # matched a contained song
+    assert client.get(PLAYLISTS, {"search": "zzzznope"}).data["results"] == []
+
+
+@pytest.mark.django_db
+def test_update_playlist_rename_and_visibility(client):
+    pid = _make_playlist(client, "Old", [TrackFactory()])
+    r = client.patch(f"{PLAYLISTS}{pid}/", {"title": "New", "is_public": True}, format="json")
+    assert r.status_code == 200
+    pl = Playlist.objects.get(pk=pid)
+    assert pl.title == "New" and pl.is_public is True
+
+
+@pytest.mark.django_db
+def test_cannot_edit_or_delete_others_playlist(client):
+    foreign = PlaylistFactory(created_by=UserFactory())
+    assert client.patch(f"{PLAYLISTS}{foreign.id}/", {"title": "Hijack"}, format="json").status_code == 404
+    assert client.delete(f"{PLAYLISTS}{foreign.id}/").status_code == 404
+
+
+@pytest.mark.django_db
+def test_delete_playlist_preserves_global_tracks(client):
+    t = TrackFactory()
+    PlaybackSourceFactory(track=t, locator="vid123")
+    pid = _make_playlist(client, "Temp", [t])
+    tracks_before, sources_before = Track.objects.count(), PlaybackSource.objects.count()
+    assert client.delete(f"{PLAYLISTS}{pid}/").status_code == 204
+    assert not Playlist.objects.filter(pk=pid).exists()
+    # The global catalog (Track + its matched PlaybackSource) survives the delete.
+    assert Track.objects.count() == tracks_before
+    assert PlaybackSource.objects.count() == sources_before
+
+
+@pytest.mark.django_db
+def test_remove_track_repacks_positions(client):
+    tracks = [TrackFactory() for _ in range(3)]
+    pid = _make_playlist(client, "Mix", tracks)
+    assert (
+        client.post(f"{PLAYLISTS}{pid}/remove-track/", {"track_id": str(tracks[0].id)}, format="json").status_code
+        == 204
+    )
+    items = client.get(f"{PLAYLISTS}{pid}/tracks/").data["results"]
+    assert [i["track"]["id"] for i in items] == [str(tracks[1].id), str(tracks[2].id)]
+    assert [i["position"] for i in items] == [0, 1]  # re-packed contiguous
+    assert Track.objects.filter(pk=tracks[0].id).exists()  # the track itself survives
+
+
+@pytest.mark.django_db
+def test_reorder_moves_track_to_front(client):
+    tracks = [TrackFactory() for _ in range(3)]
+    pid = _make_playlist(client, "Mix", tracks)
+    assert (
+        client.post(
+            f"{PLAYLISTS}{pid}/reorder/", {"track_id": str(tracks[2].id), "position": 0}, format="json"
+        ).status_code
+        == 204
+    )
+    items = client.get(f"{PLAYLISTS}{pid}/tracks/").data["results"]
+    assert [i["track"]["id"] for i in items] == [str(t.id) for t in (tracks[2], tracks[0], tracks[1])]
+    assert [i["position"] for i in items] == [0, 1, 2]
 
 
 def test_spotify_404_explains_editorial(monkeypatch):

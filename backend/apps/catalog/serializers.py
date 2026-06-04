@@ -66,6 +66,14 @@ class CreatePlaylistSerializer(serializers.Serializer):
     artwork_url = serializers.URLField(required=False, allow_blank=True, default="")
 
 
+class PlaylistUpdateSerializer(serializers.ModelSerializer):
+    """Edit a playlist's own metadata (rename / describe / visibility)."""
+
+    class Meta:
+        model = Playlist
+        fields = ["title", "description", "is_public"]
+
+
 class PlaylistDetailSerializer(serializers.ModelSerializer):
     # Metadata only — tracks are paginated via the playlist `tracks` action so a
     # long playlist isn't inlined here. `track_count` powers the header.

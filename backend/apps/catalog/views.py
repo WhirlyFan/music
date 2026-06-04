@@ -1,8 +1,9 @@
+from django.db import transaction
 from django.db.models import Count, Prefetch
 from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins, permissions, status, viewsets
+from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -17,6 +18,7 @@ from .serializers import (
     PlaylistDetailSerializer,
     PlaylistSerializer,
     PlaylistTrackSerializer,
+    PlaylistUpdateSerializer,
     TrackSerializer,
 )
 from .services import UnsupportedSourceError, create_playlist_from_tracks
@@ -65,19 +67,39 @@ class IngestViewSet(viewsets.ViewSet):
         return Response(ImportResultSerializer(data).data, status=status.HTTP_201_CREATED)
 
 
-class PlaylistViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
-    """List/retrieve owned playlists, and create a named one from track ids
-    (e.g. saving an import)."""
+class PlaylistViewSet(
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.ReadOnlyModelViewSet,
+):
+    """The caller's own playlists: list/search, retrieve, create, rename/edit,
+    delete, and edit track membership.
+
+    Playlists are a shared/global table (not RLS); we scope every action to
+    `created_by=request.user` so a caller only ever sees and mutates their own.
+    Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+    `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT)."""
 
     permission_classes = [permissions.IsAuthenticated]
+    # `?search=` matches a playlist by title OR by a song it contains. SearchFilter
+    # adds DISTINCT for the to-many join; Count(distinct=True) keeps track_count right.
+    filter_backends = [filters.SearchFilter]
+    search_fields = ["title", "items__track__title", "items__track__primary_artist"]
 
     def get_queryset(self):
-        qs = Playlist.objects.annotate(track_count=Count("items")).order_by("-created_at")
+        qs = (
+            Playlist.objects.filter(created_by=self.request.user)
+            .annotate(track_count=Count("items", distinct=True))
+            .order_by("-created_at")
+        )
         if self.action == "retrieve":
             qs = qs.prefetch_related(*_DETAIL_PREFETCH)
         return qs
 
     def get_serializer_class(self):
+        if self.action in ("update", "partial_update"):
+            return PlaylistUpdateSerializer
         return PlaylistDetailSerializer if self.action == "retrieve" else PlaylistSerializer
 
     @extend_schema(request=CreatePlaylistSerializer, responses=PlaylistSerializer)
@@ -109,6 +131,49 @@ class PlaylistViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
         )
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(PlaylistTrackSerializer(page, many=True).data)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["post"], url_path="remove-track")
+    def remove_track(self, request, pk=None):
+        """Remove one track from this playlist and re-pack positions. The global
+        Track row is untouched — only the membership (PlaylistTrack) is dropped."""
+        playlist = self.get_object()
+        with transaction.atomic():
+            deleted, _ = playlist.items.filter(track_id=request.data.get("track_id")).delete()
+            if not deleted:
+                raise Http404("Track not in this playlist.")
+            _repack(playlist)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["post"])
+    def reorder(self, request, pk=None):
+        """Move one track to an absolute position; renumber the rest 0..n-1."""
+        playlist = self.get_object()
+        try:
+            target = int(request.data.get("position"))
+        except (TypeError, ValueError):
+            return Response({"detail": "position must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            items = list(playlist.items.order_by("position"))
+            moving = next((it for it in items if str(it.track_id) == str(request.data.get("track_id"))), None)
+            if moving is None:
+                raise Http404("Track not in this playlist.")
+            items.remove(moving)
+            items.insert(max(0, min(target, len(items))), moving)
+            for i, it in enumerate(items):
+                if it.position != i:
+                    it.position = i
+                    it.save(update_fields=["position"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+def _repack(playlist):
+    """Renumber a playlist's items to contiguous positions 0..n-1."""
+    for i, item in enumerate(playlist.items.order_by("position")):
+        if item.position != i:
+            item.position = i
+            item.save(update_fields=["position"])
 
 
 class TrackViewSet(viewsets.ReadOnlyModelViewSet):

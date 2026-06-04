@@ -12,11 +12,23 @@ export type PaginatedPlaylistTrackList = components['schemas']['PaginatedPlaylis
 export type Track = components['schemas']['Track']
 export type PlaybackSource = components['schemas']['PlaybackSource']
 export type ImportResult = components['schemas']['ImportResult']
+export type PlaylistUpdate = components['schemas']['PlaylistUpdate']
 
-export function usePlaylists() {
-  return useQuery({
-    queryKey: playlistKeys.list(),
-    queryFn: () => api<PaginatedPlaylistList>('/catalog/playlists/'),
+/**
+ * Paginated playlists (25/page), with optional server-side search. `search`
+ * matches a playlist by title OR by a song it contains; it's part of the query
+ * key so each term is its own infinite list.
+ */
+export function useInfinitePlaylists(search = '') {
+  const q = search.trim()
+  return useInfiniteQuery({
+    queryKey: playlistKeys.list(q),
+    queryFn: ({ pageParam }) =>
+      api<PaginatedPlaylistList>(
+        `/catalog/playlists/?page=${pageParam}${q ? `&search=${encodeURIComponent(q)}` : ''}`,
+      ),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
   })
 }
 
@@ -94,5 +106,60 @@ export function useRefreshArtwork() {
       qc.invalidateQueries({ queryKey: roomKeys.all() })
       qc.invalidateQueries({ queryKey: playlistKeys.all() })
     },
+  })
+}
+
+/** Rename / re-describe / set visibility of a playlist (PATCH). */
+export function useUpdatePlaylist() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { id: string; title?: string; description?: string; isPublic?: boolean }) =>
+      api<PlaylistUpdate>(`/catalog/playlists/${args.id}/`, {
+        method: 'PATCH',
+        // Undefined fields are dropped by JSON.stringify → a true partial update.
+        body: { title: args.title, description: args.description, is_public: args.isPublic },
+      }),
+    onSuccess: (_data, args) => {
+      qc.invalidateQueries({ queryKey: playlistKeys.all() })
+      qc.invalidateQueries({ queryKey: playlistKeys.detail(args.id) })
+    },
+  })
+}
+
+/** Delete a playlist. The global Track rows it referenced are preserved server-side. */
+export function useDeletePlaylist() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api(`/catalog/playlists/${id}/`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.all() }),
+  })
+}
+
+/** Remove one track from a playlist (the track itself stays in the catalog). */
+export function useRemoveTrackFromPlaylist(playlistId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (trackId: string) =>
+      api(`/catalog/playlists/${playlistId}/remove-track/`, {
+        method: 'POST',
+        body: { track_id: trackId },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: playlistKeys.tracks(playlistId) })
+      qc.invalidateQueries({ queryKey: playlistKeys.all() })
+    },
+  })
+}
+
+/** Move a track to an absolute position within a playlist. */
+export function useReorderPlaylistTrack(playlistId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (args: { trackId: string; position: number }) =>
+      api(`/catalog/playlists/${playlistId}/reorder/`, {
+        method: 'POST',
+        body: { track_id: args.trackId, position: args.position },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.tracks(playlistId) }),
   })
 }
