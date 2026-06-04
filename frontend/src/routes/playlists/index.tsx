@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { Loader2, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
-import { CoverWall } from '@/components/playlists/cover-wall'
+import { CoverWall, CoverWallSkeleton } from '@/components/playlists/cover-wall'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { useDeletePlaylist, useInfinitePlaylists } from '@/lib/query/catalog'
@@ -40,9 +40,7 @@ function PlaylistsPage() {
 
       <div className="border-border relative h-[calc(100dvh-11rem)] overflow-hidden rounded-xl border sm:h-[calc(100dvh-15rem)]">
         {playlists.isLoading ? (
-          <div className="grid size-full place-items-center">
-            <Loader2 className="text-muted-foreground size-6 animate-spin" />
-          </div>
+          <CoverWallSkeleton />
         ) : playlists.isError ? (
           <div className="grid size-full place-items-center p-6">
             <FormError message="Failed to load playlists." />

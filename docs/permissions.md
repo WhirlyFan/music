@@ -55,15 +55,11 @@ This is gated by `is_staff` (not `is_superuser`) so a Support group with
 `view_note` perm can read every user's notes for support reasons, without
 needing the full superuser footgun.
 
-## MFA staff gate
+## MFA
 
-Independent of perms: `is_staff` users hitting `/admin/` must have at least
-one enrolled MFA authenticator. See [auth.md](auth.md) +
-[`apps/core/middleware.py`](../backend/apps/core/middleware.py).
-
-The MFA gate fires for any `is_staff` user regardless of how they
-authenticated — password, social, eventual SAML. It's a *role-scoped*
-policy, not an *auth-method* policy. See [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin).
+MFA is **fully optional** — there is no staff/`/admin/` gate. Users enroll
+voluntarily from Settings. See [auth.md](auth.md) and
+[decisions.md → MFA policy](decisions.md#mfa-policy-fully-optional-opt-in-for-everyone).
 
 ## The conventional pattern
 

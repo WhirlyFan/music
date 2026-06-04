@@ -81,13 +81,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    # Staff users must enroll MFA before reaching /admin/. Lives after
-    # AuthenticationMiddleware (needs request.user) and before RLSContextMiddleware
-    # so a redirect short-circuits RLS session-var setup we don't need.
-    "apps.core.middleware.RequireMfaForStaffMiddleware",
-    # Authenticated users must verify their email before reaching /api/*.
-    # Same ordering rationale as the MFA gate — after auth (needs request.user),
-    # before RLS (a 403 short-circuits the per-request DB session-var setup).
+    # Authenticated users must verify their email before reaching /api/*. After
+    # auth (needs request.user), before RLS (a 403 short-circuits the per-request
+    # DB session-var setup).
     "apps.core.middleware.RequireVerifiedEmailMiddleware",
     "django_rls.middleware.RLSContextMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -191,8 +187,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # With "optional" the user gets a normal authenticated session at signup;
 # `apps.core.middleware.RequireVerifiedEmailMiddleware` blocks /api/* until
 # the email is verified, and the frontend's root route guard redirects them
-# to /account/verify-email. Resend works any time post-signup. The pattern
-# mirrors `RequireMfaForStaffMiddleware` (staff /admin/ gate).
+# to /account/verify-email. Resend works any time post-signup.
 #
 # The seed command bakes admin@example.com + dev@example.com with verified
 # email rows so local /admin/ access + dev login keep working out-of-box.
@@ -241,12 +236,10 @@ HEADLESS_FRONTEND_URLS = {
 }
 
 # --- allauth MFA ---
-# 2FA is opt-in for all users (MFA_REQUIRED = False). A separate policy
-# in apps.core.middleware.RequireMfaForStaffMiddleware makes it mandatory
-# specifically for is_staff users hitting /admin/, regardless of how they
-# authenticated. The reason MFA stays opt-in globally: when SAML/SSO lands
-# later, the customer's IdP enforces their org's MFA policy and your app
-# trusts the assertion — re-prompting in-app is the textbook SSO anti-pattern.
+# 2FA is fully optional (MFA_REQUIRED = False) for everyone, including staff —
+# users enroll voluntarily from Settings. There is no staff /admin/ gate. When
+# SAML/SSO lands later, the customer's IdP enforces their org's MFA policy and
+# the app trusts the assertion — re-prompting in-app is the SSO anti-pattern.
 # Key for transparently encrypting sensitive MFA fields at rest.
 # `apps.core.mfa_encryption` uses this to encrypt Authenticator.data["secret"]
 # (TOTP secrets, etc.) before persisting to Postgres. Generate with:

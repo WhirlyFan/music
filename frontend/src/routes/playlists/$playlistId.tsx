@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import {
   GripVertical,
   ListPlus,
-  Loader2,
   MoreVertical,
   Pencil,
   RefreshCw,
@@ -34,6 +33,7 @@ import {
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { Ripples, useRipple } from '@/components/ui/ripple'
+import { Skeleton, SkeletonText } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import type { PlaylistDetail, PlaylistTrack } from '@/lib/query/catalog'
 import {
@@ -88,7 +88,7 @@ function PlaylistDetailPage() {
     return () => io.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  if (isLoading) return <p className="text-muted-foreground">Loading…</p>
+  if (isLoading) return <PlaylistDetailSkeleton />
   if (error || !playlist) return <FormError message="Failed to load playlist." />
 
   const items = tracks.data?.pages.flatMap((p) => p.results) ?? []
@@ -169,9 +169,14 @@ function PlaylistDetailPage() {
         ))}
       </ol>
 
-      {/* Infinite-scroll sentinel + loading affordance. */}
-      <div ref={sentinelRef} className="flex justify-center py-2">
-        {isFetchingNextPage && <Loader2 className="text-muted-foreground size-5 animate-spin" />}
+      {/* Infinite-scroll sentinel — shows skeleton rows while the next page loads. */}
+      <div ref={sentinelRef} className="space-y-2 py-2">
+        {isFetchingNextPage && (
+          <>
+            <TrackRowSkeleton />
+            <TrackRowSkeleton />
+          </>
+        )}
       </div>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -370,5 +375,43 @@ function TrackRow({
       </div>
       {!editing && <Ripples ripples={ripple.ripples} onDone={ripple.remove} />}
     </li>
+  )
+}
+
+/** Colocated skeletons — same shells as the header + TrackRow so they can't drift. */
+function TrackRowSkeleton() {
+  return (
+    <li
+      aria-hidden
+      className="border-border flex items-center gap-3 rounded-lg border p-3"
+    >
+      <Skeleton className="size-10 shrink-0 rounded-md" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <SkeletonText className="max-w-[14rem]" />
+        <SkeletonText className="max-w-[9rem] text-sm" />
+      </div>
+    </li>
+  )
+}
+
+function PlaylistDetailSkeleton() {
+  return (
+    <div className="space-y-6" role="status" aria-busy aria-label="Loading playlist">
+      <div className="space-y-3">
+        <Skeleton className="h-3.5 w-28" /> {/* breadcrumb */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-48" /> {/* title */}
+            <Skeleton className="h-4 w-24" /> {/* track count */}
+          </div>
+          <Skeleton className="h-10 w-20" /> {/* Play */}
+        </div>
+      </div>
+      <ol className="space-y-2">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <TrackRowSkeleton key={i} />
+        ))}
+      </ol>
+    </div>
   )
 }

@@ -20,6 +20,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Ripples, useRipple } from '@/components/ui/ripple'
+import { Skeleton } from '@/components/ui/skeleton'
+import { TiltCard } from '@/components/ui/tilt-card'
 
 export type CoverItem = {
   id: string
@@ -231,18 +233,20 @@ function CoverTile({ item, onDelete }: { item: CoverItem; onDelete: (id: string)
       className="group relative size-full overflow-hidden rounded-md shadow-sm"
       onPointerDown={ripple.onPointerDown}
     >
-      {item.artwork_url ? (
-        <img
-          src={item.artwork_url}
-          alt=""
-          draggable={false}
-          className="size-full scale-[0.96] object-cover transition-transform duration-[250ms] ease group-hover:scale-100"
-        />
-      ) : (
-        <div className="bg-muted text-muted-foreground grid size-full scale-[0.96] place-items-center transition-transform duration-[250ms] ease group-hover:scale-100">
-          <Music className="size-8" aria-hidden />
-        </div>
-      )}
+      <TiltCard className="absolute inset-0">
+        {item.artwork_url ? (
+          <img
+            src={item.artwork_url}
+            alt=""
+            draggable={false}
+            className="size-full object-cover"
+          />
+        ) : (
+          <div className="bg-muted text-muted-foreground grid size-full place-items-center">
+            <Music className="size-8" aria-hidden />
+          </div>
+        )}
+      </TiltCard>
 
       {/* Title, revealed on hover. */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
@@ -299,6 +303,25 @@ function CoverTile({ item, onDelete }: { item: CoverItem; onDelete: (id: string)
       </div>
 
       <Ripples ripples={ripple.ripples} onDone={ripple.remove} />
+    </div>
+  )
+}
+
+/**
+ * Loading placeholder for the wall — a responsive grid of cover-sized pulsing
+ * squares. Colocated so the cover dimensions stay in sync with the real wall.
+ */
+export function CoverWallSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-busy
+      aria-label="Loading playlists"
+      className="grid size-full gap-5 overflow-hidden p-4 [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]"
+    >
+      {Array.from({ length: 18 }).map((_, i) => (
+        <Skeleton key={i} className="aspect-square w-full" />
+      ))}
     </div>
   )
 }

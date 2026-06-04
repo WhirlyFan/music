@@ -137,6 +137,22 @@ not a store.
   `eslint-plugin-react-compiler` rule flags code the compiler can't optimize —
   fix those rather than memoizing around them.
 
+## Loading skeletons (colocation)
+
+Loading states use **skeletons, not spinners**. Primitives live in
+[`components/ui/skeleton.tsx`](../frontend/src/components/ui/skeleton.tsx):
+`Skeleton` (leaf box or wrap-mode that matches its children's footprint),
+`SkeletonText` (auto-sizes to the surrounding font), `SkeletonCircle`, plus a
+`SkeletonZone`/`useSkeletonZone()` for forcing a subtree into its loading state.
+
+The rule is **colocation**: a component's skeleton lives in the *same file* as
+the real component (e.g. `CoverWallSkeleton` next to `CoverWall`,
+`TrackRowSkeleton` next to `TrackRow`) and reuses the real shell's dimension
+constants, so the placeholder can't drift from the content. Drive it off the
+query: `useSkeletonZone() || isLoading`. Put `role="status" aria-busy` on the
+grouping container; leaves are `aria-hidden`. Every primitive bakes in
+`motion-reduce:animate-none`. (Pattern adopted from `~/usul-policy-research-app`.)
+
 ## Auth integration
 
 Cookies + same-origin = transparent. The fetch wrapper:

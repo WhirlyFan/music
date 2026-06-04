@@ -79,31 +79,30 @@ password login; `AccountMiddleware` ordering matters (after Auth + Messages,
 before XFrame). Use the **browser/v1** flavor, never app/v1 — app/v1 returns a
 token in JSON that `SessionAuthentication` never sees.
 
-### MFA policy: optional for users, required for `/admin/`
+### MFA policy: fully optional (opt-in for everyone)
 
-**Decision.** `MFA_REQUIRED = False` globally — 2FA is opt-in. But every
-`is_staff` user must have at least one enrolled authenticator (TOTP, recovery
-codes, or WebAuthn) before reaching `/admin/`, enforced by
-`RequireMfaForStaffMiddleware` (redirects to
-`/account/mfa?required=true&next=/admin/` with an explanatory banner).
+**Decision.** `MFA_REQUIRED = False` and there is **no staff gate** — 2FA is
+opt-in for everyone, staff included. Users enroll (TOTP, recovery codes, or
+WebAuthn) voluntarily from Settings; nothing is ever forced.
 
-**Why, not the alternatives.** Required-for-everyone is hostile UX, especially
-at signup; optional-for-everyone leaves the highest-blast-radius surface
-(`/admin/`) unprotected. The role-scoped middle path protects what matters
-without nagging regular users. The gate fires regardless of auth method —
-password, social, or eventual SAML — because it's a *role* policy, not an
-*auth-method* policy.
+**Why, not the alternatives.** Required-for-everyone is hostile UX, especially at
+signup. We previously force-enrolled `is_staff` users before `/admin/` (a
+`RequireMfaForStaffMiddleware` gate + a seeded dev TOTP), but for this app's
+threat model that nag wasn't worth it — `/admin/` is already behind login + a
+strong password, and when SAML/SSO lands the IdP owns MFA. So the gate, the
+seeded admin TOTP, and the `RequireMfaForStaffMiddleware` middleware were
+**removed**. *(History: the template shipped role-scoped, required-for-`/admin/`
+MFA; dropped in favor of fully optional.)*
 
 **SAML compatibility (when it lands).** App-level MFA stays opt-in; the
 customer's IdP owns their MFA policy and we trust the assertion (re-prompting
-in-app is the "duplicate MFA" SSO anti-pattern). Staff still enroll an app-side
-TOTP once for `/admin/`. Invariants that keep this clean today:
+in-app is the "duplicate MFA" SSO anti-pattern). Invariants that keep this clean:
 `useSession()` exposes `is_authenticated` + `mfa_enrolled`, never "how they
 logged in"; a social-adapter seam lives in `apps/users/social_adapter.py`;
 `AUTHENTICATION_BACKENDS` is a list a SAML backend appends to.
 
-**Tradeoff accepted.** Most regular users won't enable 2FA (password is their
-only factor); staff get one extra step on first `/admin/` visit.
+**Tradeoff accepted.** Admin accounts rely on password-only auth unless their
+owner opts into 2FA — acceptable here; revisit if `/admin/` exposure grows.
 
 ### Email verification: `optional` mode + a gate (not `mandatory`)
 

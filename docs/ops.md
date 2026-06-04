@@ -157,8 +157,8 @@ by default).
 
 Two account layers:
 1. **`KNOWN_ACCOUNTS`** — `dev@example.com` (regular) + `admin@example.com`
-   (superuser with auto-enrolled TOTP). Always present after seed; flags +
-   passwords reset every run.
+   (superuser). Always present after seed; flags + passwords reset every run.
+   MFA is optional — neither account is enrolled; enroll from Settings if wanted.
 2. **Fake users** (`--fake-users N`, default 5) — anonymous via UserFactory.
    Makes the DB feel busy + lets you visually verify RLS isolation in
    `/admin/`.
@@ -173,18 +173,6 @@ Flags:
 - `--flush` — wipe the catalog + non-superuser users before seeding
 - `--skip-real-playlists` — skip the network import of the real seed playlists
 - `--allow-in-prod` — escape hatch from the DEBUG guard (almost certainly wrong)
-
-### Why the seed bakes a fixed TOTP
-
-`admin@example.com` is `is_staff=True`. The `RequireMfaForStaffMiddleware`
-redirects `/admin/` to `/account/mfa` until they enroll. Without the seed
-enrolling TOTP, every fresh `make seed` leaves admin unable to reach
-`/admin/`. The fixed secret means devs can keep one authenticator-app
-entry across reseeds.
-
-The DEBUG guard ensures this can never run in prod. See
-[decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin)
-and [auth.md](auth.md).
 
 ## Health check
 
@@ -216,12 +204,10 @@ stdout. No in-process file rotation.
 ```sh
 make test                          # all backend tests
 docker compose exec backend pytest apps/catalog/tests/test_rls.py -v
-docker compose exec backend pytest -k mfa
 ```
 
 RLS load-bearing tests live in `apps/catalog/tests/test_rls.py` (Playlist
-owner-isolation + public-read); the MFA gate is covered in
-`apps/core/tests/test_staff_mfa_middleware.py`.
+owner-isolation + public-read).
 
 ## Pre-push hook
 
