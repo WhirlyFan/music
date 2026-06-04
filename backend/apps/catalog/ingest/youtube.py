@@ -52,6 +52,22 @@ def _opts(**extra) -> dict:
     return opts
 
 
+# Prefer a *progressive* m4a/AAC stream (itag 140) over anything else. YouTube's
+# SABR rollout now makes the default clients hand back an HLS manifest for
+# "bestaudio", which a plain <audio> element can't play in Chrome and which Web
+# Audio can't tap in Safari (playback goes silent while the timeline advances).
+# AAC-in-m4a is the one progressive format every browser plays; the fallbacks
+# only kick in if 140 is ever missing.
+_AUDIO_FORMAT = "140/bestaudio[ext=m4a][protocol^=https]/bestaudio[protocol^=https]/bestaudio"
+# The `web_embedded` client is the one that still serves a progressive itag-140
+# stream whose URL we can actually fetch (200). The default clients return only
+# HLS/SABR; `mweb`/`web` hand back a 403-locked URL (they need a GVS PO token
+# bound to visitor_data we don't have). web_embedded needs neither and works for
+# any embeddable video — the rare embedding-disabled track will 404 here, which
+# surfaces as the transient "couldn't load audio" message rather than silence.
+_AUDIO_CLIENTS = ("web_embedded",)
+
+
 def resolve_audio(video_id: str) -> dict:
     """Resolve the direct audio stream for a YouTube video (no download).
 
@@ -59,7 +75,11 @@ def resolve_audio(video_id: str) -> dict:
     the server that resolved it can fetch it, and only for a few hours — so we
     proxy it from the same backend and cache it briefly (see streaming.py).
     """
-    with YoutubeDL(_opts(format="bestaudio/best", retries=3)) as ydl:
+    opts = _opts(format=_AUDIO_FORMAT, retries=3)
+    opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = list(
+        _AUDIO_CLIENTS
+    )
+    with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
     return {"url": info["url"], "http_headers": dict(info.get("http_headers") or {})}
 

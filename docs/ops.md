@@ -108,6 +108,15 @@ Notes:
   server isn't up, yt-dlp just resolves without PO tokens (the solver still works).
 - Cookies are **not** used. If the bot wall returns under load, PO tokens are the
   fix, not cookies.
+- **Audio format/client matters.** `resolve_audio` pins the progressive **itag-140
+  m4a/AAC** stream via the **`web_embedded`** player client (see
+  `apps/catalog/ingest/youtube.py`). The default clients now return only an **HLS
+  manifest** for `bestaudio` (YouTube's SABR rollout) — a plain `<audio>` element
+  can't play HLS in Chrome, and on Safari the visualizer's `createMediaElementSource`
+  can't tap a native-HLS stream, so playback goes **silent while the timeline keeps
+  advancing**. `web_embedded` is the one client whose progressive URL we can fetch
+  directly (no GVS PO token / visitor-data needed). If audio ever goes silent again,
+  check that resolution still returns a non-HLS `https` m4a URL first.
 
 ## Database migrations
 
