@@ -222,7 +222,13 @@ make up                       # docker compose up -d (everything)
 make down                      # docker compose down
 make logs                      # tail logs from all services
 make ps                        # show running services
+make reset                     # rebuild backend image + recreate its .venv volume
 ```
+
+> **After changing backend Python deps, run `make reset`, not `make up`.** The
+> backend's `.venv` lives in an anonymous Docker volume that survives `up`, so a
+> plain `up` keeps using the *old* venv and your new deps won't appear. `make
+> reset` rebuilds the image and recreates that volume (DB volume is left intact).
 
 ### Local dev (outside Docker)
 

@@ -1,4 +1,4 @@
-.PHONY: help bootstrap up down logs ps dev-backend dev-frontend mm migrate seed reset-db shell test lint format gen-api
+.PHONY: help bootstrap up down logs ps dev-backend dev-frontend mm migrate seed reset reset-db shell test lint format gen-api
 
 # Use admin role for migrations / seed (host-side, local DB).
 ADMIN_URL ?= postgres://app_admin:app_admin@localhost:5432/appdb
@@ -17,6 +17,8 @@ help:
 	@echo "  mm            makemigrations (as admin role)"
 	@echo "  migrate       migrate (as admin role)"
 	@echo "  seed          seed dev data (creates dev@example.com / password)"
+	@echo "  reset         rebuild backend image + recreate its .venv volume (after"
+	@echo "                changing backend deps — a plain 'up' keeps the stale venv)"
 	@echo "  reset-db      drop volume + recreate + migrate + seed (DESTRUCTIVE)"
 	@echo "  shell         Django shell"
 	@echo ""
@@ -69,6 +71,15 @@ migrate:
 
 seed:
 	cd backend && DATABASE_URL=$(ADMIN_URL) uv run python manage.py seed
+
+# Rebuild the backend image and recreate its container + the anonymous .venv
+# volume. Needed after changing backend Python deps: the .venv lives in a named
+# anonymous volume that survives `up`, so a plain `up` keeps using the OLD venv
+# and your new/changed deps never appear. (Leaves the DB volume untouched.)
+reset:
+	docker compose build backend
+	docker compose rm -fsv backend
+	$(MAKE) up
 
 reset-db:
 	docker compose down -v
