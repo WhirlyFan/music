@@ -10,7 +10,6 @@ import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/compone
 import { ApiError } from '@/lib/api/client'
 import { useSongSearch, type Track } from '@/lib/query/catalog'
 import { usePlayNow, useQueueTracks } from '@/lib/query/rooms'
-import { useDebounced } from '@/lib/use-debounced'
 
 export const Route = createFileRoute('/search')({
   component: SearchPage,
@@ -25,7 +24,14 @@ function errorMessage(error: unknown): string {
 
 function SearchPage() {
   const [text, setText] = useState('')
-  const q = useDebounced(text, 350)
+  // The query that actually drives the request. It trails typing by 350ms, but
+  // Enter promotes the current text immediately — React Query caches by term, so
+  // a typed-then-Enter (or repeat) search costs no extra request.
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    const id = setTimeout(() => setQ(text.trim()), 350)
+    return () => clearTimeout(id)
+  }, [text])
   const search = useSongSearch(q)
   const playNow = usePlayNow()
   const queueTracks = useQueueTracks()
@@ -75,6 +81,7 @@ function SearchPage() {
             placeholder="Songs, artists, albums…"
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && setQ(text.trim())}
             className="h-12 rounded-full pr-4 pl-11 text-base shadow-sm"
           />
         </div>

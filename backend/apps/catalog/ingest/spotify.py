@@ -143,7 +143,9 @@ def search_tracks(query: str, limit: int = 20) -> list[dict]:
     if not q:
         return []
     token = _token()
-    params = urllib.parse.urlencode({"q": q, "type": "track", "limit": max(1, min(limit, 50))})
+    # Spotify caps search `limit` at 10 for our (client-credentials) token —
+    # anything higher 400s with "Invalid limit" (despite the docs' max of 50).
+    params = urllib.parse.urlencode({"q": q, "type": "track", "limit": max(1, min(limit, 10))})
     data = _get(f"/search?{params}", token)
     return [_normalize(t) for t in (data.get("tracks") or {}).get("items") or [] if t]
 
