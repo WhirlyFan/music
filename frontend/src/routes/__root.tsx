@@ -19,18 +19,15 @@ const VERIFY_EXEMPT_PREFIXES = [
   '/account/logout',
   '/login',
   '/signup',
-  // Public, even for unverified users — they should be able to read docs
-  // without having to clear the verification gate first.
-  '/docs',
 ]
 
-// Routes a logged-OUT user is allowed to visit. Everything else redirects to the
-// home page. Includes the password-reset + email-verification flows, which a
-// logged-out user must reach (they arrive via an emailed link).
+// Routes a logged-OUT user is allowed to visit. Everything else redirects to
+// /login (with the attempted path as ?redirect). Includes the password-reset +
+// email-verification flows, which a logged-out user must reach (they arrive via
+// an emailed link).
 const PUBLIC_PREFIXES = [
   '/login',
   '/signup',
-  '/docs',
   '/account/logout',
   '/account/verify-email',
   '/account/password/forgot',
@@ -63,9 +60,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       staleTime: 5 * 60 * 1000,
     })
 
-    // Not logged in → only public routes are allowed; anything else goes home.
+    // Not logged in → only public routes are allowed; anything else goes to
+    // /login, carrying where they were headed so we can return them post-login.
     if (!isSessionAuthenticated(session)) {
-      if (!isPublicPath(path)) throw redirect({ to: '/' })
+      if (!isPublicPath(path)) throw redirect({ to: '/login', search: { redirect: path } })
       return
     }
 

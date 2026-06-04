@@ -53,14 +53,15 @@ export function AppHeader() {
           </Link>
         )}
 
-        {/* Docs are public — anyone can read them without signing in. */}
-        <Link
-          to="/docs"
-          className="text-muted-foreground hover:text-foreground text-sm"
-          activeProps={{ className: 'text-foreground font-medium' }}
-        >
-          Docs
-        </Link>
+        {isAuthed && (
+          <Link
+            to="/docs"
+            className="text-muted-foreground hover:text-foreground text-sm"
+            activeProps={{ className: 'text-foreground font-medium' }}
+          >
+            Docs
+          </Link>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {/* Theme toggle lives outside the auth-state branch so it's always

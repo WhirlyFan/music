@@ -20,6 +20,15 @@ import {
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
+  // Optional return-path set by the auth guard in __root. Only same-origin
+  // internal paths are honored (must start with a single '/') — guards against
+  // open-redirect abuse via a crafted ?redirect=https://evil.com.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+    const r = search.redirect
+    return {
+      redirect: typeof r === 'string' && r.startsWith('/') && !r.startsWith('//') ? r : undefined,
+    }
+  },
   head: () => ({ meta: [{ title: 'Log in — music' }] }),
 })
 
@@ -34,6 +43,8 @@ const loginSchema = z.object({
 function LoginPage() {
   const navigate = useNavigate()
   const login = useLogin()
+  const { redirect: redirectTo } = Route.useSearch()
+  const dest = redirectTo ?? '/'
   // `mfaRequired` flips to true after a successful password step where the
   // server signaled `mfa_authenticate` is pending. Kept in state so it
   // survives unrelated re-renders.
@@ -46,7 +57,7 @@ function LoginPage() {
       if (login.isPending) return
       const result = await login.mutateAsync(value)
       if (result.status === 200) {
-        navigate({ to: '/' })
+        navigate({ to: dest })
       } else if (isMfaChallenge(result)) {
         setMfaRequired(true)
       } else if (isEmailVerificationPending(result)) {
@@ -66,7 +77,7 @@ function LoginPage() {
   })
 
   if (mfaRequired) {
-    return <MfaChallenge onCancel={() => setMfaRequired(false)} />
+    return <MfaChallenge onCancel={() => setMfaRequired(false)} dest={dest} />
   }
 
   // Parse allauth's structured error response so we can show actionable copy
@@ -188,7 +199,7 @@ function LoginPage() {
  * the `mfa_trust` stage — we surface that inline with a "Remember this
  * browser for 30 days" choice and complete the stage in the same submit.
  */
-function MfaChallenge({ onCancel }: { onCancel: () => void }) {
+function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }) {
   const navigate = useNavigate()
   const mfa = useMfaAuthenticate()
   const trust = useMfaTrust()
@@ -214,12 +225,12 @@ function MfaChallenge({ onCancel }: { onCancel: () => void }) {
           if (msg) toast.error(msg)
           return
         }
-        navigate({ to: '/' })
+        navigate({ to: dest })
         return
       }
       if (result.status === 200) {
         // Trust not enabled (or already trusted) — code accepted, fully in.
-        navigate({ to: '/' })
+        navigate({ to: dest })
         return
       }
       const msg = bannerError(result, 'Invalid code — try again.')
