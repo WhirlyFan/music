@@ -1,11 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ListPlus, Search as SearchIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
-import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api/client'
@@ -35,6 +34,21 @@ function SearchPage() {
   const showSkeleton = q.length > 0 && search.isLoading // first load for a term
   const empty = q.length > 0 && !search.isPending && !search.isError && results.length === 0
 
+  // Surface failures as a toast + a wiggle of the field (not inline red text). A
+  // fixed toast id means a repeated failure replaces rather than stacks. This is a
+  // real side-effect reaction to the query's error state, so it belongs in an effect.
+  const fieldRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!search.isError) return
+    toast.error(errorMessage(search.error), { id: 'song-search-error' })
+    const el = fieldRef.current
+    if (el) {
+      el.classList.remove('animate-wiggle')
+      void el.offsetWidth
+      el.classList.add('animate-wiggle')
+    }
+  }, [search.isError, search.error])
+
   const queue = (id: string) =>
     queueTracks.mutate({ trackIds: [id] }, { onSuccess: () => toast.success('Added to queue.') })
 
@@ -45,7 +59,11 @@ function SearchPage() {
         <p className="text-muted-foreground mt-1 text-sm">
           Find any song — we pull the details and stream the YouTube audio on play.
         </p>
-        <div className="relative mt-4">
+        <div
+          ref={fieldRef}
+          className="relative mt-4"
+          onAnimationEnd={(e) => e.currentTarget.classList.remove('animate-wiggle')}
+        >
           <SearchIcon
             className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 z-10 size-5 -translate-y-1/2"
             aria-hidden
@@ -61,8 +79,6 @@ function SearchPage() {
           />
         </div>
       </div>
-
-      {search.isError && <FormError message={errorMessage(search.error)} />}
 
       {empty && <p className="text-muted-foreground text-sm">No songs match “{q}”.</p>}
 

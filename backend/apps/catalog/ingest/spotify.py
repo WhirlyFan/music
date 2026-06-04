@@ -74,6 +74,8 @@ def _get(url_or_path: str, token: str) -> dict:
             ) from e
         if e.code in (401, 403):
             raise SpotifyError("Spotify rejected the request — check the Client ID/Secret.") from e
+        if e.code == 429:
+            raise SpotifyError("Spotify is rate-limiting right now — try again in a few seconds.") from e
         raise SpotifyError(f"Spotify request failed ({e.code}).") from e
 
 
@@ -137,11 +139,12 @@ def search_tracks(query: str, limit: int = 20) -> list[dict]:
     audio is resolved lazily on play (the standard match flow). Raises
     SpotifyNotConfigured when no creds are set.
     """
-    token = _token()
-    q = urllib.parse.quote(query.strip())
+    q = query.strip()
     if not q:
         return []
-    data = _get(f"/search?q={q}&type=track&limit={max(1, min(limit, 50))}", token)
+    token = _token()
+    params = urllib.parse.urlencode({"q": q, "type": "track", "limit": max(1, min(limit, 50))})
+    data = _get(f"/search?{params}", token)
     return [_normalize(t) for t in (data.get("tracks") or {}).get("items") or [] if t]
 
 
