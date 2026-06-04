@@ -316,9 +316,9 @@ export function NowPlayingBar() {
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
           onEnded={() => next.mutate()}
           onError={() => {
-            // The stream failed to load (commonly YouTube blocking extraction).
+            // The stream failed to load (couldn't extract audio from YouTube).
             setPlaying(false)
-            toast.error(`Couldn't load audio for “${track.title}” — YouTube blocked it.`)
+            toast.error(`Couldn't load audio for “${track.title}” — try again shortly.`)
           }}
         />
       )}
