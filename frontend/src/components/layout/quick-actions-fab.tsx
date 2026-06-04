@@ -52,5 +52,12 @@ export function QuickActionsFab() {
       : []),
   ]
 
-  return <GooeyMenu items={items} className="fixed right-4 bottom-4 z-50" />
+  // Lift above the player pill while something's playing so the fanned actions
+  // never land on the (narrow, on mobile) seek bar.
+  return (
+    <GooeyMenu
+      items={items}
+      className={`fixed right-4 z-50 ${room?.current ? 'bottom-24' : 'bottom-4'}`}
+    />
+  )
 }

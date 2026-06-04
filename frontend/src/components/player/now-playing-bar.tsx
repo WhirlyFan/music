@@ -332,8 +332,10 @@ export function NowPlayingBar() {
               </span>
             </p>
           </div>
+          {/* The seek bar is too cramped in the compact pill on phones — hide it
+              there and let the full-screen view handle seeking (tap the artwork). */}
           {audioSrc ? (
-            <div className="mt-1">
+            <div className="mt-1 hidden sm:block">
               <SeekBar currentTime={currentTime} duration={duration} onSeek={seek} />
             </div>
           ) : (

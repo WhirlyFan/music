@@ -1,4 +1,4 @@
-import { ExternalLink, Pause, Play, SkipBack, SkipForward, X } from 'lucide-react'
+import { ChevronDown, ExternalLink, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -69,13 +69,15 @@ export function FullScreenPlayer({
       role="dialog"
       aria-modal="true"
       aria-label={`Now playing: ${track.title}`}
+      onClick={onClose}
       className="motion-safe:animate-fade-in fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
     >
-      {/* Immersive backdrop: the cover, blurred + darkened (no canvas/CORS needed). */}
+      {/* Immersive backdrop: the cover, blurred + darkened. Lighter blur on phones
+          (blur-2xl is heavy to composite on mobile GPUs). */}
       {track.artwork_url ? (
         <div
           aria-hidden
-          className="absolute inset-0 scale-110 bg-cover bg-center blur-2xl brightness-50"
+          className="absolute inset-0 scale-110 bg-cover bg-center blur-lg brightness-50 sm:blur-2xl"
           style={{ backgroundImage: `url(${track.artwork_url})` }}
         />
       ) : (
@@ -83,17 +85,23 @@ export function FullScreenPlayer({
       )}
       <div aria-hidden className="bg-background/70 absolute inset-0" />
 
+      {/* Big, obvious minimize target (top-left, thumb-reachable) with a solid
+          chip so it reads on any cover. Tapping anywhere outside the card also
+          closes. */}
       <Button
         size="icon"
         variant="ghost"
         onClick={onClose}
-        aria-label="Close"
-        className="absolute top-4 right-4 z-10"
+        aria-label="Close now playing"
+        className="bg-background/60 hover:bg-background/80 absolute top-3 left-3 z-20 size-11 rounded-full"
       >
-        <X className="size-5" />
+        <ChevronDown className="size-6" />
       </Button>
 
-      <div className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6"
+      >
         <div className="relative grid size-72 place-items-center sm:size-96">
           <AudioVisualizer analyser={analyser} artworkUrl={track.artwork_url} />
           {track.artwork_url ? (
