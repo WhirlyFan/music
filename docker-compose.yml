@@ -57,6 +57,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      bgutil-provider:
+        condition: service_started
     # Secrets are fetched from Doppler *inside* the container at startup (see the
     # `entrypoint` below), so they live only in the process — never in a file and
     # never in this compose allowlist. Add a var in Doppler → it's here on the
@@ -70,6 +72,9 @@ services:
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.dev}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
       DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:-http://localhost}
+      # PO-token provider sidecar (below) — yt-dlp fetches YouTube proof-of-origin
+      # tokens from it to dodge throttling. Doppler can override in prod.
+      YOUTUBE_POT_BASE_URL: ${YOUTUBE_POT_BASE_URL:-http://bgutil-provider:4416}
     volumes:
       - ./backend:/app
       # Anonymous volume to preserve the Linux .venv built into the image.
@@ -82,6 +87,17 @@ services:
     # the entrypoint — it injects env directly, no Doppler in the loop.)
     entrypoint: ["doppler", "run", "--", "/app/docker-entrypoint.sh"]
     command: python manage.py runserver 0.0.0.0:8000
+    logging: *default-logging
+
+  # PO-token (proof-of-origin) provider for yt-dlp. The backend's bgutil plugin
+  # fetches YouTube PO tokens from this HTTP server (port 4416) to avoid throttling
+  # under load. Stateless, no secrets, internal-only. Pin in lockstep with the
+  # `bgutil-ytdlp-pot-provider` plugin in backend/pyproject.toml.
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:1.3.1
+    restart: unless-stopped
+    expose:
+      - "4416"
     logging: *default-logging
 
   frontend:

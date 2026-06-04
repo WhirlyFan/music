@@ -8,7 +8,6 @@ Audio download (Phase 3) is a separate concern and is the only part that needs
 ffmpeg.
 """
 
-import tempfile
 from functools import lru_cache
 
 from django.conf import settings
@@ -29,27 +28,13 @@ def _impersonate_target():
         return None
 
 
-@lru_cache(maxsize=1)
-def _cookiefile() -> str | None:
-    """Write the YouTube cookies (a Netscape cookies.txt exported from a signed-in
-    account, supplied via the YOUTUBE_COOKIES secret) to a tmp file for yt-dlp.
-    Signed-in requests get past the 'confirm you're not a bot' wall. None if unset
-    (then we rely on player-client fallbacks, which YouTube may still block)."""
-    content = (getattr(settings, "YOUTUBE_COOKIES", "") or "").strip()
-    if not content:
-        return None
-    f = tempfile.NamedTemporaryFile("w", prefix="ytcookies-", suffix=".txt", delete=False)
-    f.write(content + "\n")
-    f.close()
-    return f.name
-
-
 def _opts(**extra) -> dict:
     """Base yt-dlp options for current YouTube extraction. YouTube requires solving
     a JS signature / n challenge to expose playable formats; that's handled by the
     bundled `yt-dlp-ejs` solver scripts run through the `deno` runtime (both baked
-    into the image) — no runtime download. `YOUTUBE_COOKIES`, if set, is an optional
-    fallback for when YouTube bot-walls the IP under load."""
+    into the image) — no runtime download. The bgutil PO-token provider sidecar
+    (see settings.YOUTUBE_POT_BASE_URL) supplies proof-of-origin tokens to dodge
+    throttling under load; curl_cffi impersonation is used where available."""
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -60,9 +45,10 @@ def _opts(**extra) -> dict:
     target = _impersonate_target()
     if target is not None:
         opts["impersonate"] = target
-    cookiefile = _cookiefile()
-    if cookiefile:
-        opts["cookiefile"] = cookiefile
+    pot_base = (getattr(settings, "YOUTUBE_POT_BASE_URL", "") or "").strip()
+    if pot_base:
+        # Point the bgutil-ytdlp-pot-provider plugin at the sidecar's HTTP server.
+        opts.setdefault("extractor_args", {})["youtubepot-bgutilhttp"] = {"base_url": [pot_base]}
     return opts
 
 

@@ -196,10 +196,6 @@ services:
         sync: false                # dashboard-managed; encrypted at rest
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
-      # YouTube cookies (Netscape cookies.txt from a signed-in account) so yt-dlp
-      # gets past the "confirm you're not a bot" wall. Optional but recommended.
-      - key: YOUTUBE_COOKIES
-        sync: false
 
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.

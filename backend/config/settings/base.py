@@ -23,11 +23,11 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 SPOTIFY_CLIENT_ID = env("SPOTIFY_CLIENT_ID", default="")
 SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
 
-# A Netscape-format cookies.txt exported from a signed-in YouTube account. Lets
-# yt-dlp make authenticated requests so it gets past YouTube's "confirm you're not
-# a bot" wall when resolving audio. Optional but strongly recommended in prod.
-# Store as a Doppler secret; it's written to a tmp file at runtime, never on disk.
-YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
+# Base URL of the bgutil PO-token provider sidecar (bgutil-ytdlp-pot-provider).
+# yt-dlp fetches YouTube proof-of-origin tokens from it to avoid throttling under
+# load. In docker compose it's the service hostname; empty disables it (the plugin
+# then falls back to its localhost default, which won't reach a separate container).
+YOUTUBE_POT_BASE_URL = env("YOUTUBE_POT_BASE_URL", default="")
 
 # --- Apps ---
 DJANGO_APPS = [
