@@ -152,12 +152,17 @@ def search_tracks(query: str, limit: int = 20) -> list[dict]:
 
 
 def _api_with_meta(kind: str, sid: str) -> dict:
-    """Full fetch via the Web API (paginated, with ISRC). Requires credentials."""
+    """Full fetch via the Web API (paginated, with ISRC). Requires credentials.
+
+    `partial` is True only when the API *capped* a playlist read — Spotify exposes
+    only part of its own/editorial playlists to other apps, so pagination ends with
+    fewer tracks than the playlist reports having. Albums/tracks are never partial."""
     token = _token()
     if kind == "track":
         t = _get(f"/tracks/{sid}", token)
         return {"title": t.get("name") or "", "external_id": sid, "kind": "track",
-                "tracks": [_normalize(t)], "cover": _pick_image((t.get("album") or {}).get("images"))}
+                "tracks": [_normalize(t)], "cover": _pick_image((t.get("album") or {}).get("images")),
+                "partial": False}
     if kind == "album":
         album = _get(f"/albums/{sid}", token)
         items = _paginate(album.get("tracks") or {}, token)
@@ -165,12 +170,15 @@ def _api_with_meta(kind: str, sid: str) -> dict:
         # inherits the cover art + album name.
         return {"title": album.get("name") or "", "external_id": sid, "kind": "album",
                 "tracks": [_normalize({**it, "album": album}) for it in items],
-                "cover": _pick_image(album.get("images"))}
+                "cover": _pick_image(album.get("images")), "partial": False}
     playlist = _get(f"/playlists/{sid}", token)
-    items = _paginate(playlist.get("tracks") or {}, token)
-    tracks = [_normalize(it["track"]) for it in items if it.get("track")]
+    tracks_obj = playlist.get("tracks") or {}
+    total = tracks_obj.get("total")
+    tracks = [_normalize(it["track"]) for it in _paginate(tracks_obj, token) if it.get("track")]
+    # Capped if Spotify says the playlist has more than the API let us read.
+    partial = isinstance(total, int) and len(tracks) < total
     return {"title": playlist.get("name") or "", "external_id": sid, "kind": "playlist",
-            "tracks": tracks, "cover": _pick_image(playlist.get("images"))}
+            "tracks": tracks, "cover": _pick_image(playlist.get("images")), "partial": partial}
 
 
 # ── Keyless embed scrape ──────────────────────────────────────────────────────
@@ -179,7 +187,6 @@ _UA = (
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
 _EMBED = "https://open.spotify.com/embed/{kind}/{sid}"
-_EMBED_CAP = 100  # the public embed exposes ~100 tracks; beyond that we can't read keyless
 _NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 
@@ -245,24 +252,30 @@ def _scrape(kind: str, sid: str) -> dict | None:
 
 
 def ingest_with_meta(url: str) -> dict:
-    """API-first. Returns {title, external_id, kind, tracks, partial}.
+    """API-first. Returns {title, external_id, kind, tracks}.
 
-    With creds, fetch the *full* list via the Web API (no 50 cap, includes ISRC).
-    Fall back to the keyless embed scrape when the API refuses (editorial playlists
-    404 for apps), when there are no creds, OR when the API returns a playlist's
-    metadata with an EMPTY track list — Spotify increasingly serves the cover/title
-    but withholds the tracks from third-party apps (that's how an import ends up
-    with art but no songs). `partial` is True only when we end up on the capped embed."""
+    With creds, fetch the *full* list via the Web API (includes ISRC, paginates all
+    tracks). When the API gives a complete read, use it. Otherwise — it refused
+    (editorial 404), returned no tracks, or *capped* a playlist (Spotify shares only
+    part of its own/editorial playlists with apps) — fall back to the keyless embed
+    scrape, which isn't subject to that cap, and keep whichever read has more tracks.
+    No warning: we just recover as many tracks as we can."""
     kind, sid = _classify(url)
+    api = None
     if _configured():
         try:
             api = _api_with_meta(kind, sid)
-            if api["tracks"]:
-                return {**api, "partial": False}
-            # 200 OK but no tracks (restricted) → fall through to the scrape.
+            if api["tracks"] and not api.get("partial"):
+                return api  # complete API read — full list + ISRC, no need to scrape
         except SpotifyError:
-            pass  # API refused (e.g. editorial 404) → try the keyless scrape
+            api = None  # API refused (e.g. editorial 404) → scrape only
     scraped = _scrape(kind, sid)
-    if scraped:
-        return {**scraped, "partial": len(scraped["tracks"]) >= _EMBED_CAP}
-    raise SpotifyError("Couldn't read that Spotify link — make sure it's public.")
+    # API was capped/empty/unavailable → take whichever source returned more tracks.
+    best = max(
+        (c for c in (api, scraped) if c and c["tracks"]),
+        key=lambda c: len(c["tracks"]),
+        default=None,
+    )
+    if best is None:
+        raise SpotifyError("Couldn't read that Spotify link — make sure it's public.")
+    return best

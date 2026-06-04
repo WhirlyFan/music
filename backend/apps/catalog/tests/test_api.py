@@ -106,30 +106,62 @@ def test_ingest_spotify_api_first_full_list(client, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_ingest_spotify_editorial_falls_back_to_capped_scrape(client, monkeypatch):
-    # Editorial playlist (or no creds): API refused → keyless scrape hits the ~100
-    # embed cap → import the capped list + a (count-driven, non-contradictory) note.
+def test_ingest_spotify_scrape_has_no_partial_warning(client, monkeypatch):
+    # No creds (or API refused) → keyless scrape. The scrape isn't subject to the
+    # API's per-playlist cap, so there's NO partial warning.
     from apps.catalog.ingest import spotify
 
-    capped = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(100)]
+    tracks = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(80)]
     monkeypatch.setattr(spotify, "_configured", lambda: False)
     monkeypatch.setattr(
         spotify,
         "_scrape",
+        lambda kind, sid: {"title": "Mix", "external_id": sid, "kind": "playlist", "tracks": tracks},
+    )
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/usermade"}, format="json")
+    assert r.status_code == 201
+    assert r.data["track_count"] == 80
+    assert not r.data.get("note")  # scraped → no "couldn't read all of it" warning
+
+
+@pytest.mark.django_db
+def test_ingest_spotify_api_capped_playlist_falls_back_to_scrape(client, monkeypatch):
+    # Spotify's own/editorial playlists: the API caps the read (partial). We fall
+    # back to the keyless scrape (not subject to that cap) and keep the larger read —
+    # no warning, just more tracks.
+    from apps.catalog.ingest import spotify
+
+    monkeypatch.setattr(spotify, "_configured", lambda: True)
+    monkeypatch.setattr(
+        spotify,
+        "_api_with_meta",
         lambda kind, sid: {
-            "title": "Top 100",
+            "title": "Today's Top Hits",
             "external_id": sid,
             "kind": "playlist",
-            "tracks": capped,
+            "tracks": [
+                {"title": f"A{i}", "artist": "X", "duration": 200000, "isrc": ""} for i in range(50)
+            ],
+            "cover": "https://img/x",
+            "partial": True,
         },
     )
-    r = client.post(
-        INGEST, {"url": "https://open.spotify.com/playlist/37i9editorial"}, format="json"
+    monkeypatch.setattr(
+        spotify,
+        "_scrape",
+        lambda kind, sid: {
+            "title": "Today's Top Hits",
+            "external_id": sid,
+            "kind": "playlist",
+            "tracks": [
+                {"title": f"B{i}", "artist": "X", "duration": 200000, "isrc": ""} for i in range(100)
+            ],
+        },
     )
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/37i9top"}, format="json")
     assert r.status_code == 201
-    assert r.data["track_count"] == 100
-    assert r.data["note"] and "100" in r.data["note"]
-    assert "50" not in r.data["note"]  # no stale/contradictory cap number
+    assert r.data["track_count"] == 100  # the scrape's larger read won
+    assert not r.data.get("note")  # no partial warning anymore
 
 
 @pytest.mark.django_db

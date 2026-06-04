@@ -149,22 +149,11 @@ def ingest_apple(url: str, *, user=None) -> dict:
 
 def ingest_spotify(url: str, *, user=None) -> dict:
     """Spotify playlist/album/track → loose Tracks (matched to YouTube on play).
-    API-first (full list + ISRC when creds are set); when the API refuses or serves
-    no tracks, we fall back to the keyless embed (capped at ~100). `partial` is set
-    only on that capped fallback — so the `note` warns about possibly-missing tracks
-    only when we hit the embed ceiling (never on a full API read, nor a sub-cap read).
-    The keyless reader exposes no track total, so we can't tell a playlist that truly
-    has that many from one with more — hence the note hedges, using the real count."""
+    API-first (full list + ISRC when creds are set); falls back to the keyless embed
+    scrape when the API refuses, returns nothing, or caps a playlist — keeping the
+    larger read. No partial warning: we just recover as many tracks as we can."""
     parsed = spotify.ingest_with_meta(url)
-    result = _record(Source.objects.get(code=Source.SPOTIFY), parsed, url, user=user)
-    if parsed.get("partial"):
-        n = len(result["tracks"])
-        result["note"] = (
-            f"Imported the first {n} tracks — that's all we can read from this playlist without a "
-            "Spotify login. If it has more, paste an album, artist, or user-made playlist for the "
-            "full list."
-        )
-    return result
+    return _record(Source.objects.get(code=Source.SPOTIFY), parsed, url, user=user)
 
 
 def ingest_youtube(url: str, *, user=None) -> dict:
