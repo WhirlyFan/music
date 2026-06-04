@@ -30,15 +30,24 @@ def _cookiefile() -> str | None:
     return f.name
 
 
+# yt-dlp caches the downloaded challenge solver here; must be writable by the
+# (non-root) app user. /tmp is fine — the solver re-downloads after a restart.
+_CACHE_DIR = "/tmp/ytdlp-cache"
+
+
 def _opts(**extra) -> dict:
-    """Base yt-dlp options: cookies (if configured) + player clients that tend to
-    dodge YouTube's bot wall. With cookies the default `web` client works too."""
+    """Base yt-dlp options for current YouTube extraction:
+    - cookies (YOUTUBE_COOKIES) get past the "confirm you're not a bot" wall;
+    - `remote_components=['ejs:github']` fetches yt-dlp's official challenge solver,
+      which (run via the deno JS runtime baked into the image) solves YouTube's
+      signature / n challenges — without it, NO playable formats are returned."""
     opts = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
-        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "web_safari", "web"]}},
+        "remote_components": ["ejs:github"],
+        "cachedir": _CACHE_DIR,
         **extra,
     }
     cookiefile = _cookiefile()

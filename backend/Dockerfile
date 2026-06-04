@@ -39,6 +39,11 @@ RUN apt-get update && \
 # never the compose allowlist. Unused in prod (Render injects env directly).
 COPY --from=dopplerhq/cli:3.76.0 /bin/doppler /usr/local/bin/doppler
 
+# deno: JS runtime yt-dlp uses to solve YouTube's signature / n challenges
+# (with `remote_components=ejs:github`). Without it, YouTube returns no playable
+# audio formats. Pinned for reproducibility.
+COPY --from=denoland/deno:bin-2.8.2 /deno /usr/local/bin/deno
+
 # Non-root user
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 
