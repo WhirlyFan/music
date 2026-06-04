@@ -131,7 +131,9 @@ export function NowPlayingBar() {
   function togglePlay() {
     const el = audioRef.current
     if (!el) return
-    if (el.paused) void el.play()
+    // play() rejects if the source failed to load (e.g. YouTube blocked the
+    // stream) — swallow it; the <audio> onError handler surfaces the message.
+    if (el.paused) void el.play().catch(() => {})
     else el.pause()
   }
 
@@ -313,6 +315,11 @@ export function NowPlayingBar() {
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
           onEnded={() => next.mutate()}
+          onError={() => {
+            // The stream failed to load (commonly YouTube blocking extraction).
+            setPlaying(false)
+            toast.error(`Couldn't load audio for “${track.title}” — YouTube blocked it.`)
+          }}
         />
       )}
     </div>

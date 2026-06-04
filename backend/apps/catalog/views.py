@@ -150,7 +150,15 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
 
         # NOTE: artwork is resolved off this hot path (the client calls
         # refresh-artwork separately) — never make the audio wait on an image fetch.
-        audio = streaming.resolved_audio(ps.locator)
+        try:
+            audio = streaming.resolved_audio(ps.locator)
+        except Exception:  # noqa: BLE001 — yt-dlp/YouTube failure (bot wall, no format, …)
+            # Don't 500 with a stack trace: this is an upstream block, not our bug.
+            # The client's <audio> onError surfaces a clear message.
+            return Response(
+                {"detail": "YouTube blocked audio extraction — add/refresh cookies and retry."},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         headers = dict(audio.get("http_headers") or {})
         if request.headers.get("Range"):
             headers["Range"] = request.headers["Range"]
