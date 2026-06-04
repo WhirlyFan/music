@@ -25,8 +25,9 @@ export function PageHeader({
   className,
 }: {
   breadcrumbs?: Crumb[]
-  title: string
-  description?: string
+  // ReactNode so a loading page can pass a <SkeletonText/> in place of the title.
+  title: React.ReactNode
+  description?: React.ReactNode
   actions?: React.ReactNode
   className?: string
 }) {

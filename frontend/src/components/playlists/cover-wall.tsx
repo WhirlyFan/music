@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Ripples, useRipple } from '@/components/ui/ripple'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { TiltCard } from '@/components/ui/tilt-card'
 
 export type CoverItem = {
@@ -50,15 +50,20 @@ const reducedMotion = () =>
  *
  * The visual wall is `aria-hidden`; an `sr-only` list of real links is rendered
  * alongside so keyboard / screen-reader users still get every playlist.
+ *
+ * While `loading`, it renders a static grid of skeleton tiles via the same
+ * (zone-aware) `CoverTile` — no separate skeleton component to keep in sync.
  */
 export function CoverWall({
   items,
   onOpen,
   onDelete,
+  loading = false,
 }: {
   items: CoverItem[]
   onOpen: (id: string) => void
   onDelete: (id: string) => void
+  loading?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const tileEls = useRef<(HTMLDivElement | null)[]>([])
@@ -181,6 +186,27 @@ export function CoverWall({
 
   const tileCount = grid.cols * grid.rows
 
+  // Loading: a static grid of skeleton tiles (same CoverTile, zone-driven) —
+  // no torus/drag machinery (the ResizeObserver effect no-ops without a container).
+  if (loading) {
+    return (
+      <SkeletonZone>
+        <div
+          role="status"
+          aria-busy
+          aria-label="Loading playlists"
+          className="grid size-full gap-5 overflow-hidden p-4 [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]"
+        >
+          {Array.from({ length: 18 }).map((_, i) => (
+            <div key={i} className="aspect-square">
+              <CoverTile />
+            </div>
+          ))}
+        </div>
+      </SkeletonZone>
+    )
+  }
+
   return (
     <>
       <div
@@ -202,7 +228,7 @@ export function CoverWall({
               }}
               data-pid={item.id}
               style={{ width: grid.card, height: grid.card, willChange: 'transform' }}
-              className="absolute top-0 left-0"
+              className="absolute top-0 left-0 hover:z-10"
             >
               <CoverTile item={item} onDelete={onDelete} />
             </div>
@@ -224,104 +250,83 @@ export function CoverWall({
   )
 }
 
-function CoverTile({ item, onDelete }: { item: CoverItem; onDelete: (id: string) => void }) {
+function CoverTile({ item, onDelete }: { item?: CoverItem; onDelete?: (id: string) => void }) {
   const ripple = useRipple()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const skeleton = useSkeletonZone()
+
+  // Zone-driven skeleton: the same square footprint as the real cover, so the
+  // placeholder can't drift. (No separate skeleton component.)
+  if (skeleton || !item) return <Skeleton className="size-full rounded-md" />
 
   return (
-    <div
-      className="group relative size-full overflow-hidden rounded-md shadow-sm"
-      onPointerDown={ripple.onPointerDown}
-    >
-      <TiltCard className="absolute inset-0">
+    // Ripple host (transparent, same size); the whole TiltCard tilts as one card.
+    <div className="group relative size-full" onPointerDown={ripple.onPointerDown}>
+      <TiltCard className="overflow-hidden rounded-md shadow-sm">
         {item.artwork_url ? (
-          <img
-            src={item.artwork_url}
-            alt=""
-            draggable={false}
-            className="size-full object-cover"
-          />
+          <img src={item.artwork_url} alt="" draggable={false} className="size-full object-cover" />
         ) : (
           <div className="bg-muted text-muted-foreground grid size-full place-items-center">
             <Music className="size-8" aria-hidden />
           </div>
         )}
+
+        {/* Title, revealed on hover. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <p className="truncate text-sm font-medium text-white">{item.title}</p>
+        </div>
+
+        {/* Per-cover actions — never starts a pan (stopPropagation on pointer-down). */}
+        <div
+          className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label={`Actions for ${item.title}`}
+                className="size-7 bg-black/40 text-white hover:bg-black/60 hover:text-white"
+              >
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link to="/playlists/$playlistId" params={{ playlistId: item.id }}>
+                  Open / edit
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => setConfirmOpen(true)}
+              >
+                <Trash2 className="mr-2 size-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete “{item.title}”?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  The playlist is removed. The songs stay in your catalog, so re-importing them
+                  later is instant.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => onDelete?.(item.id)}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+
+        <Ripples ripples={ripple.ripples} onDone={ripple.remove} />
       </TiltCard>
-
-      {/* Title, revealed on hover. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
-        <p className="truncate text-sm font-medium text-white">{item.title}</p>
-      </div>
-
-      {/* Per-cover actions — never starts a pan (stopPropagation on pointer-down). */}
-      <div
-        className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              size="icon"
-              variant="ghost"
-              aria-label={`Actions for ${item.title}`}
-              className="size-7 bg-black/40 text-white hover:bg-black/60 hover:text-white"
-            >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <Link to="/playlists/$playlistId" params={{ playlistId: item.id }}>
-                Open / edit
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => setConfirmOpen(true)}
-            >
-              <Trash2 className="mr-2 size-4" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete “{item.title}”?</AlertDialogTitle>
-              <AlertDialogDescription>
-                The playlist is removed. The songs stay in your catalog, so re-importing them later
-                is instant.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => onDelete(item.id)}>Delete</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
-
-      <Ripples ripples={ripple.ripples} onDone={ripple.remove} />
-    </div>
-  )
-}
-
-/**
- * Loading placeholder for the wall — a responsive grid of cover-sized pulsing
- * squares. Colocated so the cover dimensions stay in sync with the real wall.
- */
-export function CoverWallSkeleton() {
-  return (
-    <div
-      role="status"
-      aria-busy
-      aria-label="Loading playlists"
-      className="grid size-full gap-5 overflow-hidden p-4 [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]"
-    >
-      {Array.from({ length: 18 }).map((_, i) => (
-        <Skeleton key={i} className="aspect-square w-full" />
-      ))}
     </div>
   )
 }

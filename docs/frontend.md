@@ -145,12 +145,15 @@ Loading states use **skeletons, not spinners**. Primitives live in
 `SkeletonText` (auto-sizes to the surrounding font), `SkeletonCircle`, plus a
 `SkeletonZone`/`useSkeletonZone()` for forcing a subtree into its loading state.
 
-The rule is **colocation**: a component's skeleton lives in the *same file* as
-the real component (e.g. `CoverWallSkeleton` next to `CoverWall`,
-`TrackRowSkeleton` next to `TrackRow`) and reuses the real shell's dimension
-constants, so the placeholder can't drift from the content. Drive it off the
-query: `useSkeletonZone() || isLoading`. Put `role="status" aria-busy` on the
-grouping container; leaves are `aria-hidden`. Every primitive bakes in
+The rule is **don't build parallel skeleton components** — the *real* component
+renders its own skeleton state. A component checks `useSkeletonZone()` (often
+`|| !data`) and returns its normal shell filled with `Skeleton`/`SkeletonText`
+(e.g. `CoverTile` and `TrackRow` both do this), so the placeholder inherits the
+real layout and can't drift. To show a loading screen, render the real tree
+inside `<SkeletonZone>` — e.g. the playlist detail page renders the real
+`PageHeader` + N `<TrackRow/>`s in a zone while the query loads; the cover wall
+renders a static grid of zone-driven `CoverTile`s. Put `role="status" aria-busy`
+on the grouping container; leaves are `aria-hidden`. Every primitive bakes in
 `motion-reduce:animate-none`. (Pattern adopted from `~/usul-policy-research-app`.)
 
 ## Auth integration

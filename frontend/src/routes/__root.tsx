@@ -3,6 +3,7 @@ import { createRootRouteWithContext, Outlet, redirect } from '@tanstack/react-ro
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import { AppHeader } from '@/components/layout/app-header'
+import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
@@ -104,6 +105,9 @@ function RootLayout() {
       {/* Persistent player + queue — survives navigation; renders only when
           authenticated and something is queued. */}
       <NowPlayingBar />
+
+      {/* Global bottom-right quick-actions (gooey FAB). */}
+      <QuickActionsFab />
 
       {/* Global toast surface (theme-synced, top-right). The wrapper
           component lives at components/ui/sonner.tsx — that's where to

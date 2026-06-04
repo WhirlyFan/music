@@ -33,7 +33,7 @@ import {
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { Ripples, useRipple } from '@/components/ui/ripple'
-import { Skeleton, SkeletonText } from '@/components/ui/skeleton'
+import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import type { PlaylistDetail, PlaylistTrack } from '@/lib/query/catalog'
 import {
@@ -88,8 +88,27 @@ function PlaylistDetailPage() {
     return () => io.disconnect()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
-  if (isLoading) return <PlaylistDetailSkeleton />
-  if (error || !playlist) return <FormError message="Failed to load playlist." />
+  if (error) return <FormError message="Failed to load playlist." />
+  // Loading: the REAL header + rows rendered inside a SkeletonZone so each shows
+  // its own skeleton (no parallel skeleton tree).
+  if (isLoading || !playlist) {
+    return (
+      <SkeletonZone>
+        <div className="space-y-6">
+          <PageHeader
+            breadcrumbs={[{ label: 'Playlists', to: '/playlists' }]}
+            title={<SkeletonText className="max-w-[16rem]" />}
+            description={<SkeletonText className="max-w-[6rem]" />}
+          />
+          <ol className="space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <TrackRow key={i} />
+            ))}
+          </ol>
+        </div>
+      </SkeletonZone>
+    )
+  }
 
   const items = tracks.data?.pages.flatMap((p) => p.results) ?? []
 
@@ -170,12 +189,14 @@ function PlaylistDetailPage() {
       </ol>
 
       {/* Infinite-scroll sentinel — shows skeleton rows while the next page loads. */}
-      <div ref={sentinelRef} className="space-y-2 py-2">
+      <div ref={sentinelRef} className="py-2">
         {isFetchingNextPage && (
-          <>
-            <TrackRowSkeleton />
-            <TrackRowSkeleton />
-          </>
+          <SkeletonZone>
+            <ol className="space-y-2">
+              <TrackRow />
+              <TrackRow />
+            </ol>
+          </SkeletonZone>
         )}
       </div>
 
@@ -278,8 +299,8 @@ function EditPanel({
 
 function TrackRow({
   item,
-  editing,
-  refreshing,
+  editing = false,
+  refreshing = false,
   onPlayFrom,
   onQueue,
   onRemove,
@@ -287,25 +308,41 @@ function TrackRow({
   onDragStartItem,
   onDropOnItem,
 }: {
-  item: PlaylistTrack
-  editing: boolean
-  refreshing: boolean
-  onPlayFrom: (trackId: string) => void
-  onQueue: (trackId: string) => void
-  onRemove: (trackId: string) => void
-  onRefreshArt: (trackId: string) => void
-  onDragStartItem: (trackId: string) => void
-  onDropOnItem: (position: number) => void
+  item?: PlaylistTrack
+  editing?: boolean
+  refreshing?: boolean
+  onPlayFrom?: (trackId: string) => void
+  onQueue?: (trackId: string) => void
+  onRemove?: (trackId: string) => void
+  onRefreshArt?: (trackId: string) => void
+  onDragStartItem?: (trackId: string) => void
+  onDropOnItem?: (position: number) => void
 }) {
   const ripple = useRipple()
+  const skeleton = useSkeletonZone()
+
+  // Zone-driven skeleton: same <li> shell as the real row (artwork + two text
+  // lines), so it inherits the row's dimensions. No separate skeleton component.
+  if (skeleton || !item) {
+    return (
+      <li aria-hidden className="border-border flex items-center gap-3 rounded-lg border p-3">
+        <Skeleton className="size-10 shrink-0 rounded-md" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <SkeletonText className="max-w-[14rem]" />
+          <SkeletonText className="max-w-[9rem] text-sm" />
+        </div>
+      </li>
+    )
+  }
+
   const { track } = item
 
   return (
     <li
       draggable={editing}
-      onDragStart={editing ? () => onDragStartItem(track.id) : undefined}
+      onDragStart={editing ? () => onDragStartItem?.(track.id) : undefined}
       onDragOver={editing ? (e) => e.preventDefault() : undefined}
-      onDrop={editing ? () => onDropOnItem(item.position) : undefined}
+      onDrop={editing ? () => onDropOnItem?.(item.position) : undefined}
       onPointerDown={editing ? undefined : ripple.onPointerDown}
       className={`border-border relative flex items-center gap-3 overflow-hidden rounded-lg border p-3 ${
         editing ? 'cursor-grab' : 'hover:bg-accent/40'
@@ -316,7 +353,7 @@ function TrackRow({
         <button
           type="button"
           aria-label={`Play ${track.title}`}
-          onClick={() => onPlayFrom(track.id)}
+          onClick={() => onPlayFrom?.(track.id)}
           className="absolute inset-0 rounded-lg"
         />
       )}
@@ -334,7 +371,7 @@ function TrackRow({
             aria-label={`Retry cover art for ${track.title}`}
             title="Cover is from YouTube — retry the original"
             disabled={refreshing}
-            onClick={() => onRefreshArt(track.id)}
+            onClick={() => onRefreshArt?.(track.id)}
             className="bg-background/80 text-foreground hover:bg-background absolute -top-1 -right-1 z-10 grid size-5 place-items-center rounded-full border shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`size-3 ${refreshing ? 'animate-spin' : ''}`} />
@@ -357,7 +394,7 @@ function TrackRow({
             variant="ghost"
             aria-label={`Remove ${track.title} from playlist`}
             title="Remove from playlist"
-            onClick={() => onRemove(track.id)}
+            onClick={() => onRemove?.(track.id)}
           >
             <X className="size-4" />
           </Button>
@@ -367,7 +404,7 @@ function TrackRow({
             variant="ghost"
             aria-label={`Add ${track.title} to queue`}
             title="Add to queue"
-            onClick={() => onQueue(track.id)}
+            onClick={() => onQueue?.(track.id)}
           >
             <ListPlus className="size-4" />
           </Button>
@@ -375,43 +412,5 @@ function TrackRow({
       </div>
       {!editing && <Ripples ripples={ripple.ripples} onDone={ripple.remove} />}
     </li>
-  )
-}
-
-/** Colocated skeletons — same shells as the header + TrackRow so they can't drift. */
-function TrackRowSkeleton() {
-  return (
-    <li
-      aria-hidden
-      className="border-border flex items-center gap-3 rounded-lg border p-3"
-    >
-      <Skeleton className="size-10 shrink-0 rounded-md" />
-      <div className="min-w-0 flex-1 space-y-1.5">
-        <SkeletonText className="max-w-[14rem]" />
-        <SkeletonText className="max-w-[9rem] text-sm" />
-      </div>
-    </li>
-  )
-}
-
-function PlaylistDetailSkeleton() {
-  return (
-    <div className="space-y-6" role="status" aria-busy aria-label="Loading playlist">
-      <div className="space-y-3">
-        <Skeleton className="h-3.5 w-28" /> {/* breadcrumb */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="space-y-2">
-            <Skeleton className="h-7 w-48" /> {/* title */}
-            <Skeleton className="h-4 w-24" /> {/* track count */}
-          </div>
-          <Skeleton className="h-10 w-20" /> {/* Play */}
-        </div>
-      </div>
-      <ol className="space-y-2">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <TrackRowSkeleton key={i} />
-        ))}
-      </ol>
-    </div>
   )
 }
