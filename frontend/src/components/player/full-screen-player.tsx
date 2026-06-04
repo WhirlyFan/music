@@ -72,16 +72,18 @@ export function FullScreenPlayer({
       onClick={onClose}
       className="motion-safe:animate-fade-in fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
     >
-      {/* Immersive backdrop: the cover, blurred + darkened. Lighter blur on phones
-          (blur-2xl is heavy to composite on mobile GPUs). */}
-      {track.artwork_url ? (
+      {/* Immersive backdrop: an always-opaque base, then the cover blurred on top,
+          then a darkening scrim. The opaque base matters on track change — the new
+          cover's background-image is briefly transparent while it loads, and without
+          a base under it the page would flash through the 70% scrim. Lighter blur on
+          phones (blur-2xl is heavy to composite on mobile GPUs). */}
+      <div aria-hidden className="bg-background absolute inset-0" />
+      {track.artwork_url && (
         <div
           aria-hidden
           className="absolute inset-0 scale-110 bg-cover bg-center blur-lg brightness-50 sm:blur-2xl"
           style={{ backgroundImage: `url(${track.artwork_url})` }}
         />
-      ) : (
-        <div aria-hidden className="bg-background absolute inset-0" />
       )}
       <div aria-hidden className="bg-background/70 absolute inset-0" />
 

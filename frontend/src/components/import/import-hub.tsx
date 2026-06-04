@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -37,6 +37,7 @@ export function ImportHub() {
   const queueTracks = useQueueTracks()
   const [imported, setImported] = useState<ImportResult | null>(null)
   const [text, setText] = useState('')
+  const fieldRef = useRef<HTMLDivElement>(null)
 
   const trimmed = text.trim()
   const isUrl = urlSchema.safeParse(trimmed).success
@@ -62,8 +63,19 @@ export function ImportHub() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (isUrl) doImport()
-    else if (trimmed) setQ(trimmed) // search now (don't wait for the debounce)
+    if (isUrl) {
+      doImport()
+    } else if (trimmed) {
+      setQ(trimmed) // search now (don't wait for the debounce)
+    } else {
+      // Empty submit → wiggle the field (the placeholder says what to do).
+      const el = fieldRef.current
+      if (el) {
+        el.classList.remove('animate-wiggle')
+        void el.offsetWidth
+        el.classList.add('animate-wiggle')
+      }
+    }
   }
 
   const queue = (id: string) =>
@@ -82,7 +94,11 @@ export function ImportHub() {
         </p>
 
         <form onSubmit={onSubmit} aria-label="Search or import" className="mt-6 w-full space-y-3">
-          <div className="relative">
+          <div
+            ref={fieldRef}
+            className="relative"
+            onAnimationEnd={(e) => e.currentTarget.classList.remove('animate-wiggle')}
+          >
             <Search
               className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 z-10 size-5 -translate-y-1/2"
               aria-hidden
@@ -145,7 +161,7 @@ function SearchResults({
   const empty = q.length > 0 && !search.isPending && !search.isError && results.length === 0
 
   return (
-    <section aria-label="Search results" className="mx-auto max-w-2xl space-y-2">
+    <section aria-label="Search results" className="mx-auto max-w-2xl space-y-2 pb-28">
       {empty && <p className="text-muted-foreground text-center text-sm">No songs match “{q}”.</p>}
       <SkeletonZone active={showSkeleton}>
         <ol className="space-y-2">

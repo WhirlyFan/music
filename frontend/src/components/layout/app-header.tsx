@@ -39,7 +39,7 @@ export function AppHeader() {
             className="text-muted-foreground hover:text-foreground text-sm"
             activeProps={{ className: 'text-foreground font-medium' }}
           >
-            Playlists
+            playlists
           </Link>
         )}
 
@@ -49,7 +49,7 @@ export function AppHeader() {
             className="text-muted-foreground hover:text-foreground text-sm"
             activeProps={{ className: 'text-foreground font-medium' }}
           >
-            Docs
+            docs
           </Link>
         )}
 
