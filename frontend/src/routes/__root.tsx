@@ -24,6 +24,21 @@ const VERIFY_EXEMPT_PREFIXES = [
   '/docs',
 ]
 
+// Routes a logged-OUT user is allowed to visit. Everything else redirects to the
+// home page. Includes the password-reset + email-verification flows, which a
+// logged-out user must reach (they arrive via an emailed link).
+const PUBLIC_PREFIXES = [
+  '/login',
+  '/signup',
+  '/docs',
+  '/account/logout',
+  '/account/verify-email',
+  '/account/password/forgot',
+  '/account/password/reset',
+]
+const isPublicPath = (path: string) =>
+  path === '/' || PUBLIC_PREFIXES.some((p) => path.startsWith(p))
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootLayout,
   // Default <title> when a child route doesn't override. Per-route overrides
@@ -48,9 +63,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       staleTime: 5 * 60 * 1000,
     })
 
-    // Not logged in → not this gate's concern; let the route render and
-    // any IsAuthenticated/redirect-to-login handling happens downstream.
-    if (!isSessionAuthenticated(session)) return
+    // Not logged in → only public routes are allowed; anything else goes home.
+    if (!isSessionAuthenticated(session)) {
+      if (!isPublicPath(path)) throw redirect({ to: '/' })
+      return
+    }
 
     const emails = await context.queryClient.fetchQuery({
       queryKey: emailKeys.list(),
