@@ -247,13 +247,18 @@ def ingest_with_meta(url: str) -> dict:
     """API-first. Returns {title, external_id, kind, tracks, partial}.
 
     With creds, fetch the *full* list via the Web API (no 50 cap, includes ISRC).
-    If the API refuses (editorial playlists 404 for apps) or no creds are set,
-    fall back to the keyless embed scrape. `partial` is True only when we end up
-    on the embed's capped ~50."""
+    Fall back to the keyless embed scrape when the API refuses (editorial playlists
+    404 for apps), when there are no creds, OR when the API returns a playlist's
+    metadata with an EMPTY track list — Spotify increasingly serves the cover/title
+    but withholds the tracks from third-party apps (that's how an import ends up
+    with art but no songs). `partial` is True only when we end up on the capped embed."""
     kind, sid = _classify(url)
     if _configured():
         try:
-            return {**_api_with_meta(kind, sid), "partial": False}
+            api = _api_with_meta(kind, sid)
+            if api["tracks"]:
+                return {**api, "partial": False}
+            # 200 OK but no tracks (restricted) → fall through to the scrape.
         except SpotifyError:
             pass  # API refused (e.g. editorial 404) → try the keyless scrape
     scraped = _scrape(kind, sid)

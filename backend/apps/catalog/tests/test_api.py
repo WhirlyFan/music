@@ -131,6 +131,42 @@ def test_ingest_spotify_editorial_falls_back_to_capped_scrape(client, monkeypatc
 
 
 @pytest.mark.django_db
+def test_ingest_spotify_empty_api_tracks_falls_back_to_scrape(client, monkeypatch):
+    # Spotify increasingly serves a playlist's metadata + cover but an EMPTY track
+    # list to apps (200 OK, no error). We must fall back to the keyless scrape so the
+    # import isn't "cover but no songs".
+    from apps.catalog.ingest import spotify
+
+    monkeypatch.setattr(spotify, "_configured", lambda: True)
+    monkeypatch.setattr(
+        spotify,
+        "_api_with_meta",
+        lambda kind, sid: {
+            "title": "vibey coffee shop",
+            "external_id": sid,
+            "kind": "playlist",
+            "tracks": [],  # restricted — no tracks from the API
+            "cover": "https://img/cover",
+        },
+    )
+    monkeypatch.setattr(
+        spotify,
+        "_scrape",
+        lambda kind, sid: {
+            "title": "vibey coffee shop",
+            "external_id": sid,
+            "kind": "playlist",
+            "tracks": [{"title": "Locket", "artist": "Crumb", "duration": 200000, "isrc": ""}],
+            "cover": "https://img/cover",
+        },
+    )
+    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/abc"}, format="json")
+    assert r.status_code == 201
+    assert r.data["track_count"] == 1
+    assert r.data["tracks"][0]["title"] == "Locket"
+
+
+@pytest.mark.django_db
 def test_ingest_spotify(client, monkeypatch):
     from apps.catalog.ingest import spotify
 

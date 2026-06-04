@@ -1,10 +1,26 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { emailKeys, sessionKeys } from '@/lib/query/keys'
+import { emailKeys, playlistKeys, roomKeys, sessionKeys } from '@/lib/query/keys'
 
 import { auth } from './api'
 
 export type EmailAddress = { email: string; verified: boolean; primary: boolean }
+
+/**
+ * Reset cache for an auth boundary (login/signup/logout/MFA-complete). Session +
+ * email are *invalidated* (refetched) — keeping the auth-state observers mounted so
+ * the `authed` gating that shows the player keeps working. The previous user's data
+ * (room/queue, playlists, song search, per-route search text) is *removed* so the
+ * next session never inherits it and refetches fresh. Prefix keys match sub-queries.
+ */
+function resetForSession(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: sessionKeys.all() })
+  qc.invalidateQueries({ queryKey: emailKeys.all() })
+  qc.removeQueries({ queryKey: roomKeys.all() })
+  qc.removeQueries({ queryKey: playlistKeys.all() })
+  qc.removeQueries({ queryKey: ['search'] })
+  qc.removeQueries({ queryKey: ['ui'] })
+}
 
 export function useSession() {
   return useQuery({
@@ -23,11 +39,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: ({ identifier, password }: { identifier: string; password: string }) =>
       auth.login(identifier, password),
-    // Flush ALL cached query data so the new user never inherits the previous
-    // user's room/queue/playlists; every query (incl. the user-scoped room)
-    // refetches fresh for this session. Mutations are untouched, so the
-    // multi-step login/MFA flow (which reads mutation responses) keeps working.
-    onSuccess: () => qc.removeQueries(),
+    onSuccess: () => resetForSession(qc),
   })
 }
 
@@ -36,7 +48,7 @@ export function useSignup() {
   return useMutation({
     mutationFn: (params: { email: string; username: string; password: string }) =>
       auth.signup(params),
-    onSuccess: () => qc.removeQueries(), // fresh session → flush any stale cached data
+    onSuccess: () => resetForSession(qc),
   })
 }
 
@@ -44,9 +56,7 @@ export function useLogout() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: () => auth.logout(),
-    // Flush ALL cached data on logout so nothing belonging to the user lingers in
-    // memory for whoever logs in next (room/queue, playlists, search, emails…).
-    onSuccess: () => qc.removeQueries(),
+    onSuccess: () => resetForSession(qc),
   })
 }
 
@@ -59,7 +69,7 @@ export function useMfaAuthenticate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (code: string) => auth.mfaAuthenticate(code),
-    onSuccess: () => qc.removeQueries(), // completes login → flush stale cache for the new session
+    onSuccess: () => resetForSession(qc),
   })
 }
 
@@ -109,7 +119,7 @@ export function useMfaTrust() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (trust: boolean) => auth.mfaTrust(trust),
-    onSuccess: () => qc.removeQueries(), // completes login → flush stale cache for the new session
+    onSuccess: () => resetForSession(qc),
   })
 }
 
