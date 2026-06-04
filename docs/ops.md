@@ -43,6 +43,7 @@ See [decisions.md → Workflow](decisions.md#workflow--trunk-based-main-only).
 | `make mm` | `makemigrations` |
 | `make migrate` | `migrate` (admin role) |
 | `make seed` | Seed data (admin role; refuses if `DEBUG=False`) |
+| `make reset` | Rebuild the backend image + recreate its `.venv` volume. **Run this after changing backend deps** — a plain `up` keeps the stale venv. DB untouched. |
 | `make reset-db` | **DESTRUCTIVE.** Drop volume, recreate, migrate, seed |
 | `make shell` | Django shell (admin role) |
 | `make test` | `pytest` |
@@ -70,6 +71,8 @@ live in `frontend/.env` (also gitignored; example tracked).
 | `DATABASE_URL_ADMIN` | ✅ | Migrations + seed — `app_admin` role |
 | `WEB_CONCURRENCY` | optional | Gunicorn workers; default 3, lower on small instances |
 | `SENTRY_DSN` | optional | Opt-in error tracking |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | optional | Spotify ingest (metadata only); unset → "not configured" |
+| `YOUTUBE_POT_BASE_URL` | optional | URL of the bgutil PO-token sidecar (see [YouTube audio playback](#youtube-audio-playback)); unset → no PO tokens |
 | `HATCHET_CLIENT_TOKEN` | for worker | Generated via `make hatchet-token` |
 | `HATCHET_CLIENT_HOST_PORT` | for worker | `hatchet:7077` in compose |
 | `DJANGO_LOG_LEVEL` | optional | Default `INFO` |
@@ -79,6 +82,30 @@ live in `frontend/.env` (also gitignored; example tracked).
 |---|---|---|
 | `VITE_API_BASE` | ✅ | Usually `/api/v1` because we proxy same-origin |
 | `VITE_SENTRY_DSN` | optional | Frontend error tracking |
+
+## YouTube audio playback
+
+Tracks are resolved to a YouTube video and the audio is proxied through the
+backend (`apps/catalog/ingest/youtube.py` + `streaming.py`). YouTube actively
+fights extraction, so the chain has several pieces — all required together:
+
+| Piece | Where | Why |
+|---|---|---|
+| **yt-dlp** | backend dep (`uv`) | resolves the audio stream URL. **Bump frequently** — stale yt-dlp breaks as YouTube changes. |
+| **deno** | baked into `backend/Dockerfile` | JS runtime that runs the challenge solver |
+| **yt-dlp-ejs** | backend dep (via `yt-dlp[default]`) | the JS **signature/n-challenge** solver scripts. *Without deno + this, YouTube returns zero playable formats.* Keep its version in lockstep with yt-dlp. |
+| **curl_cffi** | backend dep (`yt-dlp[...,curl-cffi]`) | browser-TLS impersonation (auto-used where the arch provides targets) → dodges bot detection |
+| **bgutil-ytdlp-pot-provider** | backend dep **+** `bgutil-provider` compose service | fetches **PO (proof-of-origin) tokens** from the sidecar to avoid throttling. Plugin version **and** the sidecar image tag must match (`docker-compose.yml` / `render.yaml`). |
+
+Notes:
+- After bumping any of these (esp. yt-dlp/yt-dlp-ejs), run **`make reset`** — the
+  backend `.venv` is an anonymous volume that a plain `up` won't refresh.
+- `YOUTUBE_POT_BASE_URL` points the plugin at the sidecar (`http://bgutil-provider:4416`
+  in compose). Unset → no PO tokens (fine until YouTube throttles the IP).
+- **Prod:** `render.yaml` provisions the provider as a **private service (paid)**.
+  Don't need it yet? Delete that service and unset `YOUTUBE_POT_BASE_URL`.
+- Cookies are **not** used. If the bot wall ever returns under load, PO tokens
+  (above) are the fix, not cookies.
 
 ## Database migrations
 

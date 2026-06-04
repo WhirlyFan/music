@@ -197,11 +197,43 @@ services:
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
 
+      # ── YouTube PO-token provider ───────────────────────────────────────
+      # Internal URL of the bgutil PO-token sidecar (the pserv below). yt-dlp's
+      # bgutil plugin fetches YouTube proof-of-origin tokens from it to dodge
+      # throttling under load. Unset this (and delete the pserv) to disable —
+      # playback works without it until YouTube starts throttling.
+      - key: YOUTUBE_POT_BASE_URL
+        value: http://react-django-template-pot-provider:4416
+
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.
       # Left unset here so the file doesn't leak secrets if forked.
       - key: SENTRY_DSN
         sync: false                # marks it as "manage this one in the dashboard"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # YouTube PO-token provider — Private Service (internal-only sidecar).
+  #
+  # bgutil-ytdlp-pot-provider's HTTP server (port 4416). The backend's yt-dlp
+  # plugin fetches YouTube proof-of-origin tokens from it to avoid throttling
+  # under load. Stateless, no secrets, not reachable from the internet.
+  #
+  # ⚠️  Render private services are NOT on the free tier — this incurs cost
+  # (smallest paid instance). If you don't need it yet, DELETE this service and
+  # UNSET YOUTUBE_POT_BASE_URL above; prod plays fine without PO tokens until
+  # YouTube throttles the backend IP. Keep the image tag in lockstep with the
+  # bgutil-ytdlp-pot-provider plugin pinned in backend/pyproject.toml.
+  # ─────────────────────────────────────────────────────────────────────────
+  - type: pserv
+    runtime: image
+    name: react-django-template-pot-provider
+    plan: starter                  # private services have no free tier
+    region: oregon                 # MUST match the backend service region
+    image:
+      url: docker.io/brainicism/bgutil-ytdlp-pot-provider:1.3.1
+    envVars:
+      - key: PORT                  # the server listens on $PORT; backend connects on 4416
+        value: "4416"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Managed Postgres (free 90 days, then $7/mo Starter required).
