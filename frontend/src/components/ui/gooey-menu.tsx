@@ -67,7 +67,7 @@ export function GooeyMenu({ items, className }: { items: GooeyItem[]; className?
       <svg aria-hidden width="0" height="0" className="absolute">
         <defs>
           <filter id="goo">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
             <feColorMatrix
               in="blur"
               mode="matrix"
@@ -78,14 +78,8 @@ export function GooeyMenu({ items, className }: { items: GooeyItem[]; className?
         </defs>
       </svg>
 
-      {/* Blob layer — colored circles under the goo filter (no shadows). The goo
-          is applied ONLY while open: a live SVG filter anywhere on the page forces
-          backdrop-blur (our dialogs) onto a slow compositing path, which janks them
-          badly. Closed, it's a single static circle that needs no goo anyway. */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{ filter: open ? 'url(#goo)' : undefined }}
-      >
+      {/* Blob layer — colored circles under the goo filter (no shadows). */}
+      <div className="pointer-events-none absolute inset-0" style={{ filter: 'url(#goo)' }}>
         <span className="bg-primary absolute inset-0 rounded-full" />
         {items.map((item, i) => (
           <span

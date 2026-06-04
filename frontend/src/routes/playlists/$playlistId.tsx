@@ -1,14 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import {
-  GripVertical,
-  ListPlus,
-  MoreVertical,
-  Pencil,
-  RefreshCw,
-  Search,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { GripVertical, ListPlus, MoreVertical, Pencil, RefreshCw, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -25,6 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { FloatingSearchPill } from '@/components/ui/floating-search-pill'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -117,7 +109,7 @@ function PlaylistDetailPage() {
   const items = tracks.data?.pages.flatMap((p) => p.results) ?? []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-36">
       <PageHeader
         breadcrumbs={[{ label: 'Playlists', to: '/playlists' }, { label: playlist.title }]}
         title={playlist.title}
@@ -161,23 +153,6 @@ function PlaylistDetailPage() {
           playlistId={playlistId}
           onDone={() => setEditing(false)}
         />
-      )}
-
-      {playlist.track_count > 0 && (
-        <div className="relative mx-auto w-full max-w-md">
-          <Search
-            className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"
-            aria-hidden
-          />
-          <Input
-            type="search"
-            aria-label="Search this playlist"
-            placeholder="Search this playlist"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="bg-background/80 h-12 rounded-full pr-4 pl-11 shadow-lg backdrop-blur"
-          />
-        </div>
       )}
 
       {tracks.isError && <FormError message="Failed to load tracks." />}
@@ -249,6 +224,15 @@ function PlaylistDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {playlist.track_count > 0 && (
+        <FloatingSearchPill
+          value={search}
+          onChange={setSearch}
+          placeholder="Search this playlist"
+          ariaLabel="Search this playlist"
+        />
+      )}
     </div>
   )
 }
@@ -386,7 +370,13 @@ function TrackRow({
       <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
         {item.position + 1}
       </span>
-      <div className="relative shrink-0" onPointerDown={(e) => e.stopPropagation()}>
+      {/* Clicking the cover plays the song too (the full-row button sits behind
+          it). When editing, the cover is just a drag handle, not a play target. */}
+      <div
+        className={`relative shrink-0 ${editing ? '' : 'cursor-pointer'}`}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={editing ? undefined : () => onPlayFrom?.(track.id)}
+      >
         <TrackArtwork track={track} />
         {isYouTubeArt(track.artwork_url) && (
           <button
@@ -394,7 +384,10 @@ function TrackRow({
             aria-label={`Retry cover art for ${track.title}`}
             title="Cover is from YouTube — retry the original"
             disabled={refreshing}
-            onClick={() => onRefreshArt?.(track.id)}
+            onClick={(e) => {
+              e.stopPropagation() // don't also trigger the cover's play
+              onRefreshArt?.(track.id)
+            }}
             className="bg-background/80 text-foreground hover:bg-background absolute -top-1 -right-1 z-10 grid size-5 place-items-center rounded-full border shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`size-3 ${refreshing ? 'animate-spin' : ''}`} />

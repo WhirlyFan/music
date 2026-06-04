@@ -212,17 +212,21 @@ export function NowPlayingBar() {
       ref={barRef}
       className="border-border bg-background/90 motion-safe:animate-slide-up fixed bottom-4 left-1/2 z-40 w-[min(95%,42rem)] -translate-x-1/2 rounded-2xl border shadow-lg backdrop-blur"
     >
-      {/* Queue panel. Always mounted; its height animates 0→full via the grid-rows
-          trick, so a ResizeObserver reports it every frame and the playlists search
-          pill rides it in lockstep. `inert` drops it from tab/a11y while collapsed. */}
+      {/* Queue panel. Always mounted; it grows upward (grid-rows 0fr→1fr) so its
+          top edge travels by exactly the panel height — the search pill rides that
+          top edge. Both use the SAME 280ms ease-out-quint CSS transition over the
+          same distance (the pill reads the pre-measured height off the stable inner
+          box, NOT a per-frame observer), so they open in true lockstep. `inert`
+          drops it from tab/a11y while collapsed. */}
       <div
         className={cn(
-          'absolute inset-x-0 bottom-full mb-2 grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none',
+          'absolute inset-x-0 bottom-full mb-2 grid transition-[grid-template-rows] duration-[280ms] ease-out-quint motion-reduce:transition-none',
           queueOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}
       >
-        <div ref={queuePanelRef} className="min-h-0 overflow-hidden">
+        <div className="min-h-0 overflow-hidden">
           <div
+            ref={queuePanelRef}
             inert={!queueOpen}
             className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
           >
