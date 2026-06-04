@@ -6,6 +6,7 @@ import { z } from 'zod'
 
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
+import { RainbowButton } from '@/components/ui/rainbow-button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/client'
@@ -53,7 +54,9 @@ export function ImportHub() {
   return (
     <div className="space-y-10">
       <section className="mx-auto flex max-w-xl flex-col items-center pt-10 text-center sm:pt-16">
-        <h1 className="text-3xl font-semibold tracking-tight">What do you want to hear?</h1>
+        <h1 className="shimmer-text text-3xl font-semibold tracking-tight">
+          What do you want to hear?
+        </h1>
         <p className="text-muted-foreground mt-2 text-sm">
           Paste a Spotify, Apple Music, or YouTube link — playlist, album, or track.
         </p>
@@ -95,7 +98,7 @@ export function ImportHub() {
               )
             }}
           </form.Field>
-          <Button
+          <RainbowButton
             type="submit"
             size="lg"
             aria-busy={ingest.isPending || undefined}
@@ -103,7 +106,7 @@ export function ImportHub() {
             className={`rounded-full ${ingest.isPending ? 'pointer-events-none opacity-60' : ''}`}
           >
             {ingest.isPending ? 'Importing…' : 'Import'}
-          </Button>
+          </RainbowButton>
         </form>
       </section>
 

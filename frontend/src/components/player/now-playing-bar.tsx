@@ -66,14 +66,16 @@ export function NowPlayingBar() {
   const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  // Playback status, driven by the <audio> element's own events (DOM state):
-  // `loading` = buffering/resolving (button shows a spinner, disabled);
-  // `playing` flips on the real `playing` event so the icon matches reality.
+  // Playback status, driven by the <audio> element's own events (DOM state) +
+  // the match query. `playing` flips on the real `playing` event; `buffering`
+  // covers the audio fetch/buffer gap. The spinner state (`loading`) is derived
+  // below from the match-in-progress + buffering — no effect sets it.
   const [playing, setPlaying] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [buffering, setBuffering] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const queuePanelRef = useRef<HTMLDivElement>(null)
   // Queue-open lives in the Query cache (shared with the playlists search pill).
-  const { queueOpen, setQueueOpen } = usePlayerUi()
+  const { queueOpen, setQueueOpen, setQueueHeight } = usePlayerUi()
 
   // Click outside the player pill collapses the open queue panel.
   useEffect(() => {
@@ -85,27 +87,45 @@ export function NowPlayingBar() {
     return () => document.removeEventListener('pointerdown', onDown)
   }, [queueOpen])
 
+  // Publish the open queue panel's height so the playlists search pill can sit
+  // exactly above it (any screen size). Only the (async) ResizeObserver callback
+  // sets state — no synchronous setState in the effect. A stale height while
+  // closed is harmless: the search pill only reads it when the queue is open.
+  useEffect(() => {
+    const el = queuePanelRef.current
+    if (!queueOpen || !el) return
+    const ro = new ResizeObserver(() => setQueueHeight(el.offsetHeight))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [queueOpen])
+
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
+  const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
 
-  // Autoplay gate: NEVER autoplay the track restored from a previous session —
-  // only tracks the user actually starts or advances to. `armed` drives the
-  // <audio autoPlay>. The decision (and the playIntent module flag) is handled
-  // entirely in an effect so render reads no refs / no module-mutable state
-  // (react-compiler rules — see the react-effects skill). `prevItem` is undefined
-  // until the room first loads; the first observed item is the restored one and
-  // is armed only if a deliberate play set playIntent.
-  const [armed, setArmed] = useState(false)
-  const prevItem = useRef<string | null | undefined>(undefined)
+  // Autoplay + loading, imperatively. We start playback with play() from an effect
+  // (after the <audio> mounts), not the `autoPlay` attribute — the attribute reads
+  // a stale value on the render that mounts a new item and silently skips play
+  // (this is why hitting Next didn't play). NEVER auto-start the track merely
+  // restored on page load: only when a deliberate action set `playIntent` (play /
+  // next / previous / jump). While we intend to play but aren't yet — resolving the
+  // source ("fetching details") or buffering — `loading` is true, so the button
+  // shows a spinner with no mis-click gap. `startedFor` records the decided item.
+  const startedFor = useRef<string | null>(null)
   useEffect(() => {
-    if (!room) return
-    const firstObservation = prevItem.current === undefined
-    const changed = !firstObservation && itemId !== prevItem.current
-    prevItem.current = itemId
-    if (firstObservation ? playIntent.value : changed) setArmed(true)
-    playIntent.value = false // one-shot — consumed
-  }, [room, itemId])
+    if (!itemId || startedFor.current === itemId) return
+    if (!playIntent.value) {
+      startedFor.current = itemId // restored / no intent → don't auto-start
+      return
+    }
+    if (audioSrc) {
+      startedFor.current = itemId
+      playIntent.value = false
+      audioRef.current?.play().catch(() => {}) // onError surfaces a real failure
+    }
+    // While unmatched (audioSrc null), the spinner shows via matchTrack.isPending.
+  }, [itemId, audioSrc])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
@@ -140,7 +160,10 @@ export function NowPlayingBar() {
 
   if (!authed || !track) return null
 
-  const audioSrc = matched ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
+  // Spinner while we're resolving the source ("fetching details") or buffering —
+  // derived, so no effect calls setState. Covers the gap with no mis-click.
+  const loading = matchTrack.isPending || buffering
+
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const context = room?.context ?? [] // the FULL playlist/album (stable list)
   const contextLabel = room?.context_label ?? ''
@@ -182,7 +205,10 @@ export function NowPlayingBar() {
       className="border-border bg-background/90 motion-safe:animate-slide-up fixed bottom-4 left-1/2 z-40 w-[min(95%,42rem)] -translate-x-1/2 rounded-2xl border shadow-lg backdrop-blur"
     >
       {queueOpen && (
-        <div className="border-border bg-background/95 motion-safe:animate-slide-up absolute inset-x-0 bottom-full mb-2 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80">
+        <div
+          ref={queuePanelRef}
+          className="border-border bg-background/95 motion-safe:animate-slide-up absolute inset-x-0 bottom-full mb-2 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
+        >
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
@@ -340,27 +366,23 @@ export function NowPlayingBar() {
           key={itemId ?? track.id}
           ref={audioRef}
           src={audioSrc}
-          autoPlay={armed}
           onLoadStart={() => {
             setCurrentTime(0)
             setDuration(0)
+            setBuffering(true) // fetching the stream
           }}
-          onWaiting={() => setLoading(true)} // re-buffering mid-track
+          onWaiting={() => setBuffering(true)} // re-buffering mid-track
           onPlay={() => {
-            // A play is now in flight (autoplay or a click) — spinner until it
-            // actually starts. Tying `loading` to a live play attempt (not just
-            // src load) means a ready-but-paused/cached track shows Play, never a
-            // perpetual spinner.
-            setLoading(true)
+            setBuffering(true) // requested — spinner until it actually starts
             connectAnalyser() // wire the visualizer on the first play gesture
           }}
           onPlaying={() => {
             // Real playback started — flip to "playing" so the button matches reality.
-            setLoading(false)
+            setBuffering(false)
             setPlaying(true)
           }}
           onPause={() => {
-            setLoading(false)
+            setBuffering(false)
             setPlaying(false)
           }}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -368,7 +390,7 @@ export function NowPlayingBar() {
           onEnded={() => next.mutate()}
           onError={() => {
             // The stream failed to load (couldn't extract audio from YouTube).
-            setLoading(false)
+            setBuffering(false)
             setPlaying(false)
             toast.error(`Couldn't load audio for “${track.title}” — try again shortly.`)
           }}

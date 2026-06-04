@@ -32,11 +32,13 @@ function PlaylistsPage() {
   const playlists = useInfinitePlaylists(q)
   const del = useDeletePlaylist()
   const { data: room } = useRoom()
-  const { queueOpen } = usePlayerUi()
-  // The search pill stacks above the player pill — and higher still when the
-  // queue panel is open above the player.
+  const { queueOpen, queueHeight } = usePlayerUi()
+  // The search pill floats above the player pill, and rises by the queue panel's
+  // *measured* height when it's open — so it stays just above the queue on any
+  // screen (the player publishes the height; both animate over ~the same time).
   const playerShown = Boolean(room?.current)
-  const pillBottom = playerShown && queueOpen ? 'bottom-[22rem]' : playerShown ? 'bottom-24' : 'bottom-4'
+  const PLAYER_REGION = 96 // bottom-24: the player pill's reserved bottom band
+  const pillBottomPx = !playerShown ? 16 : queueOpen ? PLAYER_REGION + queueHeight + 8 : PLAYER_REGION
 
   // The wall tiles a finite pool, so the first page is plenty — no scroll paging.
   const pool = playlists.data?.pages[0]?.results ?? []
@@ -72,7 +74,8 @@ function PlaylistsPage() {
       {/* Floating rounded search — centered (matches the player pill), stacks
           above it when something's playing. */}
       <div
-        className={`absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-300 ${pillBottom}`}
+        className="absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-300 ease-out"
+        style={{ bottom: pillBottomPx }}
       >
         <div className="relative">
           <Search

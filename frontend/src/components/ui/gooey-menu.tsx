@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 
 export type GooeyItem = { icon: React.ReactNode; label: string; onSelect: () => void }
 
-const RADIUS = 88 // px each item travels from the trigger center (enough to clear it)
+const RADIUS = 124 // px each item travels — wide enough that the circles never touch
 
 const reducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -36,11 +36,12 @@ export function GooeyMenu({ items, className }: { items: GooeyItem[]; className?
     }
   }, [open])
 
-  // Fan from straight-up (90°) to up-left (150°) so a corner FAB opens inward.
+  // Fan from straight-up (90°) to up-left (170°) so a corner FAB opens inward
+  // with wide angular gaps between the (distinct) buttons.
   const n = items.length
   const point = (i: number) => {
     if (!open) return { x: 0, y: 0 }
-    const deg = n <= 1 ? 120 : 90 + (i * 60) / (n - 1)
+    const deg = n <= 1 ? 130 : 90 + (i * 80) / (n - 1)
     const a = (deg * Math.PI) / 180
     return { x: Math.cos(a) * RADIUS, y: -Math.sin(a) * RADIUS }
   }

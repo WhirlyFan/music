@@ -87,19 +87,26 @@ export function useQueueTracks() {
 
 /** Advance the cursor to the next track. */
 export function useNext() {
-  return useRoomMutation(() => api<Room>('/rooms/next/', { method: 'POST' }))
+  return useRoomMutation(() => {
+    playIntent.value = true
+    return api<Room>('/rooms/next/', { method: 'POST' })
+  })
 }
 
 /** Move the cursor back to the previously played track. */
 export function usePrevious() {
-  return useRoomMutation(() => api<Room>('/rooms/previous/', { method: 'POST' }))
+  return useRoomMutation(() => {
+    playIntent.value = true
+    return api<Room>('/rooms/previous/', { method: 'POST' })
+  })
 }
 
 /** Click any queue row (history or up-next) to play it now. */
 export function useJump() {
-  return useRoomMutation((itemId: string) =>
-    api<Room>('/rooms/jump/', { method: 'POST', body: { item_id: itemId } }),
-  )
+  return useRoomMutation((itemId: string) => {
+    playIntent.value = true
+    return api<Room>('/rooms/jump/', { method: 'POST', body: { item_id: itemId } })
+  })
 }
 
 /** Remove a single queue item. */

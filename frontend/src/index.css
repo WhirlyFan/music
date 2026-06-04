@@ -385,6 +385,8 @@
   --animate-pop-in: pop-in 0.18s var(--ease-out-back) both;
   --animate-equalize: equalize 0.9s var(--ease-standard) infinite;
   --animate-ripple: ripple 0.8s ease forwards;
+  --animate-text-shimmer: text-shimmer 3s linear infinite;
+  --animate-rainbow: rainbow 3s linear infinite;
 
   /*
    * Global overlay enter/exit (dialogs, sheets, dropdowns). Frigade's model:
@@ -496,6 +498,53 @@
   50% {
     transform: scaleY(1);
   }
+}
+
+@keyframes text-shimmer {
+  from {
+    background-position: 200% center;
+  }
+  to {
+    background-position: -200% center;
+  }
+}
+
+@keyframes rainbow {
+  to {
+    background-position: 200% center;
+  }
+}
+
+/* Shimmer-wave heading — a soft highlight sweeps across the text (annnimate
+   text-shimmer-wave). The global reduce-motion guard freezes it statically. */
+.shimmer-text {
+  background: linear-gradient(
+    110deg,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: var(--animate-text-shimmer);
+}
+
+/* Animated rainbow fill (annnimate rainbow-button). */
+.rainbow-button {
+  background: linear-gradient(
+    90deg,
+    oklch(0.68 0.21 25),
+    oklch(0.85 0.18 90),
+    oklch(0.78 0.2 145),
+    oklch(0.72 0.2 255),
+    oklch(0.68 0.25 320),
+    oklch(0.68 0.21 25)
+  );
+  background-size: 200% auto;
+  color: #fff;
+  animation: var(--animate-rainbow);
 }
 
 /*
