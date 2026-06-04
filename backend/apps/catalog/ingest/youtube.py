@@ -16,6 +16,20 @@ from yt_dlp import YoutubeDL
 
 
 @lru_cache(maxsize=1)
+def _impersonate_target():
+    """Browser-TLS impersonation via curl_cffi (helps dodge YouTube's bot
+    detection). Auto-detected: use the first target the runtime actually offers,
+    else None — curl_cffi's profiles aren't available on every arch, and forcing an
+    unavailable target errors. (None just means no impersonation, not broken.)"""
+    try:
+        with YoutubeDL({"quiet": True}) as ydl:
+            targets = ydl._get_available_impersonate_targets()
+        return targets[0][0] if targets else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+@lru_cache(maxsize=1)
 def _cookiefile() -> str | None:
     """Write the YouTube cookies (a Netscape cookies.txt exported from a signed-in
     account, supplied via the YOUTUBE_COOKIES secret) to a tmp file for yt-dlp.
@@ -30,26 +44,22 @@ def _cookiefile() -> str | None:
     return f.name
 
 
-# yt-dlp caches the downloaded challenge solver here; must be writable by the
-# (non-root) app user. /tmp is fine — the solver re-downloads after a restart.
-_CACHE_DIR = "/tmp/ytdlp-cache"
-
-
 def _opts(**extra) -> dict:
-    """Base yt-dlp options for current YouTube extraction:
-    - cookies (YOUTUBE_COOKIES) get past the "confirm you're not a bot" wall;
-    - `remote_components=['ejs:github']` fetches yt-dlp's official challenge solver,
-      which (run via the deno JS runtime baked into the image) solves YouTube's
-      signature / n challenges — without it, NO playable formats are returned."""
+    """Base yt-dlp options for current YouTube extraction. YouTube requires solving
+    a JS signature / n challenge to expose playable formats; that's handled by the
+    bundled `yt-dlp-ejs` solver scripts run through the `deno` runtime (both baked
+    into the image) — no runtime download. `YOUTUBE_COOKIES`, if set, is an optional
+    fallback for when YouTube bot-walls the IP under load."""
     opts = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
-        "remote_components": ["ejs:github"],
-        "cachedir": _CACHE_DIR,
         **extra,
     }
+    target = _impersonate_target()
+    if target is not None:
+        opts["impersonate"] = target
     cookiefile = _cookiefile()
     if cookiefile:
         opts["cookiefile"] = cookiefile
