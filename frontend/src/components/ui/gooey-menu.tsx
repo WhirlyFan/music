@@ -23,7 +23,15 @@ const reducedMotion = () =>
  * A11y on the icon layer: haspopup/expanded, Escape + click-outside, tab-gating.
  * Reduced motion → snap (no travel), goo still applies statically.
  */
-export function GooeyMenu({ items, className }: { items: GooeyItem[]; className?: string }) {
+export function GooeyMenu({
+  items,
+  className,
+  style,
+}: {
+  items: GooeyItem[]
+  className?: string
+  style?: React.CSSProperties
+}) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -62,7 +70,7 @@ export function GooeyMenu({ items, className }: { items: GooeyItem[]; className?
   }
 
   return (
-    <div ref={ref} className={cn('relative size-14', className)}>
+    <div ref={ref} className={cn('relative size-14', className)} style={style}>
       {/* Goo filter — blur then crush the alpha so near shapes melt together. */}
       <svg aria-hidden width="0" height="0" className="absolute">
         <defs>

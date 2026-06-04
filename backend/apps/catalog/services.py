@@ -199,3 +199,12 @@ def ingest(url: str, *, user=None) -> dict:
     if "youtube.com" in host or "youtu.be" in host:
         return ingest_youtube(url, user=user)
     raise UnsupportedSourceError("Paste an Apple Music, Spotify, or YouTube link.")
+
+
+def search_songs(query: str, *, limit: int = 20) -> list[Track]:
+    """Global song search: find songs on Spotify and upsert them as global catalog
+    Tracks, so they can be played (YouTube audio is matched lazily on play, like any
+    other track). Returns the Tracks in Spotify's relevance order. Empty query → []."""
+    if not query.strip():
+        return []
+    return [_upsert_track(row) for row in spotify.search_tracks(query, limit=limit)]

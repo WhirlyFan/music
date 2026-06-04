@@ -452,6 +452,39 @@ def test_playlist_search_by_title_only(client):
 
 
 @pytest.mark.django_db
+def test_song_search_upserts_spotify_results(client, monkeypatch):
+    # Global song search: Spotify supplies metadata, which we upsert as catalog
+    # Tracks (YouTube audio resolves on play). Spotify is mocked (no network).
+    from apps.catalog.ingest import spotify
+
+    monkeypatch.setattr(
+        spotify,
+        "search_tracks",
+        lambda query, limit=20: [
+            {
+                "title": "Bohemian Rhapsody",
+                "artist": "Queen",
+                "duration": 354000,
+                "isrc": "GBUM71029604",
+                "artwork": "https://img/x",
+                "album": "A Night at the Opera",
+                "explicit": False,
+                "preview": "",
+                "external_id": "sp1",
+                "source_url": "https://open.spotify.com/track/sp1",
+            }
+        ],
+    )
+    r = client.get("/api/v1/catalog/tracks/search/?q=bohemian")
+    assert r.status_code == 200
+    assert [t["title"] for t in r.data] == ["Bohemian Rhapsody"]
+    assert Track.objects.filter(title="Bohemian Rhapsody").exists()  # upserted globally
+
+    # Empty query short-circuits — no results, no Spotify call.
+    assert client.get("/api/v1/catalog/tracks/search/?q=").data == []
+
+
+@pytest.mark.django_db
 def test_update_playlist_rename_and_visibility(client):
     pid = _make_playlist(client, "Old", [TrackFactory()])
     r = client.patch(f"{PLAYLISTS}{pid}/", {"title": "New", "is_public": True}, format="json")

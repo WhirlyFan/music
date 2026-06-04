@@ -8,7 +8,7 @@ import {
 
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/types'
-import { playlistKeys, roomKeys } from '@/lib/query/keys'
+import { playlistKeys, roomKeys, searchKeys } from '@/lib/query/keys'
 
 export type Playlist = components['schemas']['Playlist']
 export type PlaylistDetail = components['schemas']['PlaylistDetail']
@@ -38,6 +38,22 @@ export function useInfinitePlaylists(search = '') {
     // Keep the prior results on screen while a new search resolves — the wall
     // fills the page, so flashing to a skeleton on every keystroke is jarring.
     placeholderData: keepPreviousData,
+  })
+}
+
+/**
+ * Global song search — finds songs on Spotify (relevance order) and returns them
+ * as catalog Tracks ready to play (YouTube audio resolves lazily on play). Keeps
+ * prior results on screen while a new term resolves; disabled for an empty query.
+ */
+export function useSongSearch(query: string) {
+  const q = query.trim()
+  return useQuery({
+    queryKey: searchKeys.songs(q),
+    queryFn: () => api<Track[]>(`/catalog/tracks/search/?q=${encodeURIComponent(q)}`),
+    enabled: q.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000,
   })
 }
 

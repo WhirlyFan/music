@@ -8,6 +8,7 @@ Audio download (Phase 3) is a separate concern and is the only part that needs
 ffmpeg.
 """
 
+import urllib.parse
 from functools import lru_cache
 
 from django.conf import settings
@@ -106,8 +107,21 @@ def ingest_with_meta(url: str) -> dict:
 
     Each track carries its `video_id` (the playback source is the video itself —
     no search/match needed). Metadata only; no audio download.
+
+    A `watch?v=…&list=…` URL names both a video and the playlist it's playing
+    from; we import the whole playlist (the base opts force `noplaylist`, so we
+    must opt back in). Auto-generated radio/mixes (`RD…`) and the private Watch
+    Later (`WL`) aren't real playlists — those fall back to the single video.
     """
-    with YoutubeDL(_opts(extract_flat="in_playlist", retries=5, sleep_interval_requests=1)) as ydl:
+    list_id = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("list", [""])[0]
+    want_playlist = bool(list_id) and not list_id.startswith(("RD", "WL"))
+    opts = _opts(
+        extract_flat="in_playlist",
+        retries=5,
+        sleep_interval_requests=1,
+        noplaylist=not want_playlist,
+    )
+    with YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     if info.get("entries") is not None:
         tracks = [_entry(e) for e in info["entries"] if e and e.get("id")]

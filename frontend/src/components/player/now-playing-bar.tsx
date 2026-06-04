@@ -322,16 +322,25 @@ export function NowPlayingBar() {
         </button>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            {playing && <Equalizer />}
-            {track.is_explicit && <ExplicitBadge />}
-            <p className="truncate text-sm font-medium">
-              {track.title}
-              <span className="text-muted-foreground ml-2 truncate text-xs font-normal">
-                {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
-              </span>
-            </p>
-          </div>
+          {/* Title opens the full-screen now-playing view too — the main way to
+              reach seeking on mobile, where the in-pill seek bar is hidden. */}
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-label="Open now playing"
+            className="block w-full text-left"
+          >
+            <div className="flex items-center gap-2">
+              {playing && <Equalizer />}
+              {track.is_explicit && <ExplicitBadge />}
+              <p className="truncate text-sm font-medium">
+                {track.title}
+                <span className="text-muted-foreground ml-2 truncate text-xs font-normal">
+                  {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
+                </span>
+              </p>
+            </div>
+          </button>
           {/* The seek bar is too cramped in the compact pill on phones — hide it
               there and let the full-screen view handle seeking (tap the artwork). */}
           {audioSrc ? (

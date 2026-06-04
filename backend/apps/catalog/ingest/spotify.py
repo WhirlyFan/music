@@ -130,6 +130,21 @@ def _configured() -> bool:
     return bool(settings.SPOTIFY_CLIENT_ID and settings.SPOTIFY_CLIENT_SECRET)
 
 
+def search_tracks(query: str, limit: int = 20) -> list[dict]:
+    """Search Spotify for tracks → normalized rows (client-credentials, no user).
+
+    Used by the global song search: Spotify supplies the song metadata; YouTube
+    audio is resolved lazily on play (the standard match flow). Raises
+    SpotifyNotConfigured when no creds are set.
+    """
+    token = _token()
+    q = urllib.parse.quote(query.strip())
+    if not q:
+        return []
+    data = _get(f"/search?q={q}&type=track&limit={max(1, min(limit, 50))}", token)
+    return [_normalize(t) for t in (data.get("tracks") or {}).get("items") or [] if t]
+
+
 def _api_with_meta(kind: str, sid: str) -> dict:
     """Full fetch via the Web API (paginated, with ISRC). Requires credentials."""
     token = _token()

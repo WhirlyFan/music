@@ -21,7 +21,7 @@ from .serializers import (
     PlaylistUpdateSerializer,
     TrackSerializer,
 )
-from .services import UnsupportedSourceError, create_playlist_from_tracks
+from .services import UnsupportedSourceError, create_playlist_from_tracks, search_songs
 from .services import ingest as ingest_source
 
 # Prefetch playlist items (ordered) + each track's playback sources in one go.
@@ -198,6 +198,20 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return Track.objects.prefetch_related("playback_sources").all()
+
+    @extend_schema(responses=TrackSerializer(many=True))
+    @action(detail=False, methods=["get"])
+    def search(self, request):
+        """Global song search via `?q=`. Finds songs on Spotify (relevance order)
+        and upserts them as catalog Tracks; YouTube audio resolves on play."""
+        query = request.query_params.get("q", "").strip()
+        if not query:
+            return Response([])
+        try:
+            tracks = search_songs(query, limit=25)
+        except SpotifyError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        return Response(TrackSerializer(tracks, many=True).data)
 
     @extend_schema(request=None, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"])

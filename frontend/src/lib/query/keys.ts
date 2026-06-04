@@ -62,6 +62,10 @@ export const roomKeys = {
  * open) — a client-only cache key used as a tiny store, no fetcher. Lets the
  * player and the playlists search pill read one source of truth. See lib/query/ui.ts.
  */
+export const searchKeys = {
+  songs: (q: string) => ['search', 'songs', q] as const,
+}
+
 export const uiKeys = {
   player: () => ['ui', 'player'] as const,
   // Search text per route path, so the persistent search pill and the page it
