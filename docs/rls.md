@@ -6,6 +6,11 @@ Postgres role we connect as cannot escape its policies.
 
 Decision + rationale: [decisions.md → Data layer](decisions.md#data-layer--row-level-security-day-one).
 
+Today the one RLS-scoped table is **`catalog.Playlist`** (a user's private
+library) — RLS backstops the viewset's `created_by` filter. The rest of the
+catalog is shared-global, and the rooms tables are app-scoped (not RLS) because
+the planned Jam/shared-session feature needs cross-user reads.
+
 ## The architecture
 
 ```
@@ -22,8 +27,8 @@ Decision + rationale: [decisions.md → Data layer](decisions.md#data-layer--row
               │ Postgres — running as `app_user` role     │
               │   (NO BYPASSRLS)                          │
               │                                           │
-              │   SELECT * FROM notes_note                │
-              │   WHERE owner_id = 42                     │  ← RLS policy adds this
+              │   SELECT * FROM catalog_playlist          │
+              │   WHERE created_by_id = 42                │  ← RLS policy adds this
               │     OR current_setting('rls.bypass')      │     transparently
               │       = 'true'                            │
               └──────────────────────────────────────────┘
@@ -76,18 +81,23 @@ Two clauses:
 - `owner_id = current_setting('rls.user_id')::int` — the normal case
 - `OR current_setting('rls.bypass') = 'true'` — the staff `/admin/` escape hatch
 
-Models declare:
+Models declare it in `Meta.rls_policies` and inherit `RLSModel` (alongside our
+`BaseModel`, which is abstract and adds no fields — so RLS is additive, no column
+migration):
 
 ```python
-class Note(RLSModel):
-    owner = models.ForeignKey(...)
-    ...
+class Playlist(BaseModel, RLSModel):
+    created_by = models.ForeignKey(...)
+    is_public = models.BooleanField(default=False)
     class Meta:
-        rls_policies = [owner_scoped_policy("owner")]
+        rls_policies = [owner_scoped_policy("created_by"), public_readable_policy()]
 ```
 
-That's it. `makemigrations` picks up `Meta.rls_policies` and emits
-`ENABLE ROW LEVEL SECURITY` + `CREATE POLICY` SQL.
+`public_readable_policy()` (also in `apps/core/rls.py`) is a **SELECT-only**
+policy adding `OR is_public` — Postgres ORs permissive policies, so reads become
+"owner OR public OR bypass" while writes stay owner-only. The `ensure_rls_policies`
+`post_migrate` signal (`apps/core/signals.py`) enables RLS + creates the policies
+on every `migrate` (idempotent), so there's no hand-written policy migration.
 
 ## Middleware
 
@@ -115,8 +125,8 @@ see only their own rows. The bypass is for the admin surface specifically.
 
 ## Testing pattern
 
-[`apps/notes/tests/test_rls.py`](../backend/apps/notes/tests/test_rls.py)
-is the load-bearing proof. The pattern:
+[`apps/catalog/tests/test_rls.py`](../backend/apps/catalog/tests/test_rls.py)
+is the load-bearing proof (against `Playlist`). The pattern:
 
 1. pytest connects as `app_admin` (BYPASSRLS) so fixtures can insert
    across owners
@@ -129,16 +139,16 @@ is the load-bearing proof. The pattern:
    ```
 3. Inside the block, RLS applies normally — same as production traffic
 
-Six tests cover the matrix:
+The tests cover the matrix:
 
 | Test | What it proves |
 |---|---|
-| `test_rls_policy_is_present_on_table` | Migration enabled RLS + the policy |
-| `test_anonymous_bypass_returns_zero_rows` | No session var + non-BYPASSRLS role → zero rows (not an error) |
+| `test_rls_policy_is_present_on_table` | `migrate` enabled RLS + both policies |
+| `test_anonymous_returns_zero_rows` | No session var + non-BYPASSRLS role → zero rows (not an error) |
 | `test_user_isolation` | User A sees A's rows; switching the session var alone switches visibility |
-| `test_viewset_without_app_layer_filter_still_safe` | Deliberately broken viewset still doesn't leak |
+| `test_viewset_without_app_layer_filter_still_safe` | An unfiltered `.objects.all()` still doesn't leak |
 | `test_admin_bypass_shows_all_rows` | `rls.bypass='true'` makes everything visible |
-| `test_bypass_off_means_user_scoped` | Sanity: the bypass flag is what flipped behavior |
+| `test_public_playlist_readable_cross_user_but_not_writable` | `is_public` rows are readable cross-user but not writable |
 
 ## Footguns
 

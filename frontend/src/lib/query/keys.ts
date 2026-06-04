@@ -1,14 +1,14 @@
 /**
  * Centralized TanStack Query keys.
  *
- * One namespace per domain (`sessionKeys`, `noteKeys`, …). Each namespace
+ * One namespace per domain (`sessionKeys`, `playlistKeys`, …). Each namespace
  * has an `all()` entry returning the broadest prefix, plus specific entries
  * scoped beneath it. Mutations invalidate the narrowest matching prefix —
  * broad invalidation goes through `all()`, surgical invalidation through
  * `list()` / `detail()` / etc.
  *
  * Every entry is a function (even no-arg ones) for a uniform call shape
- * at the use site: `useQuery({ queryKey: noteKeys.list() })`.
+ * at the use site: `useQuery({ queryKey: playlistKeys.list() })`.
  *
  * Pattern mirrors the reference at
  * ~/usul-policy-research-app/frontend/lib/hooks/queries/query-keys.ts.
@@ -26,12 +26,6 @@ export const sessionKeys = {
 export const emailKeys = {
   all: () => ['emails'] as const,
   list: () => ['emails', 'list'] as const,
-}
-
-export const noteKeys = {
-  all: () => ['notes'] as const,
-  list: () => ['notes', 'list'] as const,
-  detail: (id: number) => ['notes', 'detail', id] as const,
 }
 
 export const playlistKeys = {

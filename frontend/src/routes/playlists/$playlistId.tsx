@@ -134,7 +134,12 @@ function PlaylistDetailPage() {
       />
 
       {editing && (
-        <EditPanel playlist={playlist} playlistId={playlistId} onDone={() => setEditing(false)} />
+        <EditPanel
+          key={playlistId}
+          playlist={playlist}
+          playlistId={playlistId}
+          onDone={() => setEditing(false)}
+        />
       )}
 
       {tracks.isError && <FormError message="Failed to load tracks." />}
@@ -210,6 +215,9 @@ function EditPanel({
   onDone: () => void
 }) {
   const update = useUpdatePlaylist()
+  // Intentional draft state: these are an editable copy you can cancel. The
+  // parent keys this component by playlistId, so switching playlists remounts
+  // it and re-seeds the draft — no prop→state syncing effect needed.
   const [title, setTitle] = useState(playlist.title)
   const [description, setDescription] = useState(playlist.description ?? '')
   const [isPublic, setIsPublic] = useState(playlist.is_public ?? false)

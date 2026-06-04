@@ -13,11 +13,22 @@ topic docs are *how*.
 
 ## Data layer — Row-Level Security, day one
 
-**Decision.** Enforce tenant isolation at the database with `django-rls` and a
-two-role Postgres setup, from the first migration. Every multi-tenant model
-inherits `RLSModel` and declares `rls_policies = [owner_scoped_policy("owner")]`.
-The app connects as `app_user` (no `BYPASSRLS`); migrations and seed connect as
-`app_admin` (`BYPASSRLS`). `RLSContextMiddleware` sets `rls.user_id` per request.
+**Decision.** Enforce owner isolation at the database with `django-rls` and a
+two-role Postgres setup. An owner-scoped model inherits `RLSModel` and declares
+`rls_policies = [owner_scoped_policy("<owner_field>")]`. The app connects as
+`app_user` (no `BYPASSRLS`); migrations and seed connect as `app_admin`
+(`BYPASSRLS`). `RLSContextMiddleware` sets `rls.user_id` per request.
+
+**What's RLS-scoped (and what isn't).** Only **`catalog.Playlist`** — a user's
+private library — is RLS-scoped today (reads also allow `is_public` via a
+SELECT-only policy; writes stay owner-only). RLS is the DB-level backstop under
+the viewset's `created_by` filter. The rest of the catalog (tracks, sources) is
+**shared-global** by design, and the **rooms** tables are **app-scoped, not RLS**,
+because the roadmap's Jam feature makes a session shareable (others read the
+host's room) — RLS there would fight that. *(History: the template shipped with a
+`Notes` example as the lone RLS model; Notes was removed when this became a music
+app, and RLS was re-pointed at Playlist rather than torn out — a forgotten
+`.filter` on someone's library is exactly the leak RLS is meant to catch.)*
 
 **Why, not the alternatives.** Three ways to isolate tenants:
 

@@ -156,7 +156,7 @@ export function NowPlayingBar() {
   return (
     <div className="border-border bg-background/95 motion-safe:animate-slide-up fixed inset-x-0 bottom-0 z-40 border-t backdrop-blur">
       {queueOpen && (
-        <div className="border-border motion-safe:animate-slide-up mx-auto max-h-80 max-w-5xl overflow-y-auto border-b px-6 py-3">
+        <div className="border-border motion-safe:animate-slide-up mx-auto max-h-60 max-w-5xl overflow-y-auto border-b px-4 py-3 sm:max-h-80 sm:px-6">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
@@ -212,7 +212,7 @@ export function NowPlayingBar() {
         </div>
       )}
 
-      <div className="mx-auto flex max-w-5xl items-center gap-4 px-6 py-2">
+      <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2 sm:gap-4 sm:px-6">
         <div className="flex items-center gap-1">
           <Button size="icon" variant="ghost" onClick={handlePrevious} aria-label="Previous">
             <SkipBack className="size-5" />

@@ -28,11 +28,11 @@ export type CoverItem = {
   track_count: number
 }
 
-const CARD = 160
 const GAP = 20
-const PITCH = CARD + GAP
 const FRICTION = 0.92
 const TAP_THRESHOLD = 6 // px of movement below which a press counts as a tap
+// Smaller covers on phones so a ~360px screen still shows a few per row.
+const cardFor = (width: number) => (width < 640 ? 120 : 160)
 
 const mod = (n: number, m: number) => ((n % m) + m) % m
 const reducedMotion = () =>
@@ -60,7 +60,7 @@ export function CoverWall({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const tileEls = useRef<(HTMLDivElement | null)[]>([])
-  const [grid, setGrid] = useState({ cols: 0, rows: 0 })
+  const [grid, setGrid] = useState({ cols: 0, rows: 0, card: 160, pitch: 180 })
   const gridRef = useRef(grid)
 
   const offset = useRef({ x: 0, y: 0 })
@@ -72,18 +72,18 @@ export function CoverWall({
   const raf = useRef<number | null>(null)
 
   const draw = useCallback(() => {
-    const { cols, rows } = gridRef.current
+    const { cols, rows, pitch } = gridRef.current
     if (!cols || !rows) return
-    const worldW = cols * PITCH
-    const worldH = rows * PITCH
+    const worldW = cols * pitch
+    const worldH = rows * pitch
     const { x: ox, y: oy } = offset.current
     for (let i = 0; i < cols * rows; i++) {
       const el = tileEls.current[i]
       if (!el) continue
       const c = i % cols
       const r = Math.floor(i / cols)
-      const x = mod(c * PITCH + ox, worldW) - PITCH
-      const y = mod(r * PITCH + oy, worldH) - PITCH
+      const x = mod(c * pitch + ox, worldW) - pitch
+      const y = mod(r * pitch + oy, worldH) - pitch
       el.style.transform = `translate3d(${x}px, ${y}px, 0)`
     }
   }, [])
@@ -109,9 +109,15 @@ export function CoverWall({
     const el = containerRef.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      const cols = Math.ceil(el.clientWidth / PITCH) + 2
-      const rows = Math.ceil(el.clientHeight / PITCH) + 2
-      setGrid((prev) => (prev.cols === cols && prev.rows === rows ? prev : { cols, rows }))
+      const card = cardFor(el.clientWidth)
+      const pitch = card + GAP
+      const cols = Math.ceil(el.clientWidth / pitch) + 2
+      const rows = Math.ceil(el.clientHeight / pitch) + 2
+      setGrid((prev) =>
+        prev.cols === cols && prev.rows === rows && prev.card === card
+          ? prev
+          : { cols, rows, card, pitch },
+      )
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -193,7 +199,7 @@ export function CoverWall({
                 tileEls.current[i] = el
               }}
               data-pid={item.id}
-              style={{ width: CARD, height: CARD, willChange: 'transform' }}
+              style={{ width: grid.card, height: grid.card, willChange: 'transform' }}
               className="absolute top-0 left-0"
             >
               <CoverTile item={item} onDelete={onDelete} />

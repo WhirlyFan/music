@@ -10,7 +10,7 @@ PRs, versioned with git. These pages are the source of truth.
 | The set of services in compose | `architecture.md` | `ops.md` if env vars change |
 | Anything about nginx (proxy, routes, role) | `architecture/nginx.md` | `architecture.md` topology section |
 | Login flow, sessions, CSRF, social, MFA | `auth.md` | revise the Auth section of `decisions.md` if it's an architectural shift |
-| RLS policies, two-role Postgres setup | `rls.md` | tests in `apps/notes/tests/test_rls.py` |
+| RLS policies, two-role Postgres setup | `rls.md` | tests in `apps/catalog/tests/test_rls.py` |
 | Who can do what (staff vs superuser vs groups) | `permissions.md` | |
 | Hatchet workflow topology, DAG patterns | `jobs.md` | |
 | TanStack stack, theming, FE auth wrapper | `frontend.md` | |

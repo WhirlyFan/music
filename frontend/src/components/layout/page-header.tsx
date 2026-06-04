@@ -33,7 +33,7 @@ export function PageHeader({
   return (
     <header className={cn('space-y-3', className)}>
       {breadcrumbs && breadcrumbs.length > 0 ? <Breadcrumbs items={breadcrumbs} /> : null}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
           {description ? <p className="text-muted-foreground mt-1 text-sm">{description}</p> : null}

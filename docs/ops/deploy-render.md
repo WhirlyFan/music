@@ -89,7 +89,7 @@ the stack:
 - [ ] `/login` reaches the backend through the rewrite (network tab shows
   `200 /api/...` from the static origin)
 - [ ] Sign up a new user → log out → log in
-- [ ] Create a note, refresh, the note persists
+- [ ] Import a playlist → save it → refresh, it persists under "My playlists"
 - [ ] Open `/admin/` → redirects to MFA enrollment for the staff user
 - [ ] Enroll TOTP → can now reach `/admin/`
 - [ ] Sentry receives a test exception (if `SENTRY_DSN` is set):

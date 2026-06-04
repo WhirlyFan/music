@@ -163,13 +163,15 @@ Two account layers:
    Makes the DB feel busy + lets you visually verify RLS isolation in
    `/admin/`.
 
-Every user gets fake notes via `seed_user_data()`. When you add new
-models, append the factory call there — both account types pick it up.
+Each fake user gets a few owned playlists via `seed_user_data()` — RLS-scoped,
+so owner isolation is visible in `/admin/`. The dev account gets the real
+Spotify/Apple seed playlists instead.
 
 Flags:
-- `--notes N` (default 10) — notes per user
+- `--playlists N` (default 2) — owned playlists per fake user
 - `--fake-users N` (default 5) — anonymous accounts
-- `--flush` — wipe notes + non-superuser users before seeding
+- `--flush` — wipe the catalog + non-superuser users before seeding
+- `--skip-real-playlists` — skip the network import of the real seed playlists
 - `--allow-in-prod` — escape hatch from the DEBUG guard (almost certainly wrong)
 
 ### Why the seed bakes a fixed TOTP
@@ -213,13 +215,13 @@ stdout. No in-process file rotation.
 
 ```sh
 make test                          # all backend tests
-docker compose exec backend pytest apps/notes/tests/test_rls.py -v
+docker compose exec backend pytest apps/catalog/tests/test_rls.py -v
 docker compose exec backend pytest -k mfa
 ```
 
-Backend test count today: **11**.
-- 6 in `apps/notes/tests/test_rls.py` (RLS load-bearing)
-- 5 in `apps/core/tests/test_staff_mfa_middleware.py` (MFA gate)
+RLS load-bearing tests live in `apps/catalog/tests/test_rls.py` (Playlist
+owner-isolation + public-read); the MFA gate is covered in
+`apps/core/tests/test_staff_mfa_middleware.py`.
 
 ## Pre-push hook
 

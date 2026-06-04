@@ -68,7 +68,7 @@ function RecoveryCodesPage() {
         </p>
       ) : (
         <>
-          <div className="bg-card grid grid-cols-2 gap-2 rounded-md border p-4 font-mono text-sm">
+          <div className="bg-card grid grid-cols-1 gap-2 rounded-md border p-4 font-mono text-sm sm:grid-cols-2">
             {unused.map((code) => (
               <code key={code} className="bg-muted rounded px-2 py-1">
                 {code}

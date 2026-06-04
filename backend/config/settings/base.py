@@ -63,7 +63,6 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "apps.users",
     "apps.core",
-    "apps.notes",
     "apps.catalog",
     "apps.rooms",
 ]

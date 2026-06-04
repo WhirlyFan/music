@@ -11,10 +11,7 @@ Two layers of accounts:
 
 2. Fake users (`--fake-users N`, default 5) — anonymous accounts generated
    via UserFactory. They make the DB feel busy + let you visually verify
-   RLS isolation in the admin (each fake user owns their own notes).
-
-Every user — known OR fake — gets the same fake data via `seed_user_data()`.
-Add new models there once; both account types get them automatically.
+   RLS isolation in the admin (each fake user owns their own playlists).
 """
 
 from __future__ import annotations
@@ -34,8 +31,6 @@ from apps.catalog.tests.factories import (
     PlaylistTrackFactory,
     TrackFactory,
 )
-from apps.notes.models import Note
-from apps.notes.tests.factories import NoteFactory
 from apps.users.tests.factories import UserFactory
 
 User = get_user_model()
@@ -139,16 +134,20 @@ def ensure_dev_totp(user) -> None:
 # ---------- Per-user data -------------------------------------------------
 
 
-def seed_user_data(user, *, notes: int):
-    """Populate `user` with the standard fake-data set.
+def seed_user_data(user, *, playlists: int):
+    """Give `user` a few owned playlists (each with sample tracks).
 
-    This is the one place that knows what 'fake data for a user' means.
-    When you add a new model, append its factory call here:
-
-        ProjectFactory.create_batch(3, owner=user)
-        TaskFactory.create_batch(10, project=user.projects.first())
+    Playlists are RLS-scoped to their owner, so seeding each fake user with
+    their own makes owner-isolation visible in /admin/ and exercises the
+    catalog UI. Network-free: the video ids are fake (won't actually play) —
+    real, playable playlists are imported into the dev account separately.
     """
-    NoteFactory.create_batch(notes, owner=user)
+    for _ in range(playlists):
+        playlist = PlaylistFactory(created_by=user)
+        for position in range(8):
+            track = TrackFactory()
+            PlaylistTrackFactory(playlist=playlist, track=track, position=position)
+            PlaybackSourceFactory(track=track)
 
 
 # Real public playlists ingested into the dev account so artwork + playback can be
@@ -185,27 +184,6 @@ def seed_real_playlists(user) -> list[tuple[str, int, str | None]]:
     return out
 
 
-def seed_catalog() -> int:
-    """Create a few sample public playlists (tracks + an active YouTube
-    playback source each) so the /playlists UI has content out of the box.
-
-    Network-free: the video ids are fake, so they populate the UI but won't
-    actually play. For real, playable data run `ingest_apple` + `match_youtube`.
-
-    Idempotent: skips if any playlist already exists, so re-seeding (without
-    --flush) doesn't pile up duplicates.
-    """
-    if Playlist.objects.exists():
-        return 0
-    for _ in range(3):
-        playlist = PlaylistFactory()
-        for position in range(8):
-            track = TrackFactory()
-            PlaylistTrackFactory(playlist=playlist, track=track, position=position)
-            PlaybackSourceFactory(track=track)
-    return 3
-
-
 # ---------- Command -------------------------------------------------------
 
 
@@ -214,10 +192,10 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument(
-            "--notes",
+            "--playlists",
             type=int,
-            default=10,
-            help="Notes per user (applies to both known + fake users). Default 10.",
+            default=2,
+            help="Owned playlists per fake user (demonstrates RLS isolation). Default 2.",
         )
         parser.add_argument(
             "--fake-users",
@@ -228,7 +206,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--flush",
             action="store_true",
-            help="Delete notes + non-superuser users before seeding.",
+            help="Delete the catalog + non-superuser users before seeding.",
         )
         parser.add_argument(
             "--skip-real-playlists",
@@ -262,35 +240,30 @@ class Command(BaseCommand):
         factory.random.reseed_random("music-dev")
 
         if options["flush"]:
-            Note.objects.all().delete()
             Playlist.objects.all().delete()  # cascades PlaylistTrack + SourceLink
             Track.objects.all().delete()  # cascades PlaybackSource
             # Keep superusers so whoever is logged into /admin/ doesn't
             # get booted. Known admin account is recreated below anyway.
             User.objects.filter(is_superuser=False).delete()
-            self.stdout.write(self.style.WARNING("Flushed notes, catalog + non-superuser users."))
+            self.stdout.write(self.style.WARNING("Flushed catalog + non-superuser users."))
 
-        notes_per_user = options["notes"]
+        playlists_per_user = options["playlists"]
 
-        # 1. Known accounts — always present, documented credentials.
+        # 1. Known accounts — always present, documented credentials. The dev
+        #    account gets real playlists below; no fake owned data here.
         for spec in KNOWN_ACCOUNTS:
-            user, created = upsert_known_account(spec)
+            _, created = upsert_known_account(spec)
             if created:
                 self.stdout.write(self.style.SUCCESS(f"Created account: {spec.email}"))
-            seed_user_data(user, notes=notes_per_user)
 
-        # 2. Anonymous fake users — feeds RLS isolation visuals, pagination,
-        #    busy lists. Each gets the same per-user data treatment.
+        # 2. Anonymous fake users — each owns their own playlists, so RLS
+        #    owner-isolation is visible in /admin/ + lists feel busy.
         for _ in range(options["fake_users"]):
             user = UserFactory()
             ensure_verified_email(user, user.email)  # mandatory mode requires this
-            seed_user_data(user, notes=notes_per_user)
+            seed_user_data(user, playlists=playlists_per_user)
 
-        # 3. Sample catalog (shared, not per-user) — gives the /playlists UI
-        #    content out of the box. Idempotent (create-if-empty).
-        seed_catalog()
-
-        # 4. Real playlists (Spotify + Apple) into the dev account, so artwork +
+        # 3. Real playlists (Spotify + Apple) into the dev account, so artwork +
         #    playback can be checked against live data. Best-effort.
         if not options["skip_real_playlists"]:
             dev_user = User.objects.get(email=KNOWN_ACCOUNTS[0].email)
@@ -303,8 +276,7 @@ class Command(BaseCommand):
         # Summary.
         self.stdout.write(
             self.style.SUCCESS(
-                f"Seeded: {User.objects.count()} users, {Note.objects.count()} notes, "
-                f"{Playlist.objects.count()} playlists."
+                f"Seeded: {User.objects.count()} users, {Playlist.objects.count()} playlists."
             )
         )
         self.stdout.write("")

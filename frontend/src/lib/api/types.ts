@@ -254,86 +254,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notes/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description CRUD viewset for Notes.
-         *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
-         */
-        get: operations["v1_notes_list"];
-        put?: never;
-        /**
-         * @description CRUD viewset for Notes.
-         *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
-         */
-        post: operations["v1_notes_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/notes/{id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * @description CRUD viewset for Notes.
-         *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
-         */
-        get: operations["v1_notes_retrieve"];
-        /**
-         * @description CRUD viewset for Notes.
-         *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
-         */
-        put: operations["v1_notes_update"];
-        post?: never;
-        /**
-         * @description CRUD viewset for Notes.
-         *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
-         */
-        delete: operations["v1_notes_destroy"];
-        options?: never;
-        head?: never;
-        /**
-         * @description CRUD viewset for Notes.
-         *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
-         */
-        patch: operations["v1_notes_partial_update"];
-        trace?: never;
-    };
     "/api/v1/rooms/clear/": {
         parameters: {
             query?: never;
@@ -619,15 +539,6 @@ export interface components {
          * @enum {string}
          */
         LocatorKindEnum: "video_id" | "storage_key" | "url";
-        Note: {
-            readonly id: number;
-            title: string;
-            body?: string;
-            /** Format: date-time */
-            readonly created_at: string;
-            /** Format: date-time */
-            readonly updated_at: string;
-        };
         /**
          * @description * `matched_auto` - Matched (auto)
          *     * `matched_manual` - Matched (manual correction)
@@ -635,21 +546,6 @@ export interface components {
          * @enum {string}
          */
         OriginEnum: "matched_auto" | "matched_manual" | "direct";
-        PaginatedNoteList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["Note"][];
-        };
         PaginatedPlaylistList: {
             /** @example 123 */
             count: number;
@@ -694,15 +590,6 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Track"][];
-        };
-        PatchedNote: {
-            readonly id?: number;
-            title?: string;
-            body?: string;
-            /** Format: date-time */
-            readonly created_at?: string;
-            /** Format: date-time */
-            readonly updated_at?: string;
         };
         /** @description Edit a playlist's own metadata (rename / describe / visibility). */
         PatchedPlaylistUpdate: {
@@ -1170,152 +1057,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Track"];
-                };
-            };
-        };
-    };
-    v1_notes_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedNoteList"];
-                };
-            };
-        };
-    };
-    v1_notes_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Note"];
-                "application/x-www-form-urlencoded": components["schemas"]["Note"];
-                "multipart/form-data": components["schemas"]["Note"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Note"];
-                };
-            };
-        };
-    };
-    v1_notes_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Note"];
-                };
-            };
-        };
-    };
-    v1_notes_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Note"];
-                "application/x-www-form-urlencoded": components["schemas"]["Note"];
-                "multipart/form-data": components["schemas"]["Note"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Note"];
-                };
-            };
-        };
-    };
-    v1_notes_destroy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No response body */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    v1_notes_partial_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PatchedNote"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedNote"];
-                "multipart/form-data": components["schemas"]["PatchedNote"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Note"];
                 };
             };
         };

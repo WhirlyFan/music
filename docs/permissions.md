@@ -34,7 +34,7 @@ Both flags are independent. Combinations:
 
 ### In the app (the SPA + DRF API)
 **Neither flag does anything by default.** A staff or superuser logged into
-the SPA sees the same UI, same data scoping, same RLS-filtered notes as a
+the SPA sees the same UI, same data scoping, same RLS-filtered playlists as a
 regular user. To make staff/superuser-only features in the app, you'd
 have to:
 - Add `is_staff` to the serializer + `useSession()`
@@ -87,12 +87,12 @@ to all Notes. **Object-level** perms are per-row: "user X can edit Note
 
 ### Why deferred
 
-RLS already enforces owner isolation at the DB layer. For the day-1 slice
-(every user sees only their own notes), object-level perms add nothing
+RLS already enforces owner isolation at the DB layer. For the current model
+(every user sees only their own playlists), object-level perms add nothing
 beyond a junction table and a join on every check.
 
-The *trigger* to add them is a **sharing** feature: "share this note with
-user Y." We don't have one yet. Premature.
+The *trigger* to add them is a **sharing** feature: "share this playlist with
+user Y" (beyond the `is_public` read flag). We don't have one yet. Premature.
 
 ### Decision matrix when we do add them
 

@@ -38,7 +38,7 @@ function PlaylistsPage() {
     <div className="space-y-4">
       <PageHeader title="My playlists" />
 
-      <div className="border-border relative h-[calc(100vh-15rem)] overflow-hidden rounded-xl border">
+      <div className="border-border relative h-[calc(100dvh-11rem)] overflow-hidden rounded-xl border sm:h-[calc(100dvh-15rem)]">
         {playlists.isLoading ? (
           <div className="grid size-full place-items-center">
             <Loader2 className="text-muted-foreground size-6 animate-spin" />
@@ -64,7 +64,7 @@ function PlaylistsPage() {
         )}
 
         {/* Floating, rounded search — sits over the canvas, above the now-playing bar. */}
-        <div className="absolute bottom-4 left-1/2 z-10 w-[min(90%,28rem)] -translate-x-1/2">
+        <div className="absolute right-4 bottom-4 left-4 z-10 mx-auto w-auto max-w-md sm:left-1/2 sm:w-[28rem] sm:-translate-x-1/2">
           <div className="relative">
             <Search
               className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"

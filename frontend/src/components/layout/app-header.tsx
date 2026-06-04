@@ -28,20 +28,10 @@ export function AppHeader() {
 
   return (
     <header className="border-border bg-card text-card-foreground border-b">
-      <nav className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-6">
+      <nav className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Link to="/" className="font-semibold tracking-tight">
           music
         </Link>
-
-        {isAuthed && (
-          <Link
-            to="/notes"
-            className="text-muted-foreground hover:text-foreground text-sm"
-            activeProps={{ className: 'text-foreground font-medium' }}
-          >
-            Notes
-          </Link>
-        )}
 
         {isAuthed && (
           <Link

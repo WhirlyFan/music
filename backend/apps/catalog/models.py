@@ -14,8 +14,10 @@ meant to be shared; visibility (is_public) is enforced in the app layer. Runtime
 
 from django.conf import settings
 from django.db import models
+from django_rls import RLSModel
 
 from apps.core.models import BaseModel
+from apps.core.rls import owner_scoped_policy, public_readable_policy
 
 
 # ---------------------------------------------------------------------------
@@ -114,8 +116,16 @@ class Upload(BaseModel):
         return self.original_filename or self.storage_key
 
 
-class Playlist(BaseModel):
-    """Our canonical playlist (a fork/snapshot — decoupled from any source)."""
+class Playlist(BaseModel, RLSModel):
+    """A user's canonical playlist (a fork/snapshot — decoupled from any source).
+
+    The one owner-isolated table in the catalog: RLS enforces, at the DB layer,
+    that the runtime `app_user` role only sees rows where `created_by` matches
+    the request's user — a backstop under the viewset's app-layer filter. Reads
+    additionally allow `is_public` rows (forward-compat with public sharing);
+    writes stay owner-only. Admin (`rls.bypass`) and migrations (BYPASSRLS role)
+    are unaffected. The rest of the catalog stays shared-global.
+    """
 
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -131,6 +141,7 @@ class Playlist(BaseModel):
 
     class Meta:
         ordering = ["-created_at"]
+        rls_policies = [owner_scoped_policy("created_by"), public_readable_policy()]
 
     def __str__(self) -> str:
         return self.title

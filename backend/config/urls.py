@@ -59,7 +59,6 @@ class AppHealthCheckView(HealthCheckView):
 
 
 api_v1 = [
-    path("notes/", include("apps.notes.urls")),
     path("catalog/", include("apps.catalog.urls")),
     path("", include("apps.rooms.urls")),
     path("users/", include("apps.users.urls")),

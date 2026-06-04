@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as NotesRouteImport } from './routes/notes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as IndexRouteImport } from './routes/index'
@@ -40,11 +39,6 @@ const SignupRoute = SignupRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NotesRoute = NotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -148,7 +142,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteWithChildren
   '/login': typeof LoginRoute
-  '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
@@ -171,7 +164,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
@@ -194,7 +186,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/docs': typeof DocsRouteWithChildren
   '/login': typeof LoginRoute
-  '/notes': typeof NotesRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
@@ -220,7 +211,6 @@ export interface FileRouteTypes {
     | '/'
     | '/docs'
     | '/login'
-    | '/notes'
     | '/settings'
     | '/signup'
     | '/account/email'
@@ -243,7 +233,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/notes'
     | '/settings'
     | '/signup'
     | '/account/email'
@@ -265,7 +254,6 @@ export interface FileRouteTypes {
     | '/'
     | '/docs'
     | '/login'
-    | '/notes'
     | '/settings'
     | '/signup'
     | '/account/email'
@@ -290,7 +278,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DocsRoute: typeof DocsRouteWithChildren
   LoginRoute: typeof LoginRoute
-  NotesRoute: typeof NotesRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   AccountEmailRoute: typeof AccountEmailRoute
@@ -317,13 +304,6 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/notes': {
-      id: '/notes'
-      path: '/notes'
-      fullPath: '/notes'
-      preLoaderRoute: typeof NotesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -509,7 +489,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DocsRoute: DocsRouteWithChildren,
   LoginRoute: LoginRoute,
-  NotesRoute: NotesRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   AccountEmailRoute: AccountEmailRoute,

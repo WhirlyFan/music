@@ -97,7 +97,7 @@ function RootLayout() {
       <AppHeader />
 
       {/* pb-28 keeps content clear of the fixed now-playing bar. */}
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-6 py-8 pb-28">
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8">
         <Outlet />
       </main>
 

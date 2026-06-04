@@ -137,16 +137,17 @@ function ImportResultView({ result }: { result: ImportResult }) {
       aria-labelledby="import-result-heading"
       className="border-border mx-auto max-w-2xl space-y-3 rounded-lg border p-4"
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div>
           <h2 id="import-result-heading" className="font-medium">
             {result.title}
           </h2>
           <p className="text-muted-foreground text-sm">{result.track_count} tracks imported</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Button
             size="sm"
+            className="w-full sm:w-auto"
             onClick={() =>
               play.mutate(
                 { trackIds, label: result.title },
@@ -159,13 +160,14 @@ function ImportResultView({ result }: { result: ImportResult }) {
           <Button
             size="sm"
             variant="outline"
+            className="w-full sm:w-auto"
             onClick={() =>
               queueTracks.mutate({ trackIds }, { onSuccess: () => toast.success('Added to queue.') })
             }
           >
             Add all to queue
           </Button>
-          <Button size="sm" variant="outline" onClick={saveAsPlaylist}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={saveAsPlaylist}>
             Save as playlist
           </Button>
         </div>
