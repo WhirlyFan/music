@@ -2,44 +2,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { uiKeys } from '@/lib/query/keys'
 
-// Measured player geometry (px), published so the playlists search pill can sit
-// exactly above the player + its queue on any screen. `playerHeight` = the pill
-// row; `queueHeight` = the queue panel, which animates 0→full as it opens, so the
-// search pill (reading it every frame) rides the queue in lockstep.
-type PlayerUi = { queueOpen: boolean; queueHeight: number; playerHeight: number }
-const DEFAULT: PlayerUi = { queueOpen: false, queueHeight: 0, playerHeight: 0 }
-
-/**
- * Ephemeral player UI state shared across components via the Query cache — a
- * client-only key with no fetcher. The player owns it (queue open + measured
- * geometry); the playlists search pill reads it to sit above the player. One
- * source of truth, no prop-drilling and no global store.
- */
-export function usePlayerUi() {
-  const qc = useQueryClient()
-  const { data } = useQuery({
-    queryKey: uiKeys.player(),
-    queryFn: () => DEFAULT,
-    initialData: DEFAULT,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  })
-  const set = (patch: Partial<PlayerUi>) =>
-    qc.setQueryData<PlayerUi>(uiKeys.player(), (prev) => ({ ...(prev ?? DEFAULT), ...patch }))
-  const setQueueOpen = (open: boolean | ((prev: boolean) => boolean)) =>
-    qc.setQueryData<PlayerUi>(uiKeys.player(), (prev) => {
-      const cur = prev ?? DEFAULT
-      return { ...cur, queueOpen: typeof open === 'function' ? open(cur.queueOpen) : open }
-    })
-  return {
-    queueOpen: data.queueOpen,
-    queueHeight: data.queueHeight,
-    playerHeight: data.playerHeight,
-    setQueueOpen,
-    setQueueHeight: (queueHeight: number) => set({ queueHeight }),
-    setPlayerHeight: (playerHeight: number) => set({ playerHeight }),
-  }
-}
+// NOTE: player open-state (queue / now-playing) lives in the URL — see
+// lib/player-url-state.ts (TanStack Router search params). Measured player
+// geometry is client state in a Zustand store — see lib/stores/player-ui.ts.
 
 /**
  * Search text for a route, in the Query cache so a single persistent search pill

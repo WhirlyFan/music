@@ -1,5 +1,10 @@
 import { QueryClient } from '@tanstack/react-query'
-import { createRootRouteWithContext, Outlet, redirect } from '@tanstack/react-router'
+import {
+  createRootRouteWithContext,
+  Outlet,
+  redirect,
+  retainSearchParams,
+} from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import { AppHeader } from '@/components/layout/app-header'
@@ -43,6 +48,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   // Default <title> when a child route doesn't override. Per-route overrides
   // happen via `head: () => ({ meta: [{ title: '...' }] })` in each file route.
   head: () => ({ meta: [{ title: 'music' }] }),
+  // Player view state lives in the URL (see lib/player-url-state.ts). Declaring
+  // the flags here makes them type-safe + lets the router own them; retaining them
+  // keeps the now-playing/queue views open across navigation (child routes still
+  // own their own params, e.g. /login's ?redirect).
+  validateSearch: (search: Record<string, unknown>): { nowPlaying?: boolean; queue?: boolean } => ({
+    nowPlaying: search.nowPlaying === true || search.nowPlaying === 'true' ? true : undefined,
+    queue: search.queue === true || search.queue === 'true' ? true : undefined,
+  }),
+  search: { middlewares: [retainSearchParams(['nowPlaying', 'queue'])] },
   // Verified-email gate. Runs before every navigation; checks the session
   // (cheap, cached) for authentication, then the email list for verification.
   // allauth's session response doesn't expose `has_verified_email`, so we

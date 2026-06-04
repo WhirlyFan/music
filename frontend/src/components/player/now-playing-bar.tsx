@@ -19,8 +19,9 @@ import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
+import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
-import { usePlayerUi } from '@/lib/query/ui'
+import { usePlayerUiStore } from '@/lib/stores/player-ui'
 import {
   playIntent,
   type QueueItem,
@@ -72,12 +73,14 @@ export function NowPlayingBar() {
   // below from the match-in-progress + buffering — no effect sets it.
   const [playing, setPlaying] = useState(false)
   const [buffering, setBuffering] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const queuePanelRef = useRef<HTMLDivElement>(null)
-  // Queue-open + measured geometry live in the Query cache (shared with the
-  // playlists search pill). The queue panel stays open across navigation — it
-  // closes only via its own toggle, never on outside clicks/navigation.
-  const { queueOpen, setQueueOpen, queueHeight, setQueueHeight, setPlayerHeight } = usePlayerUi()
+  // Open-state in the URL (linkable, survives nav/refresh); measured geometry in a
+  // Zustand client store (shared with the playlists search pill + FAB).
+  const [expanded, setExpanded] = useNowPlayingOpen()
+  const [queueOpen, setQueueOpen] = useQueueOpen()
+  const queueHeight = usePlayerUiStore((s) => s.queueHeight)
+  const setQueueHeight = usePlayerUiStore((s) => s.setQueueHeight)
+  const setPlayerHeight = usePlayerUiStore((s) => s.setPlayerHeight)
 
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'

@@ -1,8 +1,9 @@
 import { Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
+import { useQueueOpen } from '@/lib/player-url-state'
 import { useRoom } from '@/lib/query/rooms'
-import { usePlayerUi } from '@/lib/query/ui'
+import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
 /**
  * The floating rounded search pill, shared by the playlists wall and a playlist's
@@ -25,7 +26,9 @@ export function FloatingSearchPill({
   ariaLabel: string
 }) {
   const { data: room } = useRoom()
-  const { queueOpen, queueHeight, playerHeight } = usePlayerUi()
+  const [queueOpen] = useQueueOpen()
+  const queueHeight = usePlayerUiStore((s) => s.queueHeight)
+  const playerHeight = usePlayerUiStore((s) => s.playerHeight)
   const playerShown = Boolean(room?.current)
   // Sit 8px above the player (matching the queue↔seek-bar gap). When the queue is
   // open, rise above it by the queue height + the same 8px gap, so the pill clears

@@ -6,8 +6,9 @@ import { routeHasFloatingSearch } from '@/components/layout/global-search-pill'
 import { GooeyMenu, type GooeyItem } from '@/components/ui/gooey-menu'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
+import { useQueueOpen } from '@/lib/player-url-state'
 import { useRoom, useSaveQueueAsPlaylist, useShuffle } from '@/lib/query/rooms'
-import { usePlayerUi } from '@/lib/query/ui'
+import { usePlayerUiStore } from '@/lib/stores/player-ui'
 import { useMediaQuery } from '@/lib/use-media-query'
 
 const GAP = 8 // matches the player/queue/pill gaps
@@ -24,7 +25,9 @@ export function QuickActionsFab() {
   const { data: room } = useRoom(authed)
   const shuffle = useShuffle()
   const save = useSaveQueueAsPlaylist()
-  const { queueOpen, queueHeight, playerHeight } = usePlayerUi()
+  const [queueOpen] = useQueueOpen()
+  const queueHeight = usePlayerUiStore((s) => s.queueHeight)
+  const playerHeight = usePlayerUiStore((s) => s.playerHeight)
   const path = useRouterState({ select: (s) => s.location.pathname })
   // Two breakpoints, because the pills are different widths: the player pill
   // (max 42rem) reaches the corner on a wider screen than the narrower search
