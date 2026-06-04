@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import { GripVertical, ListPlus, MoreVertical, Pencil, RefreshCw, Trash2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -71,21 +71,29 @@ function PlaylistDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const dragId = useRef<string | null>(null)
 
-  // Auto-load the next page when the sentinel scrolls into view.
-  const sentinelRef = useRef<HTMLDivElement>(null)
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = tracks
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el || !hasNextPage) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage()
-      },
-      { rootMargin: '300px' },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  // Auto-load the next page when the sentinel nears the viewport. A *callback ref* —
+  // not useEffect + useRef — is the right tool here: it binds the IntersectionObserver
+  // the instant the sentinel mounts (and React re-invokes it, running the cleanup,
+  // whenever the deps below change), so the observer always sees fresh hasNextPage/
+  // isFetchingNextPage straight from the closure. No effect mirroring state into a ref.
+  // (A deps-keyed useEffect missed the binding entirely when the tracks query resolved
+  // before the playlist metadata: hasNextPage was already true by the time the sentinel
+  // mounted, so the effect never re-ran — that was the "stuck on page 1" stall.)
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node || !hasNextPage) return
+      const io = new IntersectionObserver(
+        ([entry]) => {
+          if (entry?.isIntersecting && !isFetchingNextPage) fetchNextPage()
+        },
+        { rootMargin: '600px 0px' },
+      )
+      io.observe(node)
+      return () => io.disconnect() // React runs this when the node unmounts or deps change
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage],
+  )
 
   if (error) return <FormError message="Failed to load playlist." />
   // Loading: the REAL header + rows rendered inside a SkeletonZone so each shows
