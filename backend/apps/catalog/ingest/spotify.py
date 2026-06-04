@@ -2,8 +2,9 @@
 it returns the *full* playlist + ISRC and is used whenever creds are configured.
 The Web API blocks Spotify's own editorial/algorithmic playlists (Top 50,
 Discover Weekly, …) for third-party apps, so for those — and when no creds are
-set — we fall back to the public **embed scrape** (keyless, but capped at ~50
-tracks). `partial=True` flags a result we could only return the capped 50 of.
+set, or when the API serves a playlist with no tracks — we fall back to the public
+**embed scrape** (keyless, but capped at ~100 tracks). `partial=True` flags a result
+we could only return the embed-capped portion of.
 
 Playback is resolved to YouTube lazily on play either way (Spotify doesn't hand
 us a playable stream)."""
@@ -178,7 +179,7 @@ _UA = (
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
 )
 _EMBED = "https://open.spotify.com/embed/{kind}/{sid}"
-_EMBED_CAP = 50  # the public embed widget exposes only the first ~50 tracks
+_EMBED_CAP = 100  # the public embed exposes ~100 tracks; beyond that we can't read keyless
 _NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 
 

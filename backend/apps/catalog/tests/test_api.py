@@ -107,27 +107,29 @@ def test_ingest_spotify_api_first_full_list(client, monkeypatch):
 
 @pytest.mark.django_db
 def test_ingest_spotify_editorial_falls_back_to_capped_scrape(client, monkeypatch):
-    # Editorial playlist (or no creds): API refused → keyless scrape returns 50 + a note.
+    # Editorial playlist (or no creds): API refused → keyless scrape hits the ~100
+    # embed cap → import the capped list + a (count-driven, non-contradictory) note.
     from apps.catalog.ingest import spotify
 
-    fifty = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(50)]
+    capped = [{"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": ""} for i in range(100)]
     monkeypatch.setattr(spotify, "_configured", lambda: False)
     monkeypatch.setattr(
         spotify,
         "_scrape",
         lambda kind, sid: {
-            "title": "Top 50",
+            "title": "Top 100",
             "external_id": sid,
             "kind": "playlist",
-            "tracks": fifty,
+            "tracks": capped,
         },
     )
     r = client.post(
         INGEST, {"url": "https://open.spotify.com/playlist/37i9editorial"}, format="json"
     )
     assert r.status_code == 201
-    assert r.data["track_count"] == 50
-    assert r.data["note"] and "50" in r.data["note"]
+    assert r.data["track_count"] == 100
+    assert r.data["note"] and "100" in r.data["note"]
+    assert "50" not in r.data["note"]  # no stale/contradictory cap number
 
 
 @pytest.mark.django_db
