@@ -90,6 +90,9 @@ class QueueSerializer(serializers.Serializer):
 
 class PlayPlaylistSerializer(serializers.Serializer):
     playlist_id = serializers.UUIDField()
+    # Optional: start the context at this track (clicking a row plays from there).
+    # Omitted → play from the top.
+    start_track_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class QueueItemRefSerializer(serializers.Serializer):

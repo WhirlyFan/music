@@ -95,7 +95,12 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         playlist = get_object_or_404(Playlist, pk=s.validated_data["playlist_id"])
         room = services.get_active_room(request.user)
-        services.play_playlist(room, playlist, added_by=request.user)
+        services.play_playlist(
+            room,
+            playlist,
+            start_track_id=s.validated_data.get("start_track_id"),
+            added_by=request.user,
+        )
         return self._respond(request.user)
 
     @extend_schema(request=QueueSerializer, responses=RoomSerializer)

@@ -38,6 +38,9 @@ export const playlistKeys = {
   all: () => ['playlists'] as const,
   list: () => ['playlists', 'list'] as const,
   detail: (id: string) => ['playlists', 'detail', id] as const,
+  // Paginated tracks of one playlist (useInfiniteQuery). Nested under detail so
+  // invalidating the playlist refreshes both its metadata and its track pages.
+  tracks: (id: string) => ['playlists', 'detail', id, 'tracks'] as const,
 }
 
 /**

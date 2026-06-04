@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/types'
@@ -7,6 +7,8 @@ import { playlistKeys, roomKeys } from '@/lib/query/keys'
 export type Playlist = components['schemas']['Playlist']
 export type PlaylistDetail = components['schemas']['PlaylistDetail']
 export type PaginatedPlaylistList = components['schemas']['PaginatedPlaylistList']
+export type PlaylistTrack = components['schemas']['PlaylistTrack']
+export type PaginatedPlaylistTrackList = components['schemas']['PaginatedPlaylistTrackList']
 export type Track = components['schemas']['Track']
 export type PlaybackSource = components['schemas']['PlaybackSource']
 export type ImportResult = components['schemas']['ImportResult']
@@ -22,6 +24,22 @@ export function usePlaylist(id: string) {
   return useQuery({
     queryKey: playlistKeys.detail(id),
     queryFn: () => api<PlaylistDetail>(`/catalog/playlists/${id}/`),
+    enabled: Boolean(id),
+  })
+}
+
+/**
+ * Paginated tracks of one playlist (25/page). Pages load on demand via
+ * `fetchNextPage` so opening a long playlist doesn't pull every track at once.
+ */
+export function useInfinitePlaylistTracks(id: string) {
+  return useInfiniteQuery({
+    queryKey: playlistKeys.tracks(id),
+    queryFn: ({ pageParam }) =>
+      api<PaginatedPlaylistTrackList>(`/catalog/playlists/${id}/tracks/?page=${pageParam}`),
+    initialPageParam: 1,
+    // DRF returns a `next` URL while more pages remain; pages are sequential.
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled: Boolean(id),
   })
 }
@@ -58,22 +76,6 @@ export function useMatchTrack(playlistId?: string) {
       api<PlaybackSource>(`/catalog/tracks/${trackId}/match/`, { method: 'POST' }),
     onSuccess: () => {
       // The room player reads each track's active_source — refresh it too.
-      qc.invalidateQueries({ queryKey: roomKeys.all() })
-      if (playlistId) qc.invalidateQueries({ queryKey: playlistKeys.detail(playlistId) })
-    },
-  })
-}
-
-/** Correct a track's active source — paste a video id or promote a candidate. */
-export function useSetSource(playlistId?: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (args: { trackId: string; videoId?: string; playbackSourceId?: string }) =>
-      api<PlaybackSource>(`/catalog/tracks/${args.trackId}/set-source/`, {
-        method: 'POST',
-        body: { video_id: args.videoId, playback_source_id: args.playbackSourceId },
-      }),
-    onSuccess: () => {
       qc.invalidateQueries({ queryKey: roomKeys.all() })
       if (playlistId) qc.invalidateQueries({ queryKey: playlistKeys.detail(playlistId) })
     },

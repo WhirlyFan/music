@@ -105,6 +105,22 @@ def test_play_playlist_and_save():
 
 
 @pytest.mark.django_db
+def test_play_playlist_starts_at_given_track():
+    # Clicking a row plays the whole playlist but starts at that track.
+    user = UserFactory()
+    room = services.get_active_room(user)
+    playlist = PlaylistFactory(created_by=user)
+    tracks = [TrackFactory() for _ in range(3)]
+    for i, t in enumerate(tracks):
+        PlaylistTrackFactory(playlist=playlist, track=t, position=i)
+
+    services.play_playlist(room, playlist, start_track_id=tracks[2].id, added_by=user)
+    room.refresh_from_db()
+    assert room.playback.current_item.track_id == tracks[2].id
+    assert room.items.count() == 3  # full playlist is the context
+
+
+@pytest.mark.django_db
 def test_play_now_is_idempotent_on_current_track():
     # Spam-playing the same song must not pile up duplicate context rows.
     user = UserFactory()

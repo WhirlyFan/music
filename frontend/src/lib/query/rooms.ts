@@ -51,10 +51,16 @@ export function usePlay() {
   )
 }
 
-/** Replace the queue with an owned playlist, from the top. */
+/**
+ * Replace the queue with an owned playlist. Plays from the top, or from
+ * `startTrackId` when given (clicking a song row plays the playlist from there).
+ */
 export function usePlayPlaylist() {
-  return useRoomMutation((playlistId: string) =>
-    api<Room>('/rooms/play-playlist/', { method: 'POST', body: { playlist_id: playlistId } }),
+  return useRoomMutation((args: { playlistId: string; startTrackId?: string }) =>
+    api<Room>('/rooms/play-playlist/', {
+      method: 'POST',
+      body: { playlist_id: args.playlistId, start_track_id: args.startTrackId },
+    }),
   )
 }
 

@@ -233,10 +233,14 @@ def clear(room: Room) -> None:
 
 
 @transaction.atomic
-def play_playlist(room: Room, playlist, *, added_by=None) -> None:
-    """Play an owned playlist as the context, from the top."""
+def play_playlist(room: Room, playlist, *, start_track_id=None, added_by=None) -> None:
+    """Play an owned playlist as the context. Starts at `start_track_id` if given
+    (clicking a row plays from there), else from the top."""
     tracks = [pt.track for pt in playlist.items.select_related("track").order_by("position")]
-    play(room, tracks, start=0, added_by=added_by, label=playlist.title)
+    start = 0
+    if start_track_id is not None:
+        start = next((i for i, t in enumerate(tracks) if str(t.id) == str(start_track_id)), 0)
+    play(room, tracks, start=start, added_by=added_by, label=playlist.title)
 
 
 def upcoming(room: Room) -> dict:

@@ -72,7 +72,6 @@ export function FullScreenPlayer({
   onNext,
   onSeek,
   onPauseMain,
-  onCorrect,
   onClose,
 }: {
   track: Track
@@ -87,7 +86,6 @@ export function FullScreenPlayer({
   onNext: () => void
   onSeek: (seconds: number) => void
   onPauseMain: () => void
-  onCorrect: (videoId: string) => void
   onClose: () => void
 }) {
   useEffect(() => {
@@ -221,16 +219,6 @@ export function FullScreenPlayer({
                   <span className="max-w-[12rem] truncate">via YouTube</span>
                   <ExternalLink className="size-3.5 shrink-0" />
                 </a>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const id = window.prompt('Paste the correct YouTube video ID:')
-                    if (id) onCorrect(id)
-                  }}
-                  className="text-muted-foreground hover:text-foreground ml-3 text-xs underline"
-                >
-                  Wrong song?
-                </button>
               </dd>
             </div>
           )}

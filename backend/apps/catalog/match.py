@@ -6,8 +6,6 @@ Writes the top candidates as PlaybackSource rows and promotes the best to
 
 from __future__ import annotations
 
-from django.db import transaction
-
 from .ingest import applemusic, spotify, youtube
 from .models import PlaybackSource, Source, Track
 
@@ -104,37 +102,3 @@ def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None
     PlaybackSource.objects.bulk_create([ps for _, ps in scored])
     backfill_artwork(track, best.locator)
     return best
-
-
-@transaction.atomic
-def set_manual_youtube_source(track: Track, video_id: str, *, user=None) -> PlaybackSource:
-    """Correction: make `video_id` the track's active source (manual, sticky)."""
-    track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).update(
-        status=PlaybackSource.Status.REPLACED
-    )
-    ps = PlaybackSource.objects.create(
-        track=track,
-        source=Source.objects.get(code=Source.YOUTUBE),
-        locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
-        locator=video_id,
-        origin=PlaybackSource.Origin.MATCHED_MANUAL,
-        status=PlaybackSource.Status.ACTIVE,
-        selected_by=user,
-    )
-    backfill_artwork(track, video_id)
-    return ps
-
-
-@transaction.atomic
-def promote_candidate(playback_source: PlaybackSource, *, user=None) -> PlaybackSource:
-    """Correction: promote an existing candidate row to active (manual)."""
-    track = playback_source.track
-    track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).exclude(
-        pk=playback_source.pk
-    ).update(status=PlaybackSource.Status.REPLACED)
-    playback_source.status = PlaybackSource.Status.ACTIVE
-    playback_source.origin = PlaybackSource.Origin.MATCHED_MANUAL
-    playback_source.selected_by = user
-    playback_source.save(update_fields=["status", "origin", "selected_by", "updated_at"])
-    backfill_artwork(track, playback_source.locator)
-    return playback_source

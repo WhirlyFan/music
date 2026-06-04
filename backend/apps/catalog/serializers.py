@@ -67,14 +67,15 @@ class CreatePlaylistSerializer(serializers.Serializer):
 
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
-    items = PlaylistTrackSerializer(many=True, read_only=True)
+    # Metadata only — tracks are paginated via the playlist `tracks` action so a
+    # long playlist isn't inlined here. `track_count` powers the header.
     track_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Playlist
         fields = [
             "id", "title", "description", "artwork_url", "is_public",
-            "created_at", "track_count", "items",
+            "created_at", "track_count",
         ]
 
 
@@ -92,16 +93,3 @@ class ImportResultSerializer(serializers.Serializer):
     cover = serializers.CharField(read_only=True, allow_blank=True, required=False)  # collection art
     # Optional advisory (e.g. "imported the first 50 — Spotify caps the preview").
     note = serializers.CharField(read_only=True, allow_null=True, required=False)
-
-
-class SetSourceSerializer(serializers.Serializer):
-    """Correct a track's playback source: paste a YouTube video id OR promote
-    an existing candidate by its PlaybackSource id."""
-
-    video_id = serializers.CharField(required=False)
-    playback_source_id = serializers.UUIDField(required=False)
-
-    def validate(self, attrs):
-        if not attrs.get("video_id") and not attrs.get("playback_source_id"):
-            raise serializers.ValidationError("Provide video_id or playback_source_id.")
-        return attrs

@@ -9,7 +9,7 @@ import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
-import { useMatchTrack, useRefreshArtwork, useSetSource } from '@/lib/query/catalog'
+import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
 import {
   type QueueItem,
   useClearQueue,
@@ -48,7 +48,6 @@ export function NowPlayingBar() {
   const shuffle = useShuffle()
   const clear = useClearQueue()
   const save = useSaveQueueAsPlaylist()
-  const setSource = useSetSource()
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
@@ -292,7 +291,6 @@ export function NowPlayingBar() {
           onNext={() => next.mutate()}
           onSeek={seek}
           onPauseMain={() => audioRef.current?.pause()}
-          onCorrect={(videoId) => setSource.mutate({ trackId: track.id, videoId })}
           onClose={() => setExpanded(false)}
         />
       )}

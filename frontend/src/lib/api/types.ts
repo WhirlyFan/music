@@ -70,6 +70,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/playlists/{id}/tracks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Paginated tracks for one playlist, in playlist order.
+         *
+         *     The detail endpoint returns metadata only; the client pages through the
+         *     tracks here so opening a long playlist doesn't inline every track.
+         */
+        get: operations["v1_catalog_playlists_tracks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/tracks/": {
         parameters: {
             query?: never;
@@ -77,7 +99,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Retrieve tracks; list candidates; correct the active playback source. */
+        /**
+         * @description Retrieve tracks; resolve a track's playback source (match), proxy its
+         *     audio (stream), and self-heal cover art (refresh-artwork).
+         */
         get: operations["v1_catalog_tracks_list"];
         put?: never;
         post?: never;
@@ -94,25 +119,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Retrieve tracks; list candidates; correct the active playback source. */
+        /**
+         * @description Retrieve tracks; resolve a track's playback source (match), proxy its
+         *     audio (stream), and self-heal cover art (refresh-artwork).
+         */
         get: operations["v1_catalog_tracks_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/catalog/tracks/{id}/candidates/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description Retrieve tracks; list candidates; correct the active playback source. */
-        get: operations["v1_catalog_tracks_candidates_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -158,23 +169,6 @@ export interface paths {
          *     this when an <img> fails to load (the CDN URL rotted).
          */
         post: operations["v1_catalog_tracks_refresh_artwork_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/catalog/tracks/{id}/set-source/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** @description Retrieve tracks; list candidates; correct the active playback source. */
-        post: operations["v1_catalog_tracks_set_source_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -577,21 +571,6 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Note"][];
         };
-        PaginatedPlaybackSourceList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["PlaybackSource"][];
-        };
         PaginatedPlaylistList: {
             /** @example 123 */
             count: number;
@@ -606,6 +585,21 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Playlist"][];
+        };
+        PaginatedPlaylistTrackList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PlaylistTrack"][];
         };
         PaginatedTrackList: {
             /** @example 123 */
@@ -647,6 +641,8 @@ export interface components {
         PlayPlaylist: {
             /** Format: uuid */
             playlist_id: string;
+            /** Format: uuid */
+            start_track_id?: string | null;
         };
         PlaybackSource: {
             /** Format: uuid */
@@ -685,7 +681,6 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
             readonly track_count: number;
-            readonly items: components["schemas"]["PlaylistTrack"][];
         };
         PlaylistTrack: {
             position: number;
@@ -729,15 +724,6 @@ export interface components {
         };
         SaveAsPlaylist: {
             title: string;
-        };
-        /**
-         * @description Correct a track's playback source: paste a YouTube video id OR promote
-         *     an existing candidate by its PlaybackSource id.
-         */
-        SetSource: {
-            video_id?: string;
-            /** Format: uuid */
-            playback_source_id?: string;
         };
         /**
          * @description * `active` - Active
@@ -868,6 +854,31 @@ export interface operations {
             };
         };
     };
+    v1_catalog_playlists_tracks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this playlist. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaylistTrackList"];
+                };
+            };
+        };
+    };
     v1_catalog_tracks_list: {
         parameters: {
             query?: {
@@ -912,31 +923,6 @@ export interface operations {
             };
         };
     };
-    v1_catalog_tracks_candidates_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path: {
-                /** @description A UUID string identifying this track. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedPlaybackSourceList"];
-                };
-            };
-        };
-    };
     v1_catalog_tracks_match_create: {
         parameters: {
             query?: never;
@@ -977,34 +963,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Track"];
-                };
-            };
-        };
-    };
-    v1_catalog_tracks_set_source_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A UUID string identifying this track. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["SetSource"];
-                "application/x-www-form-urlencoded": components["schemas"]["SetSource"];
-                "multipart/form-data": components["schemas"]["SetSource"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PlaybackSource"];
                 };
             };
         };

@@ -275,16 +275,37 @@ def test_refresh_artwork_self_heals(client, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_set_source_correction(client, offline):
-    client.post(INGEST, {"url": ALBUM_URL}, format="json")
-    track = Track.objects.first()
-    r = client.post(
-        f"/api/v1/catalog/tracks/{track.id}/set-source/", {"video_id": "MANUAL1"}, format="json"
-    )
-    assert r.status_code == 200
-    assert r.data["locator"] == "MANUAL1"
-    assert r.data["origin"] == "matched_manual"
-    assert track.playback_sources.filter(status="active").count() == 1
+def test_playlist_detail_is_metadata_only(client):
+    tracks = [TrackFactory() for _ in range(3)]
+    pl = client.post(
+        "/api/v1/catalog/playlists/",
+        {"title": "Mix", "track_ids": [str(t.id) for t in tracks]},
+        format="json",
+    ).data
+    detail = client.get(f"/api/v1/catalog/playlists/{pl['id']}/")
+    assert detail.status_code == 200
+    assert detail.data["track_count"] == 3
+    assert "items" not in detail.data  # tracks no longer inlined; paginated separately
+
+
+@pytest.mark.django_db
+def test_playlist_tracks_paginated_in_order(client):
+    # PAGE_SIZE is 25 — 30 tracks spans two pages, in playlist position order.
+    tracks = [TrackFactory() for _ in range(30)]
+    pl = client.post(
+        "/api/v1/catalog/playlists/",
+        {"title": "Big", "track_ids": [str(t.id) for t in tracks]},
+        format="json",
+    ).data
+    p1 = client.get(f"/api/v1/catalog/playlists/{pl['id']}/tracks/")
+    assert p1.status_code == 200
+    assert p1.data["count"] == 30
+    assert len(p1.data["results"]) == 25
+    assert p1.data["next"] and p1.data["results"][0]["position"] == 0
+
+    p2 = client.get(f"/api/v1/catalog/playlists/{pl['id']}/tracks/?page=2")
+    assert len(p2.data["results"]) == 5
+    assert p2.data["results"][0]["position"] == 25
 
 
 class _FakeUpstream:

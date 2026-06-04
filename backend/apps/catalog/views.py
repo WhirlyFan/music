@@ -16,7 +16,7 @@ from .serializers import (
     PlaybackSourceSerializer,
     PlaylistDetailSerializer,
     PlaylistSerializer,
-    SetSourceSerializer,
+    PlaylistTrackSerializer,
     TrackSerializer,
 )
 from .services import UnsupportedSourceError, create_playlist_from_tracks
@@ -93,24 +93,33 @@ class PlaylistViewSet(mixins.CreateModelMixin, viewsets.ReadOnlyModelViewSet):
         playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
         return Response(PlaylistSerializer(playlist).data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(responses=PlaylistTrackSerializer(many=True))
+    @action(detail=True, methods=["get"])
+    def tracks(self, request, pk=None):
+        """Paginated tracks for one playlist, in playlist order.
+
+        The detail endpoint returns metadata only; the client pages through the
+        tracks here so opening a long playlist doesn't inline every track.
+        """
+        playlist = self.get_object()
+        qs = (
+            playlist.items.select_related("track")
+            .prefetch_related("track__playback_sources")
+            .order_by("position")
+        )
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(PlaylistTrackSerializer(page, many=True).data)
+
 
 class TrackViewSet(viewsets.ReadOnlyModelViewSet):
-    """Retrieve tracks; list candidates; correct the active playback source."""
+    """Retrieve tracks; resolve a track's playback source (match), proxy its
+    audio (stream), and self-heal cover art (refresh-artwork)."""
 
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TrackSerializer
 
     def get_queryset(self):
         return Track.objects.prefetch_related("playback_sources").all()
-
-    @extend_schema(responses=PlaybackSourceSerializer(many=True))
-    @action(detail=True, methods=["get"])
-    def candidates(self, request, pk=None):
-        track = get_object_or_404(Track, pk=pk)
-        rows = track.playback_sources.exclude(status=PlaybackSource.Status.REPLACED).order_by(
-            "-confidence"
-        )
-        return Response(PlaybackSourceSerializer(rows, many=True).data)
 
     @extend_schema(request=None, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"])
@@ -191,17 +200,3 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         match.backfill_artwork(track, ps.locator if ps else "")
         track.refresh_from_db()
         return Response(TrackSerializer(track).data)
-
-    @extend_schema(request=SetSourceSerializer, responses=PlaybackSourceSerializer)
-    @action(detail=True, methods=["post"], url_path="set-source")
-    def set_source(self, request, pk=None):
-        track = get_object_or_404(Track, pk=pk)
-        serializer = SetSourceSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-        if data.get("playback_source_id"):
-            ps = get_object_or_404(track.playback_sources, pk=data["playback_source_id"])
-            ps = match.promote_candidate(ps, user=request.user)
-        else:
-            ps = match.set_manual_youtube_source(track, data["video_id"], user=request.user)
-        return Response(PlaybackSourceSerializer(ps).data)
