@@ -1,14 +1,15 @@
-"""One-time Spotify authorization → prints a user refresh token.
+"""One-time Spotify authorization → saves the user refresh token (encrypted) to the DB.
 
-A *user* token (from any free account) lifts the client-credentials restrictions,
-so the API can read full playlists. Run this once with a dedicated account, then
-store the printed refresh token in Doppler as SPOTIFY_REFRESH_TOKEN and restart.
+A *user* token (from any free account) lifts the client-credentials restrictions, so
+the API can read full playlists. Run this once with a dedicated account; the token is
+stored encrypted in the SpotifyAuth row and auto-refreshed thereafter — no restart,
+no manual secret to paste.
 
-    docker compose exec backend doppler run -- \
+    docker compose exec -it backend doppler run -- \
         /app/.venv/bin/python manage.py spotify_authorize
 
-The SPOTIFY_REDIRECT_URI must be registered in the Spotify app dashboard (Spotify
-allows http on 127.0.0.1/localhost). Reading *public* playlists needs no scopes.
+SPOTIFY_REDIRECT_URI must be registered in the Spotify app dashboard (Spotify allows
+http on 127.0.0.1). Reading *public* playlists needs no scopes.
 """
 
 import base64
@@ -26,7 +27,7 @@ _SCOPE = ""  # public playlist reads need no scopes
 
 
 class Command(BaseCommand):
-    help = "One-time: authorize a Spotify account and print its refresh token (→ Doppler)."
+    help = "One-time: authorize a Spotify account; save its refresh token (encrypted) to the DB."
 
     def handle(self, *args, **options):
         cid = settings.SPOTIFY_CLIENT_ID
@@ -77,10 +78,21 @@ class Command(BaseCommand):
 
         refresh = body.get("refresh_token")
         if not refresh:
-            raise CommandError(f"No refresh_token in Spotify's response: {body}")
+            raise CommandError("Spotify's response had no refresh_token.")
+
+        # Save it encrypted to the DB; never print/log the token itself.
+        from apps.catalog.models import SpotifyAuth
+
+        SpotifyAuth.set_refresh_token(refresh)
 
         self.stdout.write("")
+        if not settings.SPOTIFY_TOKEN_KEY:
+            self.stdout.write(
+                self.style.WARNING(
+                    "⚠ SPOTIFY_TOKEN_KEY isn't set — the token was stored UNENCRYPTED. "
+                    "Set a Fernet key in Doppler and re-run for encryption at rest."
+                )
+            )
         self.stdout.write(
-            self.style.SUCCESS("✅ Add this to Doppler as SPOTIFY_REFRESH_TOKEN, then restart:")
+            self.style.SUCCESS("✅ Authorized and saved. Full playlist reads are now active.")
         )
-        self.stdout.write(refresh)

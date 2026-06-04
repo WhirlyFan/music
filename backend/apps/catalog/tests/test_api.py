@@ -84,6 +84,41 @@ def test_ingest_spotify_unreadable(client, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_spotify_user_token_db_backed_and_encrypted(monkeypatch, settings):
+    # The authorized refresh token lives encrypted in the DB; _user_token() reads it,
+    # mints + caches a short-lived access token, and never stores plaintext at rest.
+    from cryptography.fernet import Fernet
+    from django.core.cache import cache
+
+    from apps.catalog.ingest import spotify
+    from apps.catalog.models import SpotifyAuth
+
+    settings.SPOTIFY_TOKEN_KEY = Fernet.generate_key().decode()
+    settings.SPOTIFY_CLIENT_ID = "cid"
+    settings.SPOTIFY_CLIENT_SECRET = "secret"
+    cache.clear()
+
+    SpotifyAuth.set_refresh_token("rt-secret")
+    stored = SpotifyAuth.objects.get().refresh_token
+    assert stored.startswith("fernet:") and "rt-secret" not in stored  # encrypted at rest
+    assert SpotifyAuth.get_refresh_token() == "rt-secret"  # round-trips
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"access_token": "at-xyz", "expires_in": 3600}'
+
+    monkeypatch.setattr(spotify.urllib.request, "urlopen", lambda *a, **k: _Resp())
+    assert spotify._user_token() == "at-xyz"
+    assert cache.get("spotify:user_token") == "at-xyz"
+
+
+@pytest.mark.django_db
 def test_ingest_spotify_api_first_full_list(client, monkeypatch):
     # Creds set → API returns the full list (no cap, no note).
     from apps.catalog.ingest import spotify
@@ -116,7 +151,12 @@ def test_ingest_spotify_scrape_has_no_partial_warning(client, monkeypatch):
     monkeypatch.setattr(
         spotify,
         "_scrape",
-        lambda kind, sid: {"title": "Mix", "external_id": sid, "kind": "playlist", "tracks": tracks},
+        lambda kind, sid: {
+            "title": "Mix",
+            "external_id": sid,
+            "kind": "playlist",
+            "tracks": tracks,
+        },
     )
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/usermade"}, format="json")
     assert r.status_code == 201
@@ -154,7 +194,8 @@ def test_ingest_spotify_api_capped_playlist_falls_back_to_scrape(client, monkeyp
             "external_id": sid,
             "kind": "playlist",
             "tracks": [
-                {"title": f"B{i}", "artist": "X", "duration": 200000, "isrc": ""} for i in range(100)
+                {"title": f"B{i}", "artist": "X", "duration": 200000, "isrc": ""}
+                for i in range(100)
             ],
         },
     )

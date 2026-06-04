@@ -1,10 +1,10 @@
-"""Spotify ingest. **API-first**, preferring a one-time-authorized *user* token
-(SPOTIFY_REFRESH_TOKEN, a dedicated account) which reads full playlists Spotify now
-withholds from app-only tokens; it falls back to client-credentials. The API returns
-the *full* playlist (paginated) + ISRC. Only when the API still can't read it
-(no user token AND the app-only token is blocked/empty for that playlist) do we fall
-back to the public **embed scrape** (keyless, ~100-track cap) — `partial`/the larger
-read is reconciled in ingest_with_meta.
+"""Spotify ingest. **API-first**, preferring a one-time-authorized *user* token (a
+dedicated account; its refresh token is stored encrypted in the SpotifyAuth DB row)
+which reads full playlists Spotify now withholds from app-only tokens; it falls back
+to client-credentials. The API returns the *full* playlist (paginated) + ISRC. Only
+when the API still can't read it (no user token AND the app-only token is
+blocked/empty for that playlist) do we fall back to the public **embed scrape**
+(keyless, ~100-track cap) — the larger read is reconciled in ingest_with_meta.
 
 Playback is resolved to YouTube lazily on play either way (Spotify doesn't hand
 us a playable stream)."""
@@ -61,17 +61,22 @@ def _token() -> str:
 
 def _user_token() -> str | None:
     """Access token minted from the one-time-authorized *user* refresh token (a
-    dedicated account, stored in Doppler as SPOTIFY_REFRESH_TOKEN). A user token
-    reads full playlists that the app-only token can't. Cached until near expiry;
-    None when not set up (→ caller falls back to client-credentials)."""
-    refresh = settings.SPOTIFY_REFRESH_TOKEN
+    dedicated account, stored encrypted in the SpotifyAuth DB row). A user token
+    reads full playlists that the app-only token can't. The short-lived access token
+    is cached; on a rotation we persist the new refresh token. None when not set up
+    (→ caller falls back to client-credentials)."""
     cid = settings.SPOTIFY_CLIENT_ID
     secret = settings.SPOTIFY_CLIENT_SECRET
-    if not (refresh and cid and secret):
+    if not (cid and secret):
         return None
     cached = cache.get("spotify:user_token")
     if cached:
         return cached
+    from apps.catalog.models import SpotifyAuth  # local import: avoid app-load cycle
+
+    refresh = SpotifyAuth.get_refresh_token()
+    if not refresh:
+        return None
     auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
     data = urllib.parse.urlencode(
         {"grant_type": "refresh_token", "refresh_token": refresh}
@@ -93,6 +98,9 @@ def _user_token() -> str | None:
         ) from e
     token = body["access_token"]
     cache.set("spotify:user_token", token, max(60, body.get("expires_in", 3600) - 60))
+    rotated = body.get("refresh_token")
+    if rotated and rotated != refresh:  # Spotify rotated it → persist the new one
+        SpotifyAuth.set_refresh_token(rotated)
     return token
 
 
