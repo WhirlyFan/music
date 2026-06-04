@@ -26,8 +26,11 @@ export function QuickActionsFab() {
   const save = useSaveQueueAsPlaylist()
   const { queueOpen, queueHeight, playerHeight } = usePlayerUi()
   const path = useRouterState({ select: (s) => s.location.pathname })
-  // Wide enough that the centered player pill (max 42rem) can't reach the corner.
-  const roomy = useMediaQuery('(min-width: 820px)')
+  // Two breakpoints, because the pills are different widths: the player pill
+  // (max 42rem) reaches the corner on a wider screen than the narrower search
+  // pill (max 28rem). So there are three FAB heights as the screen narrows.
+  const playerClearsCorner = useMediaQuery('(min-width: 820px)')
+  const searchClearsCorner = useMediaQuery('(min-width: 600px)')
 
   if (!authed) return null
 
@@ -62,23 +65,22 @@ export function QuickActionsFab() {
       : []),
   ]
 
-  // Stay in the bottom-right corner; but the moment the bottom is wide enough that
-  // the centered player/search pills reach the corner (narrow screens), lift the
-  // FAB above whatever's stacked there — the search pill if this route shows one,
-  // else the player pill. Same gaps + 280ms ease-out-quint as the queue, so it
-  // rides up in sync when the queue opens.
+  // Three heights, each still hugging the right edge, lifting only as much as the
+  // current width actually needs (gaps + 280ms ease-out-quint match the queue):
+  //   1. corner — nothing reaches the corner;
+  //   2. above the player pill — the wide player pill reaches it, the search pill
+  //      doesn't (it's narrower, so it only reaches on an even smaller screen);
+  //   3. above the search pill — the search pill reaches the lifted FAB too.
   const playerShown = Boolean(room?.current)
   const searchShown = SEARCH_ROUTE_RE.test(path)
-  let bottom = 16 // bottom-4 corner
-  if (!roomy) {
-    if (searchShown) {
-      const searchBottom = playerShown
-        ? 16 + playerHeight + GAP + (queueOpen ? queueHeight + GAP : 0)
-        : 16
-      bottom = searchBottom + PILL_H + GAP
-    } else if (playerShown) {
-      bottom = 16 + playerHeight + GAP
-    }
+  const searchBottom = playerShown
+    ? 16 + playerHeight + GAP + (queueOpen ? queueHeight + GAP : 0)
+    : 16
+  let bottom = 16 // 1) corner
+  if (searchShown && !searchClearsCorner) {
+    bottom = searchBottom + PILL_H + GAP // 3) above the search pill
+  } else if (playerShown && !playerClearsCorner) {
+    bottom = 16 + playerHeight + GAP // 2) above the player pill
   }
 
   return (
