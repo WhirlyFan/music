@@ -19,6 +19,8 @@ import re
 import urllib.request
 from urllib.parse import parse_qs, urlparse
 
+from apps.catalog.ingest import applemusic_web
+
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -177,11 +179,21 @@ def ingest(url: str):
 def ingest_with_meta(url: str) -> dict:
     """Return {title, external_id, kind, tracks, cover} for persistence. The cover
     is the collection art; album/song tracks inherit it (it IS their art), but
-    playlist tracks don't (they get their own cover from the YouTube match on play)."""
+    playlist tracks don't (they get their own cover from the YouTube match on play).
+
+    Playlists read in full via the keyless amp-api (`applemusic_web`) — the public
+    page embeds only ~100 tracks — and fall back to the embed scrape if it breaks."""
     kind, external_id = _classify(url)
-    title, image, album, tracks = _tracks(url)
     path_parts = [p for p in urlparse(url).path.split("/") if p]
     storefront = path_parts[0] if path_parts and len(path_parts[0]) == 2 else "us"
+    if kind == "playlist":
+        try:
+            full = applemusic_web.fetch_playlist(storefront, external_id)
+            if full["tracks"]:
+                return full
+        except applemusic_web.AppleMusicWebError:
+            pass  # amp-api/token broke → fall back to the ≤100 embed scrape below
+    title, image, album, tracks = _tracks(url)
     for t in tracks:
         # Apple's id is "<component> - <albumId> - <songId>"; keep the song id so we
         # can link/fetch each song directly (its own cover), not just the collection.
@@ -196,4 +208,10 @@ def ingest_with_meta(url: str) -> dict:
             t["source_url"] = f"https://music.apple.com/{storefront}/song/{song_id}"
         else:
             t["source_url"] = url  # fallback: the collection page
-    return {"title": title, "external_id": external_id, "kind": kind, "tracks": tracks, "cover": image}
+    return {
+        "title": title,
+        "external_id": external_id,
+        "kind": kind,
+        "tracks": tracks,
+        "cover": image,
+    }

@@ -73,6 +73,56 @@ def test_ingest_rejects_unsupported_source(client):
 
 
 @pytest.mark.django_db
+def test_ingest_apple_playlist_amp_api_full(client, monkeypatch):
+    # Apple playlists read in full via the keyless amp-api — past the page's ~100 cap.
+    from apps.catalog.ingest import applemusic_web
+
+    tracks = [
+        {"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": f"US{i:010d}"}
+        for i in range(150)
+    ]
+    monkeypatch.setattr(
+        applemusic_web,
+        "fetch_playlist",
+        lambda storefront, pid: {
+            "title": "Big Apple PL",
+            "external_id": pid,
+            "kind": "playlist",
+            "tracks": tracks,
+            "cover": "https://img/x",
+        },
+    )
+    r = client.post(INGEST, {"url": "https://music.apple.com/us/playlist/x/pl.abc"}, format="json")
+    assert r.status_code == 201, r.content
+    assert r.data["track_count"] == 150  # full list, not the ~100 embed cap
+
+
+@pytest.mark.django_db
+def test_ingest_apple_playlist_falls_back_to_scrape(client, monkeypatch):
+    # If amp-api/token breaks, fall back to the keyless embed scrape (≤100).
+    from apps.catalog.ingest import applemusic, applemusic_web
+
+    def boom(storefront, pid):
+        raise applemusic_web.AppleMusicWebError("amp-api down")
+
+    monkeypatch.setattr(applemusic_web, "fetch_playlist", boom)
+    monkeypatch.setattr(
+        applemusic,
+        "_tracks",
+        lambda url: (
+            "Scraped PL",
+            "https://img/cover",
+            "",
+            [{"title": "Locket", "artist": "Crumb", "duration": 200000, "_id": None}],
+        ),
+    )
+    r = client.post(INGEST, {"url": "https://music.apple.com/us/playlist/x/pl.def"}, format="json")
+    assert r.status_code == 201, r.content
+    assert r.data["track_count"] == 1
+    assert r.data["tracks"][0]["title"] == "Locket"
+
+
+@pytest.mark.django_db
 def test_ingest_spotify_unreadable(client, monkeypatch):
     # Pathfinder fails AND the scrape can't read it → friendly 400, no real network.
     from apps.catalog.ingest import spotify, spotify_web
