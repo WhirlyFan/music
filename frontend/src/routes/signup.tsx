@@ -11,7 +11,7 @@ import { isEmailVerificationPending, useSignup } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/signup')({
   component: SignupPage,
-  head: () => ({ meta: [{ title: 'Sign up — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Sign up — music' }] }),
 })
 
 // Keep this regex in sync with backend USERNAME_REGEX in apps/users/models.py.

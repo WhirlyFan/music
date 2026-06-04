@@ -10,7 +10,7 @@ import { mfaKeys } from '@/lib/query/keys'
 
 export const Route = createFileRoute('/account/mfa/recovery-codes')({
   component: RecoveryCodesPage,
-  head: () => ({ meta: [{ title: 'Recovery codes — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Recovery codes — music' }] }),
 })
 
 type RecoveryCodeData = {

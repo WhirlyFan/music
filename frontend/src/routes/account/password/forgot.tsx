@@ -12,7 +12,7 @@ import { useRequestPasswordReset } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/account/password/forgot')({
   component: ForgotPasswordPage,
-  head: () => ({ meta: [{ title: 'Reset password — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Reset password — music' }] }),
 })
 
 const schema = z.object({

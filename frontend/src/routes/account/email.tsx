@@ -13,7 +13,7 @@ import { type EmailAddress, useChangeEmail, useEmails } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/account/email')({
   component: ChangeEmailPage,
-  head: () => ({ meta: [{ title: 'Change email — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Change email — music' }] }),
 })
 
 const schema = z.object({ email: z.string().email('Enter a valid email address') })

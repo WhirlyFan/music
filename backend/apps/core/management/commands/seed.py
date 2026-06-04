@@ -259,7 +259,7 @@ class Command(BaseCommand):
             )
 
         # Deterministic Faker output across runs.
-        factory.random.reseed_random("react-django-template-dev")
+        factory.random.reseed_random("music-dev")
 
         if options["flush"]:
             Note.objects.all().delete()

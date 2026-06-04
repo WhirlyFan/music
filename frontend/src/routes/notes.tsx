@@ -12,7 +12,7 @@ import { useCreateNote, useDeleteNote, useNotes } from '@/lib/query/notes'
 
 export const Route = createFileRoute('/notes')({
   component: NotesPage,
-  head: () => ({ meta: [{ title: 'Notes — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Notes — music' }] }),
 })
 
 const noteSchema = z.object({

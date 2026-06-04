@@ -28,7 +28,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   component: RootLayout,
   // Default <title> when a child route doesn't override. Per-route overrides
   // happen via `head: () => ({ meta: [{ title: '...' }] })` in each file route.
-  head: () => ({ meta: [{ title: 'react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'music' }] }),
   // Verified-email gate. Runs before every navigation; checks the session
   // (cheap, cached) for authentication, then the email list for verification.
   // allauth's session response doesn't expose `has_verified_email`, so we

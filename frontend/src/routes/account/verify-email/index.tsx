@@ -14,7 +14,7 @@ import {
 
 export const Route = createFileRoute('/account/verify-email/')({
   component: VerifyEmailWaitingPage,
-  head: () => ({ meta: [{ title: 'Check your email — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Check your email — music' }] }),
 })
 
 /**

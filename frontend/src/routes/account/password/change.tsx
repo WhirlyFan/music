@@ -13,7 +13,7 @@ import { useChangePassword } from '@/lib/auth/hooks'
 
 export const Route = createFileRoute('/account/password/change')({
   component: ChangePasswordPage,
-  head: () => ({ meta: [{ title: 'Change password — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Change password — music' }] }),
 })
 
 const schema = z

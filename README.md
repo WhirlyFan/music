@@ -1,4 +1,4 @@
-# react-django-template
+# music
 
 Full-stack starter: Django + DRF + Postgres + RLS + Hatchet on the backend,
 React + Vite + TanStack + shadcn on the frontend. Auth, permissions, RLS,
@@ -31,7 +31,7 @@ time it needs it.
 
 ```bash
 # 1. Clone
-git clone <repo-url> react-django-template && cd react-django-template
+git clone <repo-url> music && cd music
 
 # 2. Env file (defaults are fine for local dev)
 cp .env.example .env
@@ -74,7 +74,7 @@ for the full flow.
 
 ```bash
 # On any docker-capable host:
-git clone <repo> && cd react-django-template
+git clone <repo> && cd music
 cp .env.production.example .env
 $EDITOR .env                              # fill in real secrets — see comments in the file
 
@@ -126,17 +126,17 @@ Skip the rename if you're just kicking the tires.
 
 ### 1. Rebrand (one-time find-and-replace)
 
-The string `react-django-template` appears in 44 places — service names,
+The string `music` appears in 44 places — service names,
 package metadata, route titles, the TOTP issuer label, the docker-compose
 project name, etc. They're all real labels you want to update.
 
 ```bash
 # Pick your new name and run from the repo root:
 NEW=my-app
-grep -rl "react-django-template" . \
+grep -rl "music" . \
   --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.venv \
   --exclude-dir=dist --exclude=pnpm-lock.yaml --exclude=uv.lock \
-  | xargs sed -i '' "s/react-django-template/${NEW}/g"   # macOS
+  | xargs sed -i '' "s/music/${NEW}/g"   # macOS
 
 # On Linux: sed -i (no '') instead of -i ''
 ```
@@ -144,7 +144,7 @@ grep -rl "react-django-template" . \
 Then verify and commit:
 
 ```bash
-grep -r "react-django-template" . --exclude-dir=node_modules --exclude-dir=.git
+grep -r "music" . --exclude-dir=node_modules --exclude-dir=.git
 # Should print zero matches.
 ```
 

@@ -30,7 +30,7 @@ export function AppHeader() {
     <header className="border-border bg-card text-card-foreground border-b">
       <nav className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-6">
         <Link to="/" className="font-semibold tracking-tight">
-          react-django-template
+          music
         </Link>
 
         {isAuthed && (

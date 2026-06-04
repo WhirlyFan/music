@@ -21,7 +21,7 @@ services:
   # ─────────────────────────────────────────────────────────────────────────
   - type: web
     runtime: static
-    name: react-django-template-frontend
+    name: music-frontend
     rootDir: frontend
     # Render's static-site build container has BOTH `/usr/bin` and
     # `/usr/lib/node_modules` read-only — so corepack-enable AND npm-install-g
@@ -54,19 +54,19 @@ services:
       # Order matters — most specific first.
       - type: rewrite
         source: /api/*
-        destination: https://react-django-template-backend.onrender.com/api/*
+        destination: https://music-backend.onrender.com/api/*
       - type: rewrite
         source: /_allauth/*
-        destination: https://react-django-template-backend.onrender.com/_allauth/*
+        destination: https://music-backend.onrender.com/_allauth/*
       - type: rewrite
         source: /admin/*
-        destination: https://react-django-template-backend.onrender.com/admin/*
+        destination: https://music-backend.onrender.com/admin/*
       - type: rewrite
         source: /static/*
-        destination: https://react-django-template-backend.onrender.com/static/*
+        destination: https://music-backend.onrender.com/static/*
       - type: rewrite
         source: /health
-        destination: https://react-django-template-backend.onrender.com/health/
+        destination: https://music-backend.onrender.com/health/
       # SPA fallback: anything else serves the React index so client-side
       # routing (TanStack Router) takes over.
       - type: rewrite
@@ -108,7 +108,7 @@ services:
   # ─────────────────────────────────────────────────────────────────────────
   - type: web
     runtime: docker
-    name: react-django-template-backend
+    name: music-backend
     rootDir: backend
     plan: free
     region: oregon                 # pin to one region; match the DB below
@@ -139,23 +139,23 @@ services:
       # BACKEND's host (Render proxies set Host to the destination), so the
       # backend host is what must be allowed here.
       - key: DJANGO_ALLOWED_HOSTS
-        value: react-django-template-backend.onrender.com
+        value: music-backend.onrender.com
       # CSRF middleware checks the Origin/Referer of state-changing requests.
       # Same-origin from the browser's perspective means Origin =
       # https://<frontend>.onrender.com — that's what to trust.
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://react-django-template-frontend.onrender.com
+        value: https://music-frontend.onrender.com
       # CORS is a defense-in-depth backstop. With rewrites we don't strictly
       # need it, but leaving the frontend origin allow-listed costs nothing.
       - key: DJANGO_CORS_ALLOWED_ORIGINS
-        value: https://react-django-template-frontend.onrender.com
+        value: https://music-frontend.onrender.com
 
       # FRONTEND_ORIGIN is consumed by HEADLESS_FRONTEND_URLS so password-reset
       # / email-verification links in transactional emails point at the
       # actual deployed frontend (not localhost). Change ONE value here and
       # both link generation + email content adapt.
       - key: FRONTEND_ORIGIN
-        value: https://react-django-template-frontend.onrender.com
+        value: https://music-frontend.onrender.com
 
       # ── Database ────────────────────────────────────────────────────────
       # Render auto-injects the connection string when the service is linked
@@ -164,11 +164,11 @@ services:
       # docs/ops/deploy-render.md "Phase B: restore two-role Postgres".
       - key: DATABASE_URL
         fromDatabase:
-          name: react-django-template-db
+          name: music-db
           property: connectionString
       - key: DATABASE_URL_ADMIN    # same URL — migrations + runtime share the role
         fromDatabase:
-          name: react-django-template-db
+          name: music-db
           property: connectionString
 
       # ── Gunicorn ────────────────────────────────────────────────────────
@@ -197,43 +197,16 @@ services:
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
 
-      # ── YouTube PO-token provider ───────────────────────────────────────
-      # Internal URL of the bgutil PO-token sidecar (the pserv below). yt-dlp's
-      # bgutil plugin fetches YouTube proof-of-origin tokens from it to dodge
-      # throttling under load. Unset this (and delete the pserv) to disable —
-      # playback works without it until YouTube starts throttling.
-      - key: YOUTUBE_POT_BASE_URL
-        value: http://react-django-template-pot-provider:4416
+      # YouTube PO-token provider: runs co-located INSIDE the backend image
+      # (Node server on 127.0.0.1:4416, started by the entrypoint) — no separate
+      # Render service, no extra cost, wakes/sleeps with the backend. The
+      # YOUTUBE_POT_BASE_URL is baked into the image; nothing to set here.
 
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.
       # Left unset here so the file doesn't leak secrets if forked.
       - key: SENTRY_DSN
         sync: false                # marks it as "manage this one in the dashboard"
-
-  # ─────────────────────────────────────────────────────────────────────────
-  # YouTube PO-token provider — Private Service (internal-only sidecar).
-  #
-  # bgutil-ytdlp-pot-provider's HTTP server (port 4416). The backend's yt-dlp
-  # plugin fetches YouTube proof-of-origin tokens from it to avoid throttling
-  # under load. Stateless, no secrets, not reachable from the internet.
-  #
-  # ⚠️  Render private services are NOT on the free tier — this incurs cost
-  # (smallest paid instance). If you don't need it yet, DELETE this service and
-  # UNSET YOUTUBE_POT_BASE_URL above; prod plays fine without PO tokens until
-  # YouTube throttles the backend IP. Keep the image tag in lockstep with the
-  # bgutil-ytdlp-pot-provider plugin pinned in backend/pyproject.toml.
-  # ─────────────────────────────────────────────────────────────────────────
-  - type: pserv
-    runtime: image
-    name: react-django-template-pot-provider
-    plan: starter                  # private services have no free tier
-    region: oregon                 # MUST match the backend service region
-    image:
-      url: docker.io/brainicism/bgutil-ytdlp-pot-provider:1.3.1
-    envVars:
-      - key: PORT                  # the server listens on $PORT; backend connects on 4416
-        value: "4416"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Managed Postgres (free 90 days, then $7/mo Starter required).
@@ -243,7 +216,7 @@ services:
 # 90 days (loses all data).
 # ─────────────────────────────────────────────────────────────────────────────
 databases:
-  - name: react-django-template-db
+  - name: music-db
     plan: free
     region: oregon                 # MUST match the backend service region
     # NOTE: Render does NOT auto-upgrade major versions of an existing DB.

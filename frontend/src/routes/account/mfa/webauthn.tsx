@@ -21,7 +21,7 @@ import { signalDeletedPasskey } from '@/lib/auth/passkey-signal'
 
 export const Route = createFileRoute('/account/mfa/webauthn')({
   component: WebAuthnPage,
-  head: () => ({ meta: [{ title: 'Passkeys — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Passkeys — music' }] }),
 })
 
 // Shape of one entry in the GET /account/authenticators list, narrowed to

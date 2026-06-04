@@ -258,7 +258,7 @@ MFA_FIELD_ENCRYPTION_KEY = env("MFA_FIELD_ENCRYPTION_KEY", default="")
 
 MFA_SUPPORTED_TYPES = ["totp", "recovery_codes", "webauthn"]
 MFA_REQUIRED = False
-MFA_TOTP_ISSUER = "react-django-template"
+MFA_TOTP_ISSUER = "music"
 # Allow the previous and next 30-second TOTP windows in addition to the
 # current one. Closes the common "I typed the last digit just as it rolled
 # over" footgun without meaningfully weakening security (still ~90s of
@@ -306,8 +306,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "react-django-template API",
-    "DESCRIPTION": "Backend API for the react-django-template project.",
+    "TITLE": "music API",
+    "DESCRIPTION": "Backend API for the music project.",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
     # Serve Swagger UI's JS/CSS + favicon from /static/ (via drf-spectacular-

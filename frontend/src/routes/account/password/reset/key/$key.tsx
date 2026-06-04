@@ -17,7 +17,7 @@ import { useCompletePasswordReset } from '@/lib/auth/hooks'
 // this URL pattern in config/settings/base.py.
 export const Route = createFileRoute('/account/password/reset/key/$key')({
   component: ResetPasswordPage,
-  head: () => ({ meta: [{ title: 'Set new password — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Set new password — music' }] }),
 })
 
 const schema = z

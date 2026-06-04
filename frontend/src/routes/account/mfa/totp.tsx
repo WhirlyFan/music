@@ -14,7 +14,7 @@ import { confirm } from '@/lib/overlay'
 
 export const Route = createFileRoute('/account/mfa/totp')({
   component: TotpEnrollPage,
-  head: () => ({ meta: [{ title: 'Enroll TOTP — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Enroll TOTP — music' }] }),
 })
 
 // `meta.secret` + `meta.totp_url` arrive when allauth returns HTTP 404 + the

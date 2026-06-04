@@ -20,7 +20,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute('/account/mfa/')({
   validateSearch: searchSchema,
   component: TwoFactorOverview,
-  head: () => ({ meta: [{ title: 'MFA — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'MFA — music' }] }),
 })
 
 type AuthenticatorEntry = {

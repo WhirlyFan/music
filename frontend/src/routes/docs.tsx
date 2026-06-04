@@ -5,7 +5,7 @@ import { groupDocs, listDocs } from '@/lib/docs/registry'
 
 export const Route = createFileRoute('/docs')({
   component: DocsLayout,
-  head: () => ({ meta: [{ title: 'Docs — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Docs — music' }] }),
 })
 
 function DocsLayout() {

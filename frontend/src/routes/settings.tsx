@@ -8,7 +8,7 @@ import { useAuthenticators } from '@/lib/auth/mfa'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
-  head: () => ({ meta: [{ title: 'Settings — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Settings — music' }] }),
 })
 
 type AuthenticatorEntry = { type?: string }

@@ -17,7 +17,7 @@ type Outcome = 'verified-not-logged-in' | 'failed'
 type LoaderData = { outcome: Outcome }
 
 export const Route = createFileRoute('/account/verify-email/$key')({
-  head: () => ({ meta: [{ title: 'Verify email — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Verify email — music' }] }),
   loader: async ({ params, context }): Promise<LoaderData> => {
     const key = decodeURIComponent(params.key)
 

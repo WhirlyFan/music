@@ -8,8 +8,8 @@ bottom.
 
 | URL | Service | Plan |
 |---|---|---|
-| `https://react-django-template-frontend.onrender.com` | React app, public | Static Site (free forever) |
-| `https://react-django-template-backend.onrender.com` | Django + DRF, public but only accessed via frontend rewrites | Web Service (free, sleeps 15 min) |
+| `https://music-frontend.onrender.com` | React app, public | Static Site (free forever) |
+| `https://music-backend.onrender.com` | Django + DRF, public but only accessed via frontend rewrites | Web Service (free, sleeps 15 min) |
 | (managed) | Postgres 17 | Database (free for 90 days, then $7/mo) |
 
 The frontend's `render.yaml` rewrites `/api/*`, `/_allauth/*`, `/admin/*`,
@@ -66,7 +66,7 @@ Backend → "Listening at: http://0.0.0.0:8000"  ← gunicorn up
 Frontend → "Build successful, deploy live"
 ```
 
-Visit `https://react-django-template-frontend.onrender.com`.
+Visit `https://music-frontend.onrender.com`.
 
 ### 5. Create a real admin user
 

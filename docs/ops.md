@@ -6,7 +6,7 @@ For deploy specifics, see [`ops/deploy-render.md`](ops/deploy-render.md).
 ## Local dev — first time
 
 ```sh
-git clone <repo> && cd react-django-template
+git clone <repo> && cd music
 cp .env.example .env          # adjust if needed
 make bootstrap                # brings everything up + migrate + seed
 ```
@@ -95,17 +95,19 @@ fights extraction, so the chain has several pieces — all required together:
 | **deno** | baked into `backend/Dockerfile` | JS runtime that runs the challenge solver |
 | **yt-dlp-ejs** | backend dep (via `yt-dlp[default]`) | the JS **signature/n-challenge** solver scripts. *Without deno + this, YouTube returns zero playable formats.* Keep its version in lockstep with yt-dlp. |
 | **curl_cffi** | backend dep (`yt-dlp[...,curl-cffi]`) | browser-TLS impersonation (auto-used where the arch provides targets) → dodges bot detection |
-| **bgutil-ytdlp-pot-provider** | backend dep **+** `bgutil-provider` compose service | fetches **PO (proof-of-origin) tokens** from the sidecar to avoid throttling. Plugin version **and** the sidecar image tag must match (`docker-compose.yml` / `render.yaml`). |
+| **bgutil PO-token provider** | `bgutil-ytdlp-pot-provider` plugin (backend dep) **+** the provider's Node server **co-located in the backend image** | fetches **PO (proof-of-origin) tokens** to avoid throttling. The plugin version **and** the `brainicism/bgutil-ytdlp-pot-provider` image tag (in `backend/Dockerfile`) must match. |
 
 Notes:
 - After bumping any of these (esp. yt-dlp/yt-dlp-ejs), run **`make reset`** — the
   backend `.venv` is an anonymous volume that a plain `up` won't refresh.
-- `YOUTUBE_POT_BASE_URL` points the plugin at the sidecar (`http://bgutil-provider:4416`
-  in compose). Unset → no PO tokens (fine until YouTube throttles the IP).
-- **Prod:** `render.yaml` provisions the provider as a **private service (paid)**.
-  Don't need it yet? Delete that service and unset `YOUTUBE_POT_BASE_URL`.
-- Cookies are **not** used. If the bot wall ever returns under load, PO tokens
-  (above) are the fix, not cookies.
+- **The PO-token provider runs co-located inside the backend container** — its
+  Node server (copied prebuilt from the bgutil image, incl. native `canvas`) is
+  started by `docker-entrypoint.sh` on `127.0.0.1:4416`, and `YOUTUBE_POT_BASE_URL`
+  is baked into the image. No separate/paid service; it shares the backend's
+  lifecycle (wakes/sleeps with it) in both dev and prod. It's best-effort — if the
+  server isn't up, yt-dlp just resolves without PO tokens (the solver still works).
+- Cookies are **not** used. If the bot wall returns under load, PO tokens are the
+  fix, not cookies.
 
 ## Database migrations
 

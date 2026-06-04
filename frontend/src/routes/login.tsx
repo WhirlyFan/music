@@ -20,7 +20,7 @@ import {
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,
-  head: () => ({ meta: [{ title: 'Log in — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Log in — music' }] }),
 })
 
 // `identifier` accepts either an email (contains @) or a username
