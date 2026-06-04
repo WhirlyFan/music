@@ -2,6 +2,7 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { Import, Save, Shuffle } from 'lucide-react'
 import { toast } from 'sonner'
 
+import { routeHasFloatingSearch } from '@/components/layout/global-search-pill'
 import { GooeyMenu, type GooeyItem } from '@/components/ui/gooey-menu'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
@@ -9,7 +10,6 @@ import { useRoom, useSaveQueueAsPlaylist, useShuffle } from '@/lib/query/rooms'
 import { usePlayerUi } from '@/lib/query/ui'
 import { useMediaQuery } from '@/lib/use-media-query'
 
-const SEARCH_ROUTE_RE = /^\/playlists(\/[^/]+)?$/ // routes that show the floating search pill
 const GAP = 8 // matches the player/queue/pill gaps
 const PILL_H = 48 // the floating search pill is h-12
 
@@ -65,22 +65,25 @@ export function QuickActionsFab() {
       : []),
   ]
 
-  // Three heights, each still hugging the right edge, lifting only as much as the
-  // current width actually needs (gaps + 280ms ease-out-quint match the queue):
-  //   1. corner — nothing reaches the corner;
-  //   2. above the player pill — the wide player pill reaches it, the search pill
-  //      doesn't (it's narrower, so it only reaches on an even smaller screen);
-  //   3. above the search pill — the search pill reaches the lifted FAB too.
+  // Hug the bottom-right corner, lifting only as much as the current width needs —
+  // and clearing the open queue box, since that's what's actually stacked there.
+  //   • The player pill (and the equally-wide queue) reach the corner below 820px →
+  //     lift above the player + open queue.
+  //   • The narrower search pill reaches below 600px → sit above it (which is above
+  //     the player/queue stack when present, else just above the corner).
+  // Heights track the player + queue measurements, so the FAB rides the queue
+  // open/close (gaps + 280ms ease-out-quint match it).
   const playerShown = Boolean(room?.current)
-  const searchShown = SEARCH_ROUTE_RE.test(path)
-  const searchBottom = playerShown
+  const searchShown = routeHasFloatingSearch(path)
+  const playerStackTop = playerShown
     ? 16 + playerHeight + GAP + (queueOpen ? queueHeight + GAP : 0)
     : 16
-  let bottom = 16 // 1) corner
+  let bottom = 16 // corner
+  if (playerShown && !playerClearsCorner) {
+    bottom = playerStackTop // above the player + open queue
+  }
   if (searchShown && !searchClearsCorner) {
-    bottom = searchBottom + PILL_H + GAP // 3) above the search pill
-  } else if (playerShown && !playerClearsCorner) {
-    bottom = 16 + playerHeight + GAP // 2) above the player pill
+    bottom = Math.max(bottom, playerStackTop + PILL_H + GAP) // above the search pill
   }
 
   return (
