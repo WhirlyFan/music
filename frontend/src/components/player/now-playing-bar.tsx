@@ -344,17 +344,25 @@ export function NowPlayingBar() {
           onLoadStart={() => {
             setCurrentTime(0)
             setDuration(0)
-            setLoading(true) // resolving + buffering the stream
           }}
           onWaiting={() => setLoading(true)} // re-buffering mid-track
-          onPlay={() => connectAnalyser()} // wire the visualizer on the first play gesture
+          onPlay={() => {
+            // A play is now in flight (autoplay or a click) — spinner until it
+            // actually starts. Tying `loading` to a live play attempt (not just
+            // src load) means a ready-but-paused/cached track shows Play, never a
+            // perpetual spinner.
+            setLoading(true)
+            connectAnalyser() // wire the visualizer on the first play gesture
+          }}
           onPlaying={() => {
-            // Real playback started — flip to "playing" exactly now so the button
-            // can't be mis-clicked during the resolve/buffer gap.
+            // Real playback started — flip to "playing" so the button matches reality.
             setLoading(false)
             setPlaying(true)
           }}
-          onPause={() => setPlaying(false)}
+          onPause={() => {
+            setLoading(false)
+            setPlaying(false)
+          }}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
           onEnded={() => next.mutate()}

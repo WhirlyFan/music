@@ -1,4 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/types'
@@ -29,6 +35,9 @@ export function useInfinitePlaylists(search = '') {
       ),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
+    // Keep the prior results on screen while a new search resolves — the wall
+    // fills the page, so flashing to a skeleton on every keystroke is jarring.
+    placeholderData: keepPreviousData,
   })
 }
 
