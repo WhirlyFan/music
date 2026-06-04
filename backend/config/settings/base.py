@@ -22,6 +22,12 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 # "not configured" message. Set both in Doppler.
 SPOTIFY_CLIENT_ID = env("SPOTIFY_CLIENT_ID", default="")
 SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
+# A one-time-authorized *user* refresh token (a dedicated free account) lifts the
+# client-credentials restrictions — the API then reads full playlists (incl. ones
+# app-only tokens can't). Obtained via `manage.py spotify_authorize`, then stored in
+# Doppler. SPOTIFY_REDIRECT_URI must match the one registered in the Spotify app.
+SPOTIFY_REFRESH_TOKEN = env("SPOTIFY_REFRESH_TOKEN", default="")
+SPOTIFY_REDIRECT_URI = env("SPOTIFY_REDIRECT_URI", default="http://127.0.0.1:8000/spotify/callback")
 
 # Base URL of the bgutil PO-token provider sidecar (bgutil-ytdlp-pot-provider).
 # yt-dlp fetches YouTube proof-of-origin tokens from it to avoid throttling under

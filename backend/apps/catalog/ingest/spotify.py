@@ -1,10 +1,10 @@
-"""Spotify ingest. **API-first** (client-credentials, SPOTIFY_CLIENT_ID/SECRET):
-it returns the *full* playlist + ISRC and is used whenever creds are configured.
-The Web API blocks Spotify's own editorial/algorithmic playlists (Top 50,
-Discover Weekly, …) for third-party apps, so for those — and when no creds are
-set, or when the API serves a playlist with no tracks — we fall back to the public
-**embed scrape** (keyless, but capped at ~100 tracks). `partial=True` flags a result
-we could only return the embed-capped portion of.
+"""Spotify ingest. **API-first**, preferring a one-time-authorized *user* token
+(SPOTIFY_REFRESH_TOKEN, a dedicated account) which reads full playlists Spotify now
+withholds from app-only tokens; it falls back to client-credentials. The API returns
+the *full* playlist (paginated) + ISRC. Only when the API still can't read it
+(no user token AND the app-only token is blocked/empty for that playlist) do we fall
+back to the public **embed scrape** (keyless, ~100-track cap) — `partial`/the larger
+read is reconciled in ingest_with_meta.
 
 Playback is resolved to YouTube lazily on play either way (Spotify doesn't hand
 us a playable stream)."""
@@ -59,6 +59,49 @@ def _token() -> str:
     return token
 
 
+def _user_token() -> str | None:
+    """Access token minted from the one-time-authorized *user* refresh token (a
+    dedicated account, stored in Doppler as SPOTIFY_REFRESH_TOKEN). A user token
+    reads full playlists that the app-only token can't. Cached until near expiry;
+    None when not set up (→ caller falls back to client-credentials)."""
+    refresh = settings.SPOTIFY_REFRESH_TOKEN
+    cid = settings.SPOTIFY_CLIENT_ID
+    secret = settings.SPOTIFY_CLIENT_SECRET
+    if not (refresh and cid and secret):
+        return None
+    cached = cache.get("spotify:user_token")
+    if cached:
+        return cached
+    auth = base64.b64encode(f"{cid}:{secret}".encode()).decode()
+    data = urllib.parse.urlencode(
+        {"grant_type": "refresh_token", "refresh_token": refresh}
+    ).encode()
+    req = urllib.request.Request(
+        _TOKEN_URL,
+        data=data,
+        headers={
+            "Authorization": f"Basic {auth}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            body = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise SpotifyError(
+            "Spotify rejected the saved login — re-run `manage.py spotify_authorize`."
+        ) from e
+    token = body["access_token"]
+    cache.set("spotify:user_token", token, max(60, body.get("expires_in", 3600) - 60))
+    return token
+
+
+def _access_token() -> str:
+    """Prefer the authorized user token (full playlist access); else the app-only
+    client-credentials token."""
+    return _user_token() or _token()
+
+
 def _get(url_or_path: str, token: str) -> dict:
     url = url_or_path if url_or_path.startswith("http") else f"{_API}{url_or_path}"
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -76,7 +119,9 @@ def _get(url_or_path: str, token: str) -> dict:
         if e.code in (401, 403):
             raise SpotifyError("Spotify rejected the request — check the Client ID/Secret.") from e
         if e.code == 429:
-            raise SpotifyError("Spotify is rate-limiting right now — try again in a few seconds.") from e
+            raise SpotifyError(
+                "Spotify is rate-limiting right now — try again in a few seconds."
+            ) from e
         raise SpotifyError(f"Spotify request failed ({e.code}).") from e
 
 
@@ -143,7 +188,7 @@ def search_tracks(query: str, limit: int = 20) -> list[dict]:
     q = query.strip()
     if not q:
         return []
-    token = _token()
+    token = _access_token()
     # Spotify caps search `limit` at 10 for our (client-credentials) token —
     # anything higher 400s with "Invalid limit" (despite the docs' max of 50).
     params = urllib.parse.urlencode({"q": q, "type": "track", "limit": max(1, min(limit, 10))})
@@ -157,28 +202,44 @@ def _api_with_meta(kind: str, sid: str) -> dict:
     `partial` is True only when the API *capped* a playlist read — Spotify exposes
     only part of its own/editorial playlists to other apps, so pagination ends with
     fewer tracks than the playlist reports having. Albums/tracks are never partial."""
-    token = _token()
+    token = _access_token()
     if kind == "track":
         t = _get(f"/tracks/{sid}", token)
-        return {"title": t.get("name") or "", "external_id": sid, "kind": "track",
-                "tracks": [_normalize(t)], "cover": _pick_image((t.get("album") or {}).get("images")),
-                "partial": False}
+        return {
+            "title": t.get("name") or "",
+            "external_id": sid,
+            "kind": "track",
+            "tracks": [_normalize(t)],
+            "cover": _pick_image((t.get("album") or {}).get("images")),
+            "partial": False,
+        }
     if kind == "album":
         album = _get(f"/albums/{sid}", token)
         items = _paginate(album.get("tracks") or {}, token)
         # Album-track items omit the nested album object — inject it so each track
         # inherits the cover art + album name.
-        return {"title": album.get("name") or "", "external_id": sid, "kind": "album",
-                "tracks": [_normalize({**it, "album": album}) for it in items],
-                "cover": _pick_image(album.get("images")), "partial": False}
+        return {
+            "title": album.get("name") or "",
+            "external_id": sid,
+            "kind": "album",
+            "tracks": [_normalize({**it, "album": album}) for it in items],
+            "cover": _pick_image(album.get("images")),
+            "partial": False,
+        }
     playlist = _get(f"/playlists/{sid}", token)
     tracks_obj = playlist.get("tracks") or {}
     total = tracks_obj.get("total")
     tracks = [_normalize(it["track"]) for it in _paginate(tracks_obj, token) if it.get("track")]
     # Capped if Spotify says the playlist has more than the API let us read.
     partial = isinstance(total, int) and len(tracks) < total
-    return {"title": playlist.get("name") or "", "external_id": sid, "kind": "playlist",
-            "tracks": tracks, "cover": _pick_image(playlist.get("images")), "partial": partial}
+    return {
+        "title": playlist.get("name") or "",
+        "external_id": sid,
+        "kind": "playlist",
+        "tracks": tracks,
+        "cover": _pick_image(playlist.get("images")),
+        "partial": partial,
+    }
 
 
 # ── Keyless embed scrape ──────────────────────────────────────────────────────
@@ -218,7 +279,7 @@ def _scrape(kind: str, sid: str) -> dict | None:
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             html = r.read().decode("utf-8", "ignore")
-    except (urllib.error.HTTPError, urllib.error.URLError):
+    except urllib.error.HTTPError, urllib.error.URLError:
         return None
     m = _NEXT_DATA.search(html)
     if not m:
@@ -234,21 +295,35 @@ def _scrape(kind: str, sid: str) -> dict | None:
     # give a 30s `audioPreview` and an `isExplicit` flag.
     cover = ((_find(data, "coverArt") or {}).get("sources") or [{}])[-1].get("url", "")
     tracks = [
-        {"title": t.get("title") or "", "artist": t.get("subtitle") or "",
-         "duration": t.get("duration"), "isrc": "",
-         "artwork": "", "album": "", "explicit": bool(t.get("isExplicit")),
-         "preview": (t.get("audioPreview") or {}).get("url") or "",
-         # uri is "spotify:track:<id>" → id + a public track link.
-         "external_id": t["uri"].split(":")[-1] if t.get("uri", "").startswith("spotify:track:") else "",
-         "source_url": f"https://open.spotify.com/track/{t['uri'].split(':')[-1]}"
-         if t.get("uri", "").startswith("spotify:track:") else ""}
+        {
+            "title": t.get("title") or "",
+            "artist": t.get("subtitle") or "",
+            "duration": t.get("duration"),
+            "isrc": "",
+            "artwork": "",
+            "album": "",
+            "explicit": bool(t.get("isExplicit")),
+            "preview": (t.get("audioPreview") or {}).get("url") or "",
+            # uri is "spotify:track:<id>" → id + a public track link.
+            "external_id": t["uri"].split(":")[-1]
+            if t.get("uri", "").startswith("spotify:track:")
+            else "",
+            "source_url": f"https://open.spotify.com/track/{t['uri'].split(':')[-1]}"
+            if t.get("uri", "").startswith("spotify:track:")
+            else "",
+        }
         for t in track_list
         if t.get("title")
     ]
     if not tracks:
         return None
-    return {"title": _find(data, "name") or "Spotify import",
-            "external_id": sid, "kind": kind, "tracks": tracks, "cover": cover}
+    return {
+        "title": _find(data, "name") or "Spotify import",
+        "external_id": sid,
+        "kind": kind,
+        "tracks": tracks,
+        "cover": cover,
+    }
 
 
 def ingest_with_meta(url: str) -> dict:
