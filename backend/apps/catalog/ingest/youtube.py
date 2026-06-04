@@ -8,28 +8,43 @@ Audio download (Phase 3) is a separate concern and is the only part that needs
 ffmpeg.
 """
 
+import tempfile
+from functools import lru_cache
+
+from django.conf import settings
 from yt_dlp import YoutubeDL
 
-_SEARCH_OPTS = {
-    "quiet": True,
-    "no_warnings": True,
-    "extract_flat": True,  # don't resolve each result fully — lighter + fewer requests
-    "skip_download": True,
-    "noplaylist": True,
-    # Politeness for batch matching (stay under YouTube's per-IP soft limit).
-    "sleep_interval_requests": 1,
-    "retries": 5,
-}
+
+@lru_cache(maxsize=1)
+def _cookiefile() -> str | None:
+    """Write the YouTube cookies (a Netscape cookies.txt exported from a signed-in
+    account, supplied via the YOUTUBE_COOKIES secret) to a tmp file for yt-dlp.
+    Signed-in requests get past the 'confirm you're not a bot' wall. None if unset
+    (then we rely on player-client fallbacks, which YouTube may still block)."""
+    content = (getattr(settings, "YOUTUBE_COOKIES", "") or "").strip()
+    if not content:
+        return None
+    f = tempfile.NamedTemporaryFile("w", prefix="ytcookies-", suffix=".txt", delete=False)
+    f.write(content + "\n")
+    f.close()
+    return f.name
 
 
-_RESOLVE_OPTS = {
-    "format": "bestaudio",
-    "quiet": True,
-    "no_warnings": True,
-    "skip_download": True,
-    "noplaylist": True,
-    "retries": 3,
-}
+def _opts(**extra) -> dict:
+    """Base yt-dlp options: cookies (if configured) + player clients that tend to
+    dodge YouTube's bot wall. With cookies the default `web` client works too."""
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "noplaylist": True,
+        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "web_safari", "web"]}},
+        **extra,
+    }
+    cookiefile = _cookiefile()
+    if cookiefile:
+        opts["cookiefile"] = cookiefile
+    return opts
 
 
 def resolve_audio(video_id: str) -> dict:
@@ -39,19 +54,9 @@ def resolve_audio(video_id: str) -> dict:
     the server that resolved it can fetch it, and only for a few hours — so we
     proxy it from the same backend and cache it briefly (see streaming.py).
     """
-    with YoutubeDL(_RESOLVE_OPTS) as ydl:
+    with YoutubeDL(_opts(format="bestaudio/best", retries=3)) as ydl:
         info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
     return {"url": info["url"], "http_headers": dict(info.get("http_headers") or {})}
-
-
-_INGEST_OPTS = {
-    "quiet": True,
-    "no_warnings": True,
-    "extract_flat": "in_playlist",  # flatten playlist entries; resolve a lone video
-    "skip_download": True,
-    "retries": 5,
-    "sleep_interval_requests": 1,
-}
 
 
 def _entry(e: dict) -> dict:
@@ -77,7 +82,7 @@ def ingest_with_meta(url: str) -> dict:
     Each track carries its `video_id` (the playback source is the video itself —
     no search/match needed). Metadata only; no audio download.
     """
-    with YoutubeDL(_INGEST_OPTS) as ydl:
+    with YoutubeDL(_opts(extract_flat="in_playlist", retries=5, sleep_interval_requests=1)) as ydl:
         info = ydl.extract_info(url, download=False) or {}
     if info.get("entries") is not None:
         tracks = [_entry(e) for e in info["entries"] if e and e.get("id")]
@@ -103,7 +108,7 @@ def search(query: str, n: int = 5) -> list[dict]:
 
     Each: {video_id, title, uploader, duration_sec}. duration_sec may be None.
     """
-    with YoutubeDL(_SEARCH_OPTS) as ydl:
+    with YoutubeDL(_opts(extract_flat=True, sleep_interval_requests=1, retries=5)) as ydl:
         info = ydl.extract_info(f"ytsearch{n}:{query}", download=False)
     out = []
     for entry in (info or {}).get("entries") or []:

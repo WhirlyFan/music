@@ -148,10 +148,8 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         if ps is None:
             raise Http404("Track has no active YouTube source.")
 
-        # Self-heal: a track matched before artwork existed gets its cover from the
-        # video thumbnail on first play (blank-only; shows after the next room load).
-        match.backfill_artwork(track, ps.locator)
-
+        # NOTE: artwork is resolved off this hot path (the client calls
+        # refresh-artwork separately) — never make the audio wait on an image fetch.
         audio = streaming.resolved_audio(ps.locator)
         headers = dict(audio.get("http_headers") or {})
         if request.headers.get("Range"):

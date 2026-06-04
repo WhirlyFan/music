@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query'
 import { ListMusic, Pause, Play, Shuffle, SkipBack, SkipForward, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -10,8 +9,7 @@ import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 import { promptText } from '@/lib/overlay'
-import { useMatchTrack, useSetSource } from '@/lib/query/catalog'
-import { playlistKeys } from '@/lib/query/keys'
+import { useMatchTrack, useRefreshArtwork, useSetSource } from '@/lib/query/catalog'
 import {
   type QueueItem,
   useClearQueue,
@@ -39,8 +37,8 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 export function NowPlayingBar() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
-  const { data: room, refetch: refetchRoom } = useRoom(authed)
-  const qc = useQueryClient()
+  const { data: room } = useRoom(authed)
+  const refreshArtwork = useRefreshArtwork()
 
   const matchTrack = useMatchTrack()
   const next = useNext()
@@ -103,6 +101,20 @@ export function NowPlayingBar() {
       },
     })
   }, [track, matched, matchTrack, next])
+
+  // Resolve a blank cover once per track — off the audio path (its own request),
+  // so playback never waits on an image fetch. Invalidates the room + playlist
+  // queries on success, so the cover updates in the player AND any playlist view.
+  const artAttempted = useRef<string | null>(null)
+  useEffect(() => {
+    if (!track) {
+      artAttempted.current = null
+      return
+    }
+    if (track.artwork_url || artAttempted.current === track.id) return
+    artAttempted.current = track.id
+    refreshArtwork.mutate(track.id)
+  }, [track, refreshArtwork])
 
   if (!authed || !track) return null
 
@@ -299,15 +311,7 @@ export function NowPlayingBar() {
           }}
           onPause={() => setPlaying(false)}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-          onLoadedMetadata={(e) => {
-            setDuration(e.currentTarget.duration)
-            // The stream endpoint resolves artwork for blank-cover tracks on play —
-            // pull it into the player AND any playlist view that shows this track.
-            if (!track.artwork_url) {
-              void refetchRoom()
-              void qc.invalidateQueries({ queryKey: playlistKeys.all() })
-            }
-          }}
+          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
           onEnded={() => next.mutate()}
         />
       )}

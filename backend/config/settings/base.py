@@ -23,6 +23,12 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 SPOTIFY_CLIENT_ID = env("SPOTIFY_CLIENT_ID", default="")
 SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
 
+# A Netscape-format cookies.txt exported from a signed-in YouTube account. Lets
+# yt-dlp make authenticated requests so it gets past YouTube's "confirm you're not
+# a bot" wall when resolving audio. Optional but strongly recommended in prod.
+# Store as a Doppler secret; it's written to a tmp file at runtime, never on disk.
+YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
+
 # --- Apps ---
 DJANGO_APPS = [
     "django.contrib.admin",
