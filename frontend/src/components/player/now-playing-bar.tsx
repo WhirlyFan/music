@@ -331,14 +331,17 @@ export function NowPlayingBar() {
             className="block w-full text-left"
           >
             <div className="flex items-center gap-2">
-              {playing && <Equalizer />}
               {track.is_explicit && <ExplicitBadge />}
-              <p className="truncate text-sm font-medium">
+              {/* Title takes the row and truncates; the playing indicator is pinned
+                  right and reserves its own space — so toggling play never shifts or
+                  covers the title. */}
+              <p className="min-w-0 flex-1 truncate text-sm font-medium">
                 {track.title}
                 <span className="text-muted-foreground ml-2 truncate text-xs font-normal">
                   {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
                 </span>
               </p>
+              {playing && <Equalizer />}
             </div>
           </button>
           {/* The seek bar is too cramped in the compact pill on phones — hide it

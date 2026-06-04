@@ -35,16 +35,6 @@ export function AppHeader() {
 
         {isAuthed && (
           <Link
-            to="/search"
-            className="text-muted-foreground hover:text-foreground text-sm"
-            activeProps={{ className: 'text-foreground font-medium' }}
-          >
-            Search
-          </Link>
-        )}
-
-        {isAuthed && (
-          <Link
             to="/playlists"
             className="text-muted-foreground hover:text-foreground text-sm"
             activeProps={{ className: 'text-foreground font-medium' }}
