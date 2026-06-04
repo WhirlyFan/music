@@ -18,7 +18,6 @@ import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
-import { cn } from '@/lib/utils'
 import { promptText } from '@/lib/overlay'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
 import { usePlayerUi } from '@/lib/query/ui'
@@ -75,28 +74,20 @@ export function NowPlayingBar() {
   const [buffering, setBuffering] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const queuePanelRef = useRef<HTMLDivElement>(null)
-  // Queue-open lives in the Query cache (shared with the playlists search pill).
-  const { queueOpen, setQueueOpen, setQueueHeight, setPlayerHeight } = usePlayerUi()
+  // Queue-open + measured geometry live in the Query cache (shared with the
+  // playlists search pill). The queue panel stays open across navigation — it
+  // closes only via its own toggle, never on outside clicks/navigation.
+  const { queueOpen, setQueueOpen, queueHeight, setQueueHeight, setPlayerHeight } = usePlayerUi()
 
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
   const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
 
-  // Click outside the player pill collapses the open queue panel.
-  useEffect(() => {
-    if (!queueOpen) return
-    const onDown = (e: PointerEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) setQueueOpen(false)
-    }
-    document.addEventListener('pointerdown', onDown)
-    return () => document.removeEventListener('pointerdown', onDown)
-  }, [queueOpen])
-
-  // Publish the player pill + queue-panel heights so the playlists search pill can
-  // sit just above them. The queue panel's height animates 0→full as it opens, and
-  // the ResizeObserver fires every frame of that, so the search pill (reading the
-  // value) rides the queue in true lockstep — no separate, mistimed transition.
+  // Publish the player pill + queue-panel heights so the search pill can sit just
+  // above them. We measure the queue's STABLE full height (the inner box) once;
+  // both the queue's max-height and the pill's bottom then animate that exact
+  // pixel value with the same 280ms ease-out-quint, so they open in lockstep.
   // Only the async RO callback setStates (never the effect body). Re-attaches when
   // the bar mounts (track present → itemId set).
   useEffect(() => {
@@ -212,25 +203,21 @@ export function NowPlayingBar() {
       ref={barRef}
       className="border-border bg-background/90 motion-safe:animate-slide-up fixed bottom-4 left-1/2 z-40 w-[min(95%,42rem)] -translate-x-1/2 rounded-2xl border shadow-lg backdrop-blur"
     >
-      {/* Queue panel. Always mounted; it grows upward (grid-rows 0fr→1fr) so its
-          top edge travels by exactly the panel height — the search pill rides that
-          top edge. Both use the SAME 280ms ease-out-quint CSS transition over the
-          same distance (the pill reads the pre-measured height off the stable inner
-          box, NOT a per-frame observer), so they open in true lockstep. `inert`
-          drops it from tab/a11y while collapsed. */}
+      {/* Queue panel. Always mounted; its max-height animates 0→(measured px) so its
+          top edge travels by exactly the panel height. The search pill animates its
+          bottom by that SAME pixel value with the SAME 280ms ease-out-quint, so the
+          two open in true lockstep (max-height in px, not grid `fr`, matches the
+          pill's px curve exactly). `inert` drops it from tab/a11y while collapsed. */}
       <div
-        className={cn(
-          'absolute inset-x-0 bottom-full mb-2 grid transition-[grid-template-rows] duration-[280ms] ease-out-quint motion-reduce:transition-none',
-          queueOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
-        )}
+        className="absolute inset-x-0 bottom-full mb-2 overflow-hidden transition-[max-height] duration-[280ms] ease-out-quint motion-reduce:transition-none"
+        style={{ maxHeight: queueOpen ? queueHeight : 0 }}
       >
-        <div className="min-h-0 overflow-hidden">
-          <div
-            ref={queuePanelRef}
-            inert={!queueOpen}
-            className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
-          >
-            <div className="mb-2 flex items-center justify-between">
+        <div
+          ref={queuePanelRef}
+          inert={!queueOpen}
+          className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
+        >
+          <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
               <Button
@@ -288,8 +275,7 @@ export function NowPlayingBar() {
             onPlay={(id) => jump.mutate(id)}
             onRemove={(id) => removeItem.mutate(id)}
             emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
-            />
-          </div>
+          />
         </div>
       </div>
 
@@ -378,7 +364,6 @@ export function NowPlayingBar() {
           onPrevious={handlePrevious}
           onNext={() => next.mutate()}
           onSeek={seek}
-          onPauseMain={() => audioRef.current?.pause()}
           onClose={() => setExpanded(false)}
         />
       )}

@@ -1,11 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { CoverWall } from '@/components/playlists/cover-wall'
-import { FloatingSearchPill } from '@/components/ui/floating-search-pill'
 import { FormError } from '@/components/ui/form-error'
 import { useDeletePlaylist, useInfinitePlaylists } from '@/lib/query/catalog'
+import { useRouteSearch } from '@/lib/query/ui'
 import { useDebounced } from '@/lib/use-debounced'
 
 export const Route = createFileRoute('/playlists/')({
@@ -15,7 +14,9 @@ export const Route = createFileRoute('/playlists/')({
 
 function PlaylistsPage() {
   const navigate = useNavigate()
-  const [search, setSearch] = useState('')
+  // The search value is owned by the persistent layout pill (keyed by this path);
+  // this page just reads it to drive the query.
+  const { value: search } = useRouteSearch('/playlists')
   const q = useDebounced(search, 300)
   const playlists = useInfinitePlaylists(q)
   const del = useDeletePlaylist()
@@ -50,13 +51,6 @@ function PlaylistsPage() {
           onDelete={(id) => del.mutate(id, { onSuccess: () => toast.success('Playlist deleted.') })}
         />
       )}
-
-      <FloatingSearchPill
-        value={search}
-        onChange={setSearch}
-        placeholder="Search playlists"
-        ariaLabel="Search your playlists"
-      />
     </div>
   )
 }

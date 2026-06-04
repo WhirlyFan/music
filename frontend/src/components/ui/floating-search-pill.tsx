@@ -27,7 +27,10 @@ export function FloatingSearchPill({
   const { data: room } = useRoom()
   const { queueOpen, queueHeight, playerHeight } = usePlayerUi()
   const playerShown = Boolean(room?.current)
-  const bottom = playerShown ? 16 + playerHeight + 8 + (queueOpen ? queueHeight : 0) : 16
+  // Sit 8px above the player (matching the queue↔seek-bar gap). When the queue is
+  // open, rise above it by the queue height + the same 8px gap, so the pill clears
+  // the queue box by the same amount the queue clears the seek bar.
+  const bottom = playerShown ? 16 + playerHeight + 8 + (queueOpen ? queueHeight + 8 : 0) : 16
 
   return (
     <div
@@ -36,7 +39,7 @@ export function FloatingSearchPill({
     >
       <div className="relative">
         <Search
-          className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2"
+          className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 z-10 size-4 -translate-y-1/2"
           aria-hidden
         />
         <Input

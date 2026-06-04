@@ -64,6 +64,9 @@ export const roomKeys = {
  */
 export const uiKeys = {
   player: () => ['ui', 'player'] as const,
+  // Search text per route path, so the persistent search pill and the page it
+  // serves share one value (and each page keeps its own term).
+  search: (path: string) => ['ui', 'search', path] as const,
 }
 
 export const mfaKeys = {

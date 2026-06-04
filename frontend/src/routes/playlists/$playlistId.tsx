@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import { GripVertical, ListPlus, MoreVertical, Pencil, RefreshCw, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -16,7 +16,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { FloatingSearchPill } from '@/components/ui/floating-search-pill'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +38,7 @@ import {
   useUpdatePlaylist,
 } from '@/lib/query/catalog'
 import { usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
+import { useRouteSearch } from '@/lib/query/ui'
 import { useDebounced } from '@/lib/use-debounced'
 
 /** A YouTube-thumbnail fallback cover — offer to re-resolve the real art. */
@@ -54,7 +54,10 @@ function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const navigate = useNavigate()
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
-  const [search, setSearch] = useState('')
+  // Search value is owned by the persistent layout pill, keyed by this exact path
+  // (same key the pill writes); this page reads it to drive the track query.
+  const path = useRouterState({ select: (s) => s.location.pathname })
+  const { value: search } = useRouteSearch(path)
   const q = useDebounced(search, 300)
   const tracks = useInfinitePlaylistTracks(playlistId, q)
   const playPlaylist = usePlayPlaylist()
@@ -224,15 +227,6 @@ function PlaylistDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {playlist.track_count > 0 && (
-        <FloatingSearchPill
-          value={search}
-          onChange={setSearch}
-          placeholder="Search this playlist"
-          ariaLabel="Search this playlist"
-        />
-      )}
     </div>
   )
 }

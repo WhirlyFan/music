@@ -3,6 +3,7 @@ import { createRootRouteWithContext, Outlet, redirect } from '@tanstack/react-ro
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
 import { AppHeader } from '@/components/layout/app-header'
+import { GlobalSearchPill } from '@/components/layout/global-search-pill'
 import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
@@ -105,6 +106,10 @@ function RootLayout() {
       {/* Persistent player + queue — survives navigation; renders only when
           authenticated and something is queued. */}
       <NowPlayingBar />
+
+      {/* One persistent search pill for the playlists routes (no per-page remount
+          flash); it reads the route to know what it searches. */}
+      <GlobalSearchPill />
 
       {/* Global bottom-right quick-actions (gooey FAB). */}
       <QuickActionsFab />

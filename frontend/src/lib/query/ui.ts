@@ -40,3 +40,21 @@ export function usePlayerUi() {
     setPlayerHeight: (playerHeight: number) => set({ playerHeight }),
   }
 }
+
+/**
+ * Search text for a route, in the Query cache so a single persistent search pill
+ * (mounted in the layout) and the page it serves share one value — no prop-drill,
+ * and the pill never unmounts across navigation (so it doesn't flash). Keyed by
+ * path so each page keeps its own term.
+ */
+export function useRouteSearch(path: string) {
+  const qc = useQueryClient()
+  const { data } = useQuery({
+    queryKey: uiKeys.search(path),
+    queryFn: () => '',
+    initialData: '',
+    staleTime: Infinity,
+    gcTime: Infinity,
+  })
+  return { value: data, setValue: (v: string) => qc.setQueryData(uiKeys.search(path), v) }
+}

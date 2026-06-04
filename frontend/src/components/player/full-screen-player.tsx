@@ -1,5 +1,5 @@
-import { ExternalLink, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ExternalLink, Pause, Play, SkipBack, SkipForward, X } from 'lucide-react'
+import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 import { AudioVisualizer } from '@/components/player/audio-visualizer'
@@ -14,44 +14,6 @@ function sourceLabel(url: string): string {
   if (url.includes('music.apple.com')) return 'Apple Music'
   if (url.includes('youtube.com') || url.includes('youtu.be')) return 'YouTube'
   return 'the source'
-}
-
-/** A small play/pause toggle for the 30s preview clip (the official Spotify/Apple
- *  snippet) — distinct from the full YouTube stream. Pauses the main player while
- *  it plays so they never overlap; self-contained <audio>, stops on unmount. */
-function PreviewButton({ url, onStart }: { url: string; onStart: () => void }) {
-  const ref = useRef<HTMLAudioElement | null>(null)
-  const [playing, setPlaying] = useState(false)
-
-  useEffect(() => {
-    const el = new Audio(url)
-    ref.current = el
-    el.onended = () => setPlaying(false)
-    return () => {
-      el.pause()
-      ref.current = null
-    }
-  }, [url])
-
-  function toggle() {
-    const el = ref.current
-    if (!el) return
-    if (el.paused) {
-      onStart() // pause the full track first
-      void el.play()
-      setPlaying(true)
-    } else {
-      el.pause()
-      setPlaying(false)
-    }
-  }
-
-  return (
-    <Button size="sm" variant="outline" onClick={toggle}>
-      {playing ? <Pause className="mr-1 size-3.5" /> : <Volume2 className="mr-1 size-3.5" />}
-      {playing ? 'Stop preview' : '30s preview'}
-    </Button>
-  )
 }
 
 /**
@@ -71,7 +33,6 @@ export function FullScreenPlayer({
   onPrevious,
   onNext,
   onSeek,
-  onPauseMain,
   onClose,
 }: {
   track: Track
@@ -85,7 +46,6 @@ export function FullScreenPlayer({
   onPrevious: () => void
   onNext: () => void
   onSeek: (seconds: number) => void
-  onPauseMain: () => void
   onClose: () => void
 }) {
   useEffect(() => {
@@ -226,14 +186,6 @@ export function FullScreenPlayer({
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted-foreground">ISRC</dt>
               <dd className="font-mono text-xs">{track.isrc}</dd>
-            </div>
-          )}
-          {track.preview_url && (
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-muted-foreground">Preview</dt>
-              <dd>
-                <PreviewButton url={track.preview_url} onStart={onPauseMain} />
-              </dd>
             </div>
           )}
         </dl>
