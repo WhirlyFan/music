@@ -33,8 +33,10 @@ export const playlistKeys = {
   // `search` is part of the key so each query string is its own infinite list.
   list: (search = '') => ['playlists', 'list', search] as const,
   detail: (id: string) => ['playlists', 'detail', id] as const,
-  // Paginated tracks of one playlist (useInfiniteQuery). Nested under detail so
-  // invalidating the playlist refreshes both its metadata and its track pages.
+  // Paginated tracks of one playlist (useInfiniteQuery) — the query appends the
+  // search term as a final segment, so this 4-element prefix invalidates every
+  // search variant. Nested under detail so invalidating the playlist refreshes
+  // both its metadata and its track pages.
   tracks: (id: string) => ['playlists', 'detail', id, 'tracks'] as const,
 }
 

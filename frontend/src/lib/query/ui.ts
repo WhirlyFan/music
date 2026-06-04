@@ -2,15 +2,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { uiKeys } from '@/lib/query/keys'
 
-// `queueHeight` = the open queue panel's measured px height (0 when closed), so
-// the playlists search pill can sit exactly above it on any screen size.
-type PlayerUi = { queueOpen: boolean; queueHeight: number }
-const DEFAULT: PlayerUi = { queueOpen: false, queueHeight: 0 }
+// Measured player geometry (px), published so the playlists search pill can sit
+// exactly above the player + its queue on any screen. `playerHeight` = the pill
+// row; `queueHeight` = the queue panel, which animates 0→full as it opens, so the
+// search pill (reading it every frame) rides the queue in lockstep.
+type PlayerUi = { queueOpen: boolean; queueHeight: number; playerHeight: number }
+const DEFAULT: PlayerUi = { queueOpen: false, queueHeight: 0, playerHeight: 0 }
 
 /**
  * Ephemeral player UI state shared across components via the Query cache — a
- * client-only key with no fetcher. The player owns it (queue open + its measured
- * height); the playlists search pill reads it to slide up out of the way. One
+ * client-only key with no fetcher. The player owns it (queue open + measured
+ * geometry); the playlists search pill reads it to sit above the player. One
  * source of truth, no prop-drilling and no global store.
  */
 export function usePlayerUi() {
@@ -29,6 +31,12 @@ export function usePlayerUi() {
       const cur = prev ?? DEFAULT
       return { ...cur, queueOpen: typeof open === 'function' ? open(cur.queueOpen) : open }
     })
-  const setQueueHeight = (queueHeight: number) => set({ queueHeight })
-  return { queueOpen: data.queueOpen, queueHeight: data.queueHeight, setQueueOpen, setQueueHeight }
+  return {
+    queueOpen: data.queueOpen,
+    queueHeight: data.queueHeight,
+    playerHeight: data.playerHeight,
+    setQueueOpen,
+    setQueueHeight: (queueHeight: number) => set({ queueHeight }),
+    setPlayerHeight: (playerHeight: number) => set({ playerHeight }),
+  }
 }

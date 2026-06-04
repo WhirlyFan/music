@@ -116,9 +116,12 @@ export function useRemoveItem() {
   )
 }
 
-/** Reshuffle the up-next items. */
+/** Shuffle the whole context and play from the top (Spotify-style). */
 export function useShuffle() {
-  return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }))
+  return useRoomMutation(() => {
+    playIntent.value = true // shuffle plays a new top track → autoplay it
+    return api<Room>('/rooms/shuffle/', { method: 'POST' })
+  })
 }
 
 /** Empty the queue and stop playback. */

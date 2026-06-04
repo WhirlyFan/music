@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { CoverWall } from '@/components/playlists/cover-wall'
@@ -9,21 +9,12 @@ import { Input } from '@/components/ui/input'
 import { useDeletePlaylist, useInfinitePlaylists } from '@/lib/query/catalog'
 import { useRoom } from '@/lib/query/rooms'
 import { usePlayerUi } from '@/lib/query/ui'
+import { useDebounced } from '@/lib/use-debounced'
 
 export const Route = createFileRoute('/playlists/')({
   component: PlaylistsPage,
   head: () => ({ meta: [{ title: 'My playlists — music' }] }),
 })
-
-/** Debounce a value so typing doesn't fire a request per keystroke. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value)
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), ms)
-    return () => clearTimeout(id)
-  }, [value, ms])
-  return debounced
-}
 
 function PlaylistsPage() {
   const navigate = useNavigate()
@@ -32,13 +23,13 @@ function PlaylistsPage() {
   const playlists = useInfinitePlaylists(q)
   const del = useDeletePlaylist()
   const { data: room } = useRoom()
-  const { queueOpen, queueHeight } = usePlayerUi()
-  // The search pill floats above the player pill, and rises by the queue panel's
-  // *measured* height when it's open — so it stays just above the queue on any
-  // screen (the player publishes the height; both animate over ~the same time).
+  const { queueHeight, playerHeight } = usePlayerUi()
+  // Sit just above the player: bottom-4 (16) + the player pill (measured) + the
+  // mb-2 gap (8) + the queue panel (measured). The player publishes the queue
+  // height every frame of its open/close animation, so this pill rides the queue
+  // in lockstep — no transition of its own to drift out of sync.
   const playerShown = Boolean(room?.current)
-  const PLAYER_REGION = 96 // bottom-24: the player pill's reserved bottom band
-  const pillBottomPx = !playerShown ? 16 : queueOpen ? PLAYER_REGION + queueHeight + 8 : PLAYER_REGION
+  const pillBottomPx = playerShown ? 16 + playerHeight + 8 + queueHeight : 16
 
   // The wall tiles a finite pool, so the first page is plenty — no scroll paging.
   const pool = playlists.data?.pages[0]?.results ?? []
@@ -74,7 +65,7 @@ function PlaylistsPage() {
       {/* Floating rounded search — centered (matches the player pill), stacks
           above it when something's playing. */}
       <div
-        className="absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-300 ease-out"
+        className="absolute left-1/2 z-10 w-[min(92%,28rem)] -translate-x-1/2"
         style={{ bottom: pillBottomPx }}
       >
         <div className="relative">

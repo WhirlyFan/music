@@ -93,7 +93,9 @@ def test_ingest_spotify_api_first_full_list(client, monkeypatch):
         spotify,
         "_api_with_meta",
         lambda kind, sid: {
-            "title": "User PL", "external_id": sid, "kind": "playlist",
+            "title": "User PL",
+            "external_id": sid,
+            "kind": "playlist",
             "tracks": [{"title": "X", "artist": "Y", "duration": 1000, "isrc": "US000"}],
         },
     )
@@ -113,9 +115,16 @@ def test_ingest_spotify_editorial_falls_back_to_capped_scrape(client, monkeypatc
     monkeypatch.setattr(
         spotify,
         "_scrape",
-        lambda kind, sid: {"title": "Top 50", "external_id": sid, "kind": "playlist", "tracks": fifty},
+        lambda kind, sid: {
+            "title": "Top 50",
+            "external_id": sid,
+            "kind": "playlist",
+            "tracks": fifty,
+        },
     )
-    r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/37i9editorial"}, format="json")
+    r = client.post(
+        INGEST, {"url": "https://open.spotify.com/playlist/37i9editorial"}, format="json"
+    )
     assert r.status_code == 201
     assert r.data["track_count"] == 50
     assert r.data["note"] and "50" in r.data["note"]
@@ -129,11 +138,18 @@ def test_ingest_spotify(client, monkeypatch):
         "title": "Sp Mix",
         "external_id": "sp1",
         "kind": "playlist",
-        "tracks": [{
-            "title": "X", "artist": "Y", "duration": 210000, "isrc": "US1234567890",
-            "artwork": "https://i.scdn.co/image/abc", "album": "Sp Album",
-            "explicit": True, "preview": "https://p.scdn.co/mp3-preview/abc",
-        }],
+        "tracks": [
+            {
+                "title": "X",
+                "artist": "Y",
+                "duration": 210000,
+                "isrc": "US1234567890",
+                "artwork": "https://i.scdn.co/image/abc",
+                "album": "Sp Album",
+                "explicit": True,
+                "preview": "https://p.scdn.co/mp3-preview/abc",
+            }
+        ],
     }
     monkeypatch.setattr(spotify, "ingest_with_meta", lambda url: meta)
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/sp1"}, format="json")
@@ -157,8 +173,15 @@ def test_metadata_enriched_across_sources():
     t1 = _upsert_track(row)
     assert t1.album_name == "" and t1.artwork_url == ""
 
-    t2 = _upsert_track({**row, "album": "Real Album", "artwork": "https://img/x",
-                        "explicit": True, "preview": "https://p/x"})
+    t2 = _upsert_track(
+        {
+            **row,
+            "album": "Real Album",
+            "artwork": "https://img/x",
+            "explicit": True,
+            "preview": "https://p/x",
+        }
+    )
     assert t2.pk == t1.pk  # same canonical track (match_key)
     t1.refresh_from_db()
     assert t1.album_name == "Real Album"
@@ -232,7 +255,9 @@ def test_play_prefers_origin_art_then_youtube(monkeypatch):
     sp = TrackFactory(artwork_url="", source_url="https://open.spotify.com/track/abc123")
     monkeypatch.setattr(spotify, "_token", lambda: "tok")
     monkeypatch.setattr(
-        spotify, "_get", lambda path, tok: {"album": {"images": [{"url": "https://i.scdn.co/REAL", "width": 300}]}}
+        spotify,
+        "_get",
+        lambda path, tok: {"album": {"images": [{"url": "https://i.scdn.co/REAL", "width": 300}]}},
     )
     match.backfill_artwork(sp, "VID123")
     sp.refresh_from_db()
@@ -252,11 +277,19 @@ def test_ingest_records_per_track_source_link(client, monkeypatch):
     from apps.catalog.models import SourceLink
 
     meta = {
-        "title": "M", "external_id": "pl", "kind": "playlist", "partial": False,
-        "tracks": [{
-            "title": "Z", "artist": "A", "duration": 1000,
-            "external_id": "sp123", "source_url": "https://open.spotify.com/track/sp123",
-        }],
+        "title": "M",
+        "external_id": "pl",
+        "kind": "playlist",
+        "partial": False,
+        "tracks": [
+            {
+                "title": "Z",
+                "artist": "A",
+                "duration": 1000,
+                "external_id": "sp123",
+                "source_url": "https://open.spotify.com/track/sp123",
+            }
+        ],
     }
     monkeypatch.setattr(spotify, "ingest_with_meta", lambda url: meta)
     r = client.post(INGEST, {"url": "https://open.spotify.com/playlist/pl"}, format="json")
@@ -270,7 +303,9 @@ def test_ingest_records_per_track_source_link(client, monkeypatch):
 @pytest.mark.django_db
 def test_refresh_artwork_self_heals(client, monkeypatch):
     # A broken cover is re-resolved from the origin on demand.
-    track = TrackFactory(artwork_url="https://dead/x", source_url="https://open.spotify.com/track/abc")
+    track = TrackFactory(
+        artwork_url="https://dead/x", source_url="https://open.spotify.com/track/abc"
+    )
     PlaybackSourceFactory(track=track, locator="vid123")
     monkeypatch.setattr(match, "_origin_artwork", lambda u: "https://i.scdn.co/NEW")
     r = client.post(f"/api/v1/catalog/tracks/{track.id}/refresh-artwork/")
@@ -310,6 +345,22 @@ def test_playlist_tracks_paginated_in_order(client):
     p2 = client.get(f"/api/v1/catalog/playlists/{pl['id']}/tracks/?page=2")
     assert len(p2.data["results"]) == 5
     assert p2.data["results"][0]["position"] == 25
+
+
+def test_playlist_tracks_server_side_search(client):
+    # ?search= narrows a playlist's tracks by title or artist (case-insensitive).
+    hit = TrackFactory(title="Midnight City", primary_artist="M83")
+    other = TrackFactory(title="Strobe", primary_artist="Deadmau5")
+    pl = client.post(
+        "/api/v1/catalog/playlists/",
+        {"title": "Mix", "track_ids": [str(hit.id), str(other.id)]},
+        format="json",
+    ).data
+    by_title = client.get(f"/api/v1/catalog/playlists/{pl['id']}/tracks/?search=midnight")
+    assert [r["track"]["id"] for r in by_title.data["results"]] == [str(hit.id)]
+
+    by_artist = client.get(f"/api/v1/catalog/playlists/{pl['id']}/tracks/?search=deadmau5")
+    assert [r["track"]["id"] for r in by_artist.data["results"]] == [str(other.id)]
 
 
 class _FakeUpstream:
@@ -387,7 +438,9 @@ def test_playlists_scoped_to_owner(client):
 
 @pytest.mark.django_db
 def test_playlist_search_by_title_and_song(client):
-    _make_playlist(client, "Jazz Vibes", [TrackFactory(title="Blue Train", primary_artist="John Coltrane")])
+    _make_playlist(
+        client, "Jazz Vibes", [TrackFactory(title="Blue Train", primary_artist="John Coltrane")]
+    )
     _make_playlist(client, "Rock", [TrackFactory(title="Smoke", primary_artist="Deep Purple")])
     by_title = client.get(PLAYLISTS, {"search": "jazz"}).data["results"]
     assert [p["title"] for p in by_title] == ["Jazz Vibes"]
@@ -408,7 +461,10 @@ def test_update_playlist_rename_and_visibility(client):
 @pytest.mark.django_db
 def test_cannot_edit_or_delete_others_playlist(client):
     foreign = PlaylistFactory(created_by=UserFactory())
-    assert client.patch(f"{PLAYLISTS}{foreign.id}/", {"title": "Hijack"}, format="json").status_code == 404
+    assert (
+        client.patch(f"{PLAYLISTS}{foreign.id}/", {"title": "Hijack"}, format="json").status_code
+        == 404
+    )
     assert client.delete(f"{PLAYLISTS}{foreign.id}/").status_code == 404
 
 
@@ -430,7 +486,9 @@ def test_remove_track_repacks_positions(client):
     tracks = [TrackFactory() for _ in range(3)]
     pid = _make_playlist(client, "Mix", tracks)
     assert (
-        client.post(f"{PLAYLISTS}{pid}/remove-track/", {"track_id": str(tracks[0].id)}, format="json").status_code
+        client.post(
+            f"{PLAYLISTS}{pid}/remove-track/", {"track_id": str(tracks[0].id)}, format="json"
+        ).status_code
         == 204
     )
     items = client.get(f"{PLAYLISTS}{pid}/tracks/").data["results"]
@@ -445,12 +503,16 @@ def test_reorder_moves_track_to_front(client):
     pid = _make_playlist(client, "Mix", tracks)
     assert (
         client.post(
-            f"{PLAYLISTS}{pid}/reorder/", {"track_id": str(tracks[2].id), "position": 0}, format="json"
+            f"{PLAYLISTS}{pid}/reorder/",
+            {"track_id": str(tracks[2].id), "position": 0},
+            format="json",
         ).status_code
         == 204
     )
     items = client.get(f"{PLAYLISTS}{pid}/tracks/").data["results"]
-    assert [i["track"]["id"] for i in items] == [str(t.id) for t in (tracks[2], tracks[0], tracks[1])]
+    assert [i["track"]["id"] for i in items] == [
+        str(t.id) for t in (tracks[2], tracks[0], tracks[1])
+    ]
     assert [i["position"] for i in items] == [0, 1, 2]
 
 

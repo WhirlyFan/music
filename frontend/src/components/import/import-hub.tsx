@@ -1,16 +1,14 @@
 import { useForm } from '@tanstack/react-form'
 import { Search } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { RainbowButton } from '@/components/ui/rainbow-button'
-import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/client'
-import { fieldErrorMessage } from '@/lib/auth/errors'
 import { promptText } from '@/lib/overlay'
 import type { ImportResult } from '@/lib/query/catalog'
 import { useCreatePlaylist, useIngest } from '@/lib/query/catalog'
@@ -36,10 +34,10 @@ function ingestErrorMessage(error: unknown): string | null {
 export function ImportHub() {
   const ingest = useIngest()
   const [imported, setImported] = useState<ImportResult | null>(null)
+  const fieldRef = useRef<HTMLDivElement>(null)
 
   const form = useForm({
     defaultValues: { url: '' },
-    validators: { onSubmit: schema },
     onSubmit: async ({ value, formApi }) => {
       try {
         const result = await ingest.mutateAsync(value.url)
@@ -51,6 +49,25 @@ export function ImportHub() {
     },
   })
 
+  // Empty/invalid link → just wiggle the field (the placeholder already says what
+  // to paste — no redundant toast, no inline red validator text). We shake the
+  // whole field wrapper (icon + input together, so the search icon rides along),
+  // restarting the CSS animation imperatively (remove → reflow → add) so a
+  // repeated bad submit shakes every time. Handler-only, no state.
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!schema.safeParse({ url: form.getFieldValue('url').trim() }).success) {
+      const el = fieldRef.current
+      if (el) {
+        el.classList.remove('animate-wiggle')
+        void el.offsetWidth
+        el.classList.add('animate-wiggle')
+      }
+      return
+    }
+    form.handleSubmit()
+  }
+
   return (
     <div className="space-y-10">
       <section className="mx-auto flex max-w-xl flex-col items-center pt-10 text-center sm:pt-16">
@@ -61,42 +78,31 @@ export function ImportHub() {
           Paste a Spotify, Apple Music, or YouTube link — playlist, album, or track.
         </p>
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            form.handleSubmit()
-          }}
-          aria-label="Import a playlist"
-          className="mt-6 w-full space-y-3"
-        >
+        <form onSubmit={onSubmit} aria-label="Import a playlist" className="mt-6 w-full space-y-3">
           <form.Field name="url">
-            {(field) => {
-              const errorMsg = fieldErrorMessage(field.state.meta.errors[0])
-              return (
-                <div className="space-y-1 text-left">
-                  <div className="relative">
-                    <Search
-                      className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2"
-                      aria-hidden
-                    />
-                    <Input
-                      id={field.name}
-                      type="url"
-                      inputMode="url"
-                      aria-label="Playlist link"
-                      placeholder="Paste a playlist, album, or track link"
-                      aria-invalid={errorMsg ? true : undefined}
-                      aria-errormessage={errorMsg ? `${field.name}-error` : undefined}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="h-12 rounded-full pr-4 pl-11 text-base shadow-sm"
-                    />
-                  </div>
-                  <FormError id={`${field.name}-error`} message={errorMsg} />
-                </div>
-              )
-            }}
+            {(field) => (
+              <div
+                ref={fieldRef}
+                className="relative"
+                onAnimationEnd={(e) => e.currentTarget.classList.remove('animate-wiggle')}
+              >
+                <Search
+                  className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2"
+                  aria-hidden
+                />
+                <Input
+                  id={field.name}
+                  type="url"
+                  inputMode="url"
+                  aria-label="Playlist link"
+                  placeholder="Paste a playlist, album, or track link"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  className="h-12 rounded-full pr-4 pl-11 text-base shadow-sm"
+                />
+              </div>
+            )}
           </form.Field>
           <RainbowButton
             type="submit"

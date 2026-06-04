@@ -18,6 +18,7 @@ import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
+import { cn } from '@/lib/utils'
 import { promptText } from '@/lib/overlay'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
 import { usePlayerUi } from '@/lib/query/ui'
@@ -75,7 +76,12 @@ export function NowPlayingBar() {
   const [expanded, setExpanded] = useState(false)
   const queuePanelRef = useRef<HTMLDivElement>(null)
   // Queue-open lives in the Query cache (shared with the playlists search pill).
-  const { queueOpen, setQueueOpen, setQueueHeight } = usePlayerUi()
+  const { queueOpen, setQueueOpen, setQueueHeight, setPlayerHeight } = usePlayerUi()
+
+  const track = room?.current ?? null
+  const matched = track?.active_source?.locator_kind === 'video_id'
+  const itemId = room?.current_item_id ?? null
+  const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
 
   // Click outside the player pill collapses the open queue panel.
   useEffect(() => {
@@ -87,22 +93,24 @@ export function NowPlayingBar() {
     return () => document.removeEventListener('pointerdown', onDown)
   }, [queueOpen])
 
-  // Publish the open queue panel's height so the playlists search pill can sit
-  // exactly above it (any screen size). Only the (async) ResizeObserver callback
-  // sets state — no synchronous setState in the effect. A stale height while
-  // closed is harmless: the search pill only reads it when the queue is open.
+  // Publish the player pill + queue-panel heights so the playlists search pill can
+  // sit just above them. The queue panel's height animates 0→full as it opens, and
+  // the ResizeObserver fires every frame of that, so the search pill (reading the
+  // value) rides the queue in true lockstep — no separate, mistimed transition.
+  // Only the async RO callback setStates (never the effect body). Re-attaches when
+  // the bar mounts (track present → itemId set).
   useEffect(() => {
-    const el = queuePanelRef.current
-    if (!queueOpen || !el) return
-    const ro = new ResizeObserver(() => setQueueHeight(el.offsetHeight))
-    ro.observe(el)
+    const bar = barRef.current
+    const panel = queuePanelRef.current
+    if (!bar || !panel) return
+    const ro = new ResizeObserver(() => {
+      setPlayerHeight(bar.offsetHeight)
+      setQueueHeight(panel.offsetHeight)
+    })
+    ro.observe(bar)
+    ro.observe(panel)
     return () => ro.disconnect()
-  }, [queueOpen])
-
-  const track = room?.current ?? null
-  const matched = track?.active_source?.locator_kind === 'video_id'
-  const itemId = room?.current_item_id ?? null
-  const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
+  }, [itemId])
 
   // Autoplay + loading, imperatively. We start playback with play() from an effect
   // (after the <audio> mounts), not the `autoPlay` attribute — the attribute reads
@@ -204,12 +212,21 @@ export function NowPlayingBar() {
       ref={barRef}
       className="border-border bg-background/90 motion-safe:animate-slide-up fixed bottom-4 left-1/2 z-40 w-[min(95%,42rem)] -translate-x-1/2 rounded-2xl border shadow-lg backdrop-blur"
     >
-      {queueOpen && (
-        <div
-          ref={queuePanelRef}
-          className="border-border bg-background/95 motion-safe:animate-slide-up absolute inset-x-0 bottom-full mb-2 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
-        >
-          <div className="mb-2 flex items-center justify-between">
+      {/* Queue panel. Always mounted; its height animates 0→full via the grid-rows
+          trick, so a ResizeObserver reports it every frame and the playlists search
+          pill rides it in lockstep. `inert` drops it from tab/a11y while collapsed. */}
+      <div
+        className={cn(
+          'absolute inset-x-0 bottom-full mb-2 grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none',
+          queueOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}
+      >
+        <div ref={queuePanelRef} className="overflow-hidden">
+          <div
+            inert={!queueOpen}
+            className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
+          >
+            <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
               <Button
@@ -267,9 +284,10 @@ export function NowPlayingBar() {
             onPlay={(id) => jump.mutate(id)}
             onRemove={(id) => removeItem.mutate(id)}
             emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
-          />
+            />
+          </div>
         </div>
-      )}
+      </div>
 
       <div className="flex items-center gap-2 px-3 py-2 sm:gap-3">
         <div className="flex items-center gap-1">
@@ -367,9 +385,12 @@ export function NowPlayingBar() {
           ref={audioRef}
           src={audioSrc}
           onLoadStart={() => {
+            // Just resetting the scrubber. Do NOT mark buffering here: a restored
+            // track loads its source without ever playing (no onPlaying/onPause to
+            // clear it), which would strand the spinner forever. Buffering is tied
+            // to a real play attempt (onPlay) or a mid-play stall (onWaiting).
             setCurrentTime(0)
             setDuration(0)
-            setBuffering(true) // fetching the stream
           }}
           onWaiting={() => setBuffering(true)} // re-buffering mid-track
           onPlay={() => {

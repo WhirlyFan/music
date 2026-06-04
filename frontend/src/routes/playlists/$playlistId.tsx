@@ -5,6 +5,7 @@ import {
   MoreVertical,
   Pencil,
   RefreshCw,
+  Search,
   Trash2,
   X,
 } from 'lucide-react'
@@ -46,6 +47,7 @@ import {
   useUpdatePlaylist,
 } from '@/lib/query/catalog'
 import { usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
+import { useDebounced } from '@/lib/use-debounced'
 
 /** A YouTube-thumbnail fallback cover — offer to re-resolve the real art. */
 function isYouTubeArt(url?: string | null): boolean {
@@ -60,7 +62,9 @@ function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const navigate = useNavigate()
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
-  const tracks = useInfinitePlaylistTracks(playlistId)
+  const [search, setSearch] = useState('')
+  const q = useDebounced(search, 300)
+  const tracks = useInfinitePlaylistTracks(playlistId, q)
   const playPlaylist = usePlayPlaylist()
   const queueTracks = useQueueTracks()
   const refreshArtwork = useRefreshArtwork()
@@ -159,6 +163,23 @@ function PlaylistDetailPage() {
         />
       )}
 
+      {playlist.track_count > 0 && (
+        <div className="relative max-w-md">
+          <Search
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            aria-label="Search this playlist"
+            placeholder="Search this playlist"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {tracks.isError && <FormError message="Failed to load tracks." />}
 
       <ol className="space-y-2">
@@ -185,6 +206,10 @@ function PlaylistDetailPage() {
           />
         ))}
       </ol>
+
+      {q && items.length === 0 && !tracks.isFetching && (
+        <p className="text-muted-foreground text-sm">No songs match “{q}”.</p>
+      )}
 
       {/* Infinite-scroll sentinel — shows skeleton rows while the next page loads. */}
       <div ref={sentinelRef} className="py-2">

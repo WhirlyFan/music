@@ -387,6 +387,7 @@
   --animate-ripple: ripple 0.8s ease forwards;
   --animate-text-shimmer: text-shimmer 3s linear infinite;
   --animate-rainbow: rainbow 3s linear infinite;
+  --animate-wiggle: wiggle 0.4s var(--ease-standard);
 
   /*
    * Global overlay enter/exit (dialogs, sheets, dropdowns). Frigade's model:
@@ -512,6 +513,26 @@
 @keyframes rainbow {
   to {
     background-position: 200% center;
+  }
+}
+
+/* Shake an input to flag "needs a value" (paired with a toast). */
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
   }
 }
 

@@ -50,18 +50,24 @@ export function usePlaylist(id: string) {
 }
 
 /**
- * Paginated tracks of one playlist (25/page). Pages load on demand via
- * `fetchNextPage` so opening a long playlist doesn't pull every track at once.
+ * Paginated tracks of one playlist (25/page), with optional server-side search
+ * over track title/artist. Pages load on demand via `fetchNextPage`; `search` is
+ * part of the query key (each term its own list) and keeps prior results on
+ * screen while a new term resolves, so typing doesn't flash the list empty.
  */
-export function useInfinitePlaylistTracks(id: string) {
+export function useInfinitePlaylistTracks(id: string, search = '') {
+  const q = search.trim()
   return useInfiniteQuery({
-    queryKey: playlistKeys.tracks(id),
+    queryKey: [...playlistKeys.tracks(id), q],
     queryFn: ({ pageParam }) =>
-      api<PaginatedPlaylistTrackList>(`/catalog/playlists/${id}/tracks/?page=${pageParam}`),
+      api<PaginatedPlaylistTrackList>(
+        `/catalog/playlists/${id}/tracks/?page=${pageParam}${q ? `&search=${encodeURIComponent(q)}` : ''}`,
+      ),
     initialPageParam: 1,
     // DRF returns a `next` URL while more pages remain; pages are sequential.
     getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled: Boolean(id),
+    placeholderData: keepPreviousData,
   })
 }
 

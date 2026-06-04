@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.http import Http404, StreamingHttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
@@ -122,6 +122,7 @@ class PlaylistViewSet(
 
         The detail endpoint returns metadata only; the client pages through the
         tracks here so opening a long playlist doesn't inline every track.
+        `?search=` narrows to tracks whose title or artist matches (server-side).
         """
         playlist = self.get_object()
         qs = (
@@ -129,6 +130,11 @@ class PlaylistViewSet(
             .prefetch_related("track__playback_sources")
             .order_by("position")
         )
+        search = request.query_params.get("search", "").strip()
+        if search:
+            qs = qs.filter(
+                Q(track__title__icontains=search) | Q(track__primary_artist__icontains=search)
+            )
         page = self.paginate_queryset(qs)
         return self.get_paginated_response(PlaylistTrackSerializer(page, many=True).data)
 
@@ -152,11 +158,15 @@ class PlaylistViewSet(
         playlist = self.get_object()
         try:
             target = int(request.data.get("position"))
-        except (TypeError, ValueError):
-            return Response({"detail": "position must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+        except TypeError, ValueError:
+            return Response(
+                {"detail": "position must be an integer."}, status=status.HTTP_400_BAD_REQUEST
+            )
         with transaction.atomic():
             items = list(playlist.items.order_by("position"))
-            moving = next((it for it in items if str(it.track_id) == str(request.data.get("track_id"))), None)
+            moving = next(
+                (it for it in items if str(it.track_id) == str(request.data.get("track_id"))), None
+            )
             if moving is None:
                 raise Http404("Track not in this playlist.")
             items.remove(moving)
@@ -195,14 +205,11 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         YouTube search); otherwise resolves one; 404 if nothing fits.
         """
         track = get_object_or_404(Track, pk=pk)
-        ps = (
-            track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).first()
-            or match.match_track_to_youtube(track)
-        )
+        ps = track.playback_sources.filter(
+            status=PlaybackSource.Status.ACTIVE
+        ).first() or match.match_track_to_youtube(track)
         if ps is None:
-            return Response(
-                {"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PlaybackSourceSerializer(ps).data)
 
     @extend_schema(exclude=True)  # binary audio proxy — no typed client needed
