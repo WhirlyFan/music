@@ -104,16 +104,42 @@ export function useImport(url: string) {
   })
 }
 
-/** Create a named playlist from a set of tracks (e.g. saving an import). */
+/** Create a named playlist from a set of tracks (e.g. saving an import).
+ *  `sourcePlaylist` stamps the fork's origin so it can be refreshed from source. */
 export function useCreatePlaylist() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (args: { title: string; trackIds: string[]; artworkUrl?: string }) =>
+    mutationFn: (args: {
+      title: string
+      trackIds: string[]
+      artworkUrl?: string
+      sourcePlaylist?: string | null
+    }) =>
       api<Playlist>('/catalog/playlists/', {
         method: 'POST',
-        body: { title: args.title, track_ids: args.trackIds, artwork_url: args.artworkUrl ?? '' },
+        body: {
+          title: args.title,
+          track_ids: args.trackIds,
+          artwork_url: args.artworkUrl ?? '',
+          source_playlist: args.sourcePlaylist ?? undefined,
+        },
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.list() }),
+  })
+}
+
+/** Refresh an imported playlist from its source — mirrors the source's current tracks
+ *  (discards manual edits). Only valid when the playlist has an origin. */
+export function useRefreshPlaylist() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      api<PlaylistDetail>(`/catalog/playlists/${id}/refresh/`, { method: 'POST' }),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: playlistKeys.detail(id) })
+      qc.invalidateQueries({ queryKey: playlistKeys.tracks(id) })
+      qc.invalidateQueries({ queryKey: playlistKeys.list() })
+    },
   })
 }
 

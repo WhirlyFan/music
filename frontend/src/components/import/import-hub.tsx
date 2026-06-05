@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { Music, Search } from 'lucide-react'
 import { useEffect } from 'react'
 import { useRef, useState } from 'react'
@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { SongRow } from '@/components/track/song-row'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RainbowButton } from '@/components/ui/rainbow-button'
 import { SkeletonZone } from '@/components/ui/skeleton'
@@ -159,7 +159,12 @@ export function ImportResultView({ result }: { result: ImportResult }) {
     })
     if (!name) return
     createPlaylist.mutate(
-      { title: name, trackIds, artworkUrl: result.cover ?? undefined },
+      {
+        title: name,
+        trackIds,
+        artworkUrl: result.cover ?? undefined,
+        sourcePlaylist: result.source_playlist, // stamp origin → enables refresh
+      },
       { onSuccess: () => toast.success(`Saved “${name}”.`) },
     )
   }
@@ -205,9 +210,19 @@ export function ImportResultView({ result }: { result: ImportResult }) {
             >
               Add all to queue
             </Button>
-            <Button size="sm" variant="outline" onClick={saveAsPlaylist}>
-              Save as playlist
-            </Button>
+            {result.already_saved ? (
+              <Link
+                to="/playlists/$playlistId"
+                params={{ playlistId: result.already_saved }}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                Open saved playlist
+              </Link>
+            ) : (
+              <Button size="sm" variant="outline" onClick={saveAsPlaylist}>
+                Save as playlist
+              </Button>
+            )}
           </div>
         </div>
       </div>

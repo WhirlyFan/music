@@ -33,6 +33,7 @@ import {
   useInfinitePlaylistTracks,
   usePlaylist,
   useRefreshArtwork,
+  useRefreshPlaylist,
   useRemoveTrackFromPlaylist,
   useReorderPlaylistTrack,
   useUpdatePlaylist,
@@ -66,9 +67,11 @@ function PlaylistDetailPage() {
   const removeTrack = useRemoveTrackFromPlaylist(playlistId)
   const reorder = useReorderPlaylistTrack(playlistId)
   const del = useDeletePlaylist()
+  const refresh = useRefreshPlaylist()
 
   const [editing, setEditing] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [refreshOpen, setRefreshOpen] = useState(false)
   const dragId = useRef<string | null>(null)
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = tracks
@@ -144,6 +147,12 @@ function PlaylistDetailPage() {
                   <Pencil className="mr-2 size-4" />
                   {editing ? 'Done editing' : 'Edit'}
                 </DropdownMenuItem>
+                {playlist.origin && (
+                  <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
+                    <RefreshCw className="mr-2 size-4" />
+                    Refresh from source
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => setDeleteOpen(true)}
@@ -208,6 +217,32 @@ function PlaylistDetailPage() {
           </SkeletonZone>
         )}
       </div>
+
+      <AlertDialog open={refreshOpen} onOpenChange={setRefreshOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refresh “{playlist.title}” from source?</AlertDialogTitle>
+            <AlertDialogDescription>
+              We’ll re-fetch the original playlist and update this one to match it (add new songs,
+              drop removed ones). Any manual changes you’ve made here will be replaced.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={refresh.isPending}
+              onClick={() =>
+                refresh.mutate(playlistId, {
+                  onSuccess: () => toast.success('Refreshed from source.'),
+                  onError: () => toast.error('Couldn’t refresh — the source may be unavailable.'),
+                })
+              }
+            >
+              {refresh.isPending ? 'Refreshing…' : 'Refresh'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
@@ -292,7 +327,12 @@ function EditPanel({
           onClick={() =>
             update.mutate(
               { id: playlistId, title: title.trim(), description, isPublic },
-              { onSuccess: () => { toast.success('Saved.'); onDone() } },
+              {
+                onSuccess: () => {
+                  toast.success('Saved.')
+                  onDone()
+                },
+              },
             )
           }
         >
@@ -366,9 +406,7 @@ function TrackRow({
           className="absolute inset-0 rounded-lg"
         />
       )}
-      {editing && (
-        <GripVertical className="text-muted-foreground size-4 shrink-0" aria-hidden />
-      )}
+      {editing && <GripVertical className="text-muted-foreground size-4 shrink-0" aria-hidden />}
       <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
         {item.position + 1}
       </span>

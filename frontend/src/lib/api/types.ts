@@ -112,6 +112,26 @@ export interface paths {
         patch: operations["v1_catalog_playlists_partial_update"];
         trace?: never;
     };
+    "/api/v1/catalog/playlists/{id}/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Re-fetch this playlist from its source and mirror its tracks (sync from
+         *     source — discards manual edits). 400 if it has no source origin.
+         */
+        post: operations["v1_catalog_playlists_refresh_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/playlists/{id}/remove-track/": {
         parameters: {
             query?: never;
@@ -161,6 +181,7 @@ export interface paths {
          *
          *     The detail endpoint returns metadata only; the client pages through the
          *     tracks here so opening a long playlist doesn't inline every track.
+         *     `?search=` narrows to tracks whose title or artist matches (server-side).
          */
         get: operations["v1_catalog_playlists_tracks_list"];
         put?: never;
@@ -248,6 +269,26 @@ export interface paths {
          *     this when an <img> fails to load (the CDN URL rotted).
          */
         post: operations["v1_catalog_tracks_refresh_artwork_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Global song search via `?q=`. Finds songs on Spotify (relevance order)
+         *     and upserts them as catalog Tracks; YouTube audio resolves on play.
+         */
+        get: operations["v1_catalog_tracks_search_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -511,6 +552,8 @@ export interface components {
              * @default
              */
             artwork_url: string;
+            /** Format: uuid */
+            source_playlist?: string | null;
         };
         /** @description The result of a paste: loose tracks the caller can play/queue/save. */
         ImportResult: {
@@ -521,6 +564,10 @@ export interface components {
             readonly tracks: components["schemas"]["Track"][];
             readonly cover: string;
             readonly note: string | null;
+            /** Format: uuid */
+            readonly source_playlist: string | null;
+            /** Format: uuid */
+            readonly already_saved: string | null;
         };
         Ingest: {
             /** Format: uri */
@@ -653,6 +700,8 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
             readonly track_count: number;
+            /** Format: uuid */
+            readonly origin: string | null;
         };
         PlaylistTrack: {
             position: number;
@@ -907,6 +956,27 @@ export interface operations {
             };
         };
     };
+    v1_catalog_playlists_refresh_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistDetail"];
+                };
+            };
+        };
+    };
     v1_catalog_playlists_remove_track_create: {
         parameters: {
             query?: never;
@@ -1057,6 +1127,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Track"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_search_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTrackList"];
                 };
             };
         };
