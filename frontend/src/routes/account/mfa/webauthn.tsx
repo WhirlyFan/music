@@ -1,7 +1,3 @@
-import {
-  create as webauthnCreate,
-  parseCreationOptionsFromJSON,
-} from '@github/webauthn-json/browser-ponyfill'
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Fingerprint, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
@@ -18,10 +14,11 @@ import { auth } from '@/lib/auth/api'
 import { bannerError, fieldErrorMessage } from '@/lib/auth/errors'
 import { useAddWebAuthn, useAuthenticators, useDeleteWebAuthn } from '@/lib/auth/mfa'
 import { signalDeletedPasskey } from '@/lib/auth/passkey-signal'
+import { createPasskey } from '@/lib/auth/webauthn'
 
 export const Route = createFileRoute('/account/mfa/webauthn')({
   component: WebAuthnPage,
-  head: () => ({ meta: [{ title: 'Passkeys — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Passkeys — music' }] }),
 })
 
 // Shape of one entry in the GET /account/authenticators list, narrowed to
@@ -250,9 +247,8 @@ function PasskeyRow({
   )
 }
 
-// Step 2: name + register. Fetches creation options, calls
-// navigator.credentials.create() via @github/webauthn-json (handles
-// base64url ↔ ArrayBuffer for us), then POSTs the attestation.
+// Step 2: name + register. Fetches creation options, runs the WebAuthn ceremony
+// via the browser-native JSON APIs (lib/auth/webauthn.ts), then POSTs the attestation.
 const enrollSchema = z.object({
   name: z.string().min(1, 'Required').max(100, 'At most 100 characters'),
 })
@@ -281,16 +277,11 @@ function EnrollStep({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
           return
         }
 
-        // Two-step conversion: parseCreationOptionsFromJSON turns the
-        // base64url-encoded `challenge` / `user.id` / `excludeCredentials[].id`
-        // into ArrayBuffers (what navigator.credentials.create requires);
-        // .toJSON() on the resulting credential turns the ArrayBuffer
-        // attestation back into base64url strings for the POST body.
-        const parsed = parseCreationOptionsFromJSON(
-          creationOptions as Parameters<typeof parseCreationOptionsFromJSON>[0],
+        // Run the WebAuthn registration ceremony with the browser-native JSON APIs
+        // (decode options → navigator.credentials.create → re-encode for the POST).
+        const credential = await createPasskey(
+          creationOptions as PublicKeyCredentialCreationOptionsJSON,
         )
-        const credentialObj = await webauthnCreate(parsed)
-        const credential = credentialObj.toJSON()
 
         const res = await add.mutateAsync({ name: value.name.trim(), credential })
         if (res.status === 200 || res.status === 201) {

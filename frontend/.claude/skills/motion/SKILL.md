@@ -1,126 +1,124 @@
 ---
 name: frontend-motion
-description: Motion tokens and CSS-only animation patterns for the Next.js frontend. No animation library. Use when adding transitions, sliding indicators, mount/unmount effects, or page-level view transitions.
+description: Motion & interaction design for the music app (Vite + Tailwind v4, no animation library). Functional-not-decorative philosophy, HeroUI-aligned cadence (250ms ease), the project's easing/keyframe tokens, the Button ripple + press + shadow recipe, and prefers-reduced-motion. Use when adding ANY transition, animation, hover/press feedback, or styling a button/control.
 ---
 
 # Frontend Motion
 
-Two easings, three durations, all in CSS. No `framer-motion` / `motion`. Set up in ENG-2401, modeled on [Frigade's two-curve approach](https://frigade.com/blog/two-easing-curves-no-animation-library).
+CSS-first motion for a music player. **No `framer-motion` / `motion`** — microinteractions are pure CSS (GPU `transform`/`opacity`). Tokens live in `frontend/src/index.css` (`@theme` + `@keyframes`). The bar to clear is HeroUI's feel, not a marketing site's.
 
-## Tokens (`frontend/src/app/globals.css` `@theme`)
+## The one rule: functional, not decorative
 
-| Token                | Value                            | Use for                                                                                     |
-| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
-| `--ease-entrance`    | `cubic-bezier(0.23, 1, 0.32, 1)` | Mounts, content reveals, slide+fade                                                         |
-| `--ease-interaction` | `cubic-bezier(0.32, 0.72, 0, 1)` | Hover, press, dropdowns, sliding indicators                                                 |
-| `--duration-fast`    | `160ms`                          | Hover, focus, button press                                                                  |
-| `--duration-base`    | `220ms`                          | Tab indicators, dropdowns, popovers, tooltips, Radix `slide*AndFade`                        |
-| `--duration-content` | `480ms`                          | Large content reveals — hero banners, full-panel slide-ins (no current consumers; reserved) |
+Every animation must **communicate state or give feedback for a user action**. If it just moves on its own, cut it. This is the lesson the whole motion system was tuned around — apply the test before adding anything:
 
-`@media (prefers-reduced-motion: reduce)` zeros the duration tokens globally. Anything using `var(--duration-*)` is automatically compliant — don't write per-component reduced-motion blocks.
+| Pattern | Verdict | Why |
+| --- | --- | --- |
+| Press / scale-down on click | ✅ keep | Tactile feedback (HeroUI's *default* button behavior) |
+| Ripple from the press point | ✅ keep | Feedback tied to where you acted |
+| Hover **color/opacity** change | ✅ keep | Communicates "interactive / targeted" |
+| Entrance slide/fade on mount | ✅ keep | Orients you to new content |
+| State-driven loops (e.g. the now-playing equalizer) | ✅ keep | Reflects real state |
+| Hover **lift** (`-translate-y`), hover **glow** | ❌ cut | Movement that says nothing; reads as Dribbble, not product |
+| Icon **pop/bounce** on a simple swap (play↔pause) | ❌ cut | Gimmick; the swap needs no animation |
+| `duration-150` for interactive transitions | ❌ avoid | Too fast → feels cheap. Use 250ms (see cadence) |
 
-## Tailwind v4 quirk
+Mature products (Spotify, Linear, Stripe, HeroUI) keep chrome quiet: color + press + soft depth, nothing levitating. **The music is the star.** Restraint is the design.
 
-`--ease-*` is a Tailwind namespace → `ease-interaction` is a real utility.
-`--duration-*` is **not** a namespace → `duration-base` does **not** exist. Use the CSS-variable shorthand:
+## Cadence (HeroUI-matched)
 
-```tsx
-// ✅
-<div className="transition-[width,left] duration-(--duration-base) ease-interaction" />
-// ✅ inline
-<div style={{ transition: 'all var(--duration-base) var(--ease-interaction)' }} />
-// ❌ silently produces no class
-<div className="duration-base" />
-```
+HeroUI's composite transitions are **250ms with `ease`** ([their theme source](https://github.com/heroui-inc/heroui)). That's our interactive baseline — 150ms felt cheap and got fixed. Entrances are a touch longer.
 
-In `@theme` keyframes, just use `var(--duration-content) var(--ease-entrance)`.
+- **Interactive (hover/press/color):** `duration-[250ms] ease`
+- **Entrances (mount reveals):** ~200–280ms on `--ease-out-quint`
+- **Ripple:** `0.8s ease`
 
-## Rules
+## Tokens (`src/index.css`)
 
-1. **No `cubic-bezier(...)` literals.** Use the tokens. The 3 inline-bezier sites in ENG-2401 were the spec-default `ease` pasted as a no-op.
-2. **No `duration-150` / `duration-300` for new motion.** Pick a token. Existing one-off `transition-colors duration-150` in `components/ui/` are fine — only fix conflicts.
-3. **No `framer-motion` or `motion` (`motion/react`).** Both deps are banned. CSS covers entrance (`@starting-style`), exit (`transition-behavior: allow-discrete` or React state + setTimeout), shared elements (`<ViewTransition>`), and indicators (CSS transitions). If you genuinely need drag/gesture/spring physics, get sign-off in the PR.
-4. **Prefer `transform` / `opacity` over `width` / `left` / `top`.** Only the former animate on the compositor. Existing repo indicators use `left`/`width` because the offset is measured per render — that's a known tradeoff, not the pattern for new code.
-5. **`will-change` is a last resort.** Don't put it in stylesheets. Add via JS just before a measured-jank transition, remove on `transitionend`.
+Tailwind v4 turns `--ease-*` into `ease-*` utilities and `--animate-*` into `animate-*` utilities (keyframes are defined right below the `@theme` block).
+
+| Token | Value | Use for |
+| --- | --- | --- |
+| `--ease-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | General UI state changes (Material standard) |
+| `--ease-out-quint` | `cubic-bezier(0.22, 1, 0.36, 1)` | Snappy entrances (fast in, gentle stop) |
+| `--ease-out-back` | `cubic-bezier(0.34, 1.56, 0.64, 1)` | Slight overshoot — use sparingly |
+| `animate-fade-in` | `fade-in 0.2s out-quint` | Opacity-in |
+| `animate-slide-up` | `slide-up 0.28s out-quint` | Panel/bar entrance (translateY+fade) |
+| `animate-pop-in` | `pop-in 0.18s out-back` | Scale-in (reserved; use rarely) |
+| `animate-equalize` | `equalize 0.9s standard infinite` | Now-playing equalizer bars |
+| `animate-ripple` | `ripple 0.8s ease forwards` | Button press ripple |
+
+**`--ease-*` are real utilities** (`ease-standard`). Durations are **not** a Tailwind namespace — write `duration-[250ms]` (arbitrary), not `duration-250`.
+
+## Accessibility — already handled globally
+
+`src/index.css` has one `@media (prefers-reduced-motion: reduce)` block that collapses **all** animation/transition durations to ~0.01ms. So:
+
+- Don't write per-component reduced-motion blocks.
+- Gate *movement* (transforms) behind `motion-safe:` so reduce-motion users get color/opacity only, no motion (e.g. `motion-safe:active:scale-[0.97]`).
+- JS-spawned animations (the ripple) still self-clean under reduce-motion because the global guard makes `animationend` fire immediately — don't gate ripple spawning on `matchMedia`.
+
+## The Button recipe (`src/components/ui/button.tsx`)
+
+The canonical example of all of the above. New interactive controls should match it:
+
+- **Radius:** `rounded-xl` (12px — HeroUI medium); small size drops to `rounded-lg`.
+- **Transitions:** `transition-[transform,color,background-color,opacity] duration-[250ms] ease motion-reduce:transition-none`.
+- **Press:** `motion-safe:active:scale-[0.97]`.
+- **Ripple:** captured at the pointer-down point, rendered as a `bg-current` circle with `animate-ripple` inside an `overflow-hidden` button, removed on `onAnimationEnd`. `bg-current` makes it adapt per variant.
+- **Variants:** `default | outline | ghost | destructive | shadow`. Use **`shadow`** for a hero/primary action — it's a *static* soft colored shadow (`shadow-lg shadow-primary/40`) + `hover:opacity-90` (HeroUI's opacity-hover). Static depth is fine; a hover-*lift* is not.
+
+Don't hand-roll button styling elsewhere — use `<Button variant=... size=...>` so the ripple, press, cadence, and radius come for free.
 
 ## Patterns
 
-### Sliding indicator (active-tab underline, toggle blob)
+**Entrance (mount):** add `motion-safe:animate-slide-up` (bars/panels) or `motion-safe:animate-fade-in`. CSS keyframes run once on mount and won't replay on re-render, so they're safe on components that re-render from query updates.
 
-```tsx
-// Gate the transition until first measurement so it doesn't slide in from (0,0)
-<div
-  className={cn(
-    'bg-foreground absolute h-0.5',
-    width > 0 && 'ease-interaction transition-[width,left] duration-(--duration-base)',
-  )}
-  style={{ width, left }}
-/>
-```
+**State loop (equalizer):** decorative-but-functional flourish that reflects real state — see `Equalizer` in `now-playing-bar.tsx`. Three `animate-equalize` bars with staggered `animationDelay`, `origin-bottom`, rendered only while `is_playing`.
 
-For inline `style.transition` (when set from a measurement effect): `transition: initialized ? 'all var(--duration-base) var(--ease-interaction)' : 'none'`.
+**Row highlight / hover:** `transition-colors duration-150` is acceptable for pure color (the one place a faster duration reads fine); the current row gets a `bg-muted` + a `▶` marker rather than motion.
 
-Examples in repo: `components/ui/sliding-badge-tabs.tsx`, `WorkspacesPanel.tsx`, `ForecastTabHeader.tsx`, `PipelineDateTabToggle.tsx`, `DeepResearchInputBar.tsx`.
+**Overlays (dialogs, sheets, dropdowns) — the global enter/exit system.** Radix
+keeps the node mounted while `data-state="closed"` until the exit animation ends,
+so we drive enter/exit off `data-[state]` with our tokens (entrances ease-out,
+exits a touch quicker — Frigade's two-curve model):
 
-### Entrance on mount — `@starting-style`
+| Surface | open | close |
+| --- | --- | --- |
+| Backdrop / dropdown (opacity only — popper-positioned, don't animate transform) | `data-[state=open]:animate-fade-in` | `data-[state=closed]:animate-fade-out` |
+| Centered dialog content (fade + zoom, keeps the −50% centering transform) | `data-[state=open]:animate-dialog-in` | `data-[state=closed]:animate-dialog-out` |
+| Bottom sheet (slide up — for a future Sheet) | `data-[state=open]:animate-sheet-up-in` | `data-[state=closed]:animate-sheet-up-out` |
 
-```css
-.toast {
-  opacity: 1;
-  transition: opacity var(--duration-content) var(--ease-entrance);
-  @starting-style {
-    opacity: 0;
-  }
-}
-```
+Wired into `components/ui/alert-dialog.tsx` (covers `confirm()` + `promptText()`)
+and `dropdown-menu.tsx`. The `*-out` tokens use `forwards` so the end frame holds
+until Radix unmounts.
 
-Pairs with `transition-behavior: allow-discrete` if you also transition `display`. For React-driven exits (no `<AnimatePresence>` available), set `isExiting`, wait `--duration-base`, then unmount.
+### shadcn classes work — retimed to our curves
 
-### Page / shared-element transitions — Next.js `<ViewTransition>`
+We **do** install **`tw-animate-css`** (the maintained Tailwind v4 successor to
+`tailwindcss-animate`; CSS-only, not a JS animation lib). It provides shadcn's
+vocabulary — `animate-in/out`, `fade-in-0`, `zoom-in-95`, `slide-in-from-*`,
+`accordion-down`, etc. — so a pasted shadcn component animates with **no extra
+work**. Its `animate-in/out` read `var(--tw-ease)` / `var(--tw-duration)`, and
+`src/index.css` globally sets those (in `@layer base`) to our `--ease-out-quint`
+(entrances) and `--ease-standard` (exits) — so **everything inherits our curves
+automatically**. A per-element `ease-*` / `duration-*` still wins when you want
+something bespoke.
 
-Next.js 16 has native View Transitions. Enable once:
+> **Centered dialogs are the one exception.** The plugin's `zoom`/`slide`
+> keyframes animate `transform`, which overrides a centered element's
+> `−50%/−50%` translate (it'd jump to the corner). For centered content use our
+> **`animate-dialog-in/out`** (keeps the centering transform), as
+> `alert-dialog.tsx` does. Popper-anchored surfaces (dropdowns, popovers) are
+> fine with the plugin since Radix positions a wrapper — though our
+> `animate-fade-in/out` is the simplest popper-safe choice.
 
-```ts
-// next.config.ts
-const nextConfig: NextConfig = { experimental: { viewTransition: true } }
-```
+## When CSS isn't enough
 
-Common patterns ([guide](https://nextjs.org/docs/app/guides/view-transitions)):
-
-- **Shared morph**: same `name="photo-${id}"` on the source and destination element
-- **Suspense reveal**: `<ViewTransition exit="..."><Skeleton/></ViewTransition>` + `<ViewTransition enter="..." default="none">` on resolved content
-- **Directional slide**: `<Link transitionTypes={['nav-forward']} />` + map types in `<ViewTransition enter={{ 'nav-forward': '...', default: 'none' }} />`. ~60px offset is the sweet spot.
-- **Same-route crossfade**: `<ViewTransition key={slug} share="auto" enter="auto" default="none">`
-
-**Reduced motion for view transitions needs its own override** — pseudo-elements don't read our duration tokens:
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-group(*) {
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
-  }
-}
-```
-
-Don't use `<ViewTransition>` for hover/press feedback — it's for route or state-change transitions.
-
-## When this system isn't enough
-
-The token set is intentionally minimal. If a future feature needs:
-
-- **An "expressive" tier** (slow, attention-grabbing marketing motion) — add `--ease-expressive` + `--duration-expressive` (cf. [IBM Carbon's productive/expressive split](https://carbondesignsystem.com/elements/motion/overview/))
-- **Distance-aware durations** (longer moves use longer durations) — Material 3 / View Transitions handle this; don't try to encode it in tokens
-- **Drag, gesture, or physics-spring** — bring back `motion` (the renamed `framer-motion`) for that feature only, with sign-off
+The system is deliberately minimal. Reach for the **`motion`** library (renamed `framer-motion`) **only** for: list enter/exit (`AnimatePresence`), drag/reorder gestures, or spring physics — and only for that feature, called out in the PR. Everything else (hover, press, ripple, mount entrances, loops) stays CSS.
 
 ## References
 
-- [Frigade — Two easing curves, no animation library](https://frigade.com/blog/two-easing-curves-no-animation-library) (origin of our curve values)
-- [Next.js — View Transitions guide](https://nextjs.org/docs/app/guides/view-transitions), [`viewTransition` config](https://nextjs.org/docs/app/api-reference/config/next-config-js/viewTransition)
-- [React — `<ViewTransition>`](https://react.dev/reference/react/ViewTransition)
-- MDN — [`@starting-style`](https://developer.mozilla.org/en-US/docs/Web/CSS/@starting-style), [`transition-behavior`](https://developer.mozilla.org/en-US/docs/Web/CSS/transition-behavior), [`will-change`](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/will-change)
-- [web.dev — `prefers-reduced-motion`](https://web.dev/articles/prefers-reduced-motion); [CSS-Tricks — No motion isn't always reduced motion](https://css-tricks.com/nuking-motion-with-prefers-reduced-motion/) (disable non-essential, not all)
-- [Tailwind v4 — `duration-(<custom-property>)`](https://tailwindcss.com/docs/transition-duration), [theme namespaces](https://tailwindcss.com/docs/theme)
-- Adjacent systems for reference: [Material 3 motion](https://m3.material.io/styles/motion/easing-and-duration/tokens-specs), [IBM Carbon motion](https://carbondesignsystem.com/elements/motion/overview/), [Shopify Polaris motion](https://polaris-react.shopify.com/tokens/motion)
+- [HeroUI Button](https://www.heroui.com/docs/components/button) + [v2](https://v2.heroui.com/) — the cadence/ripple/shadow reference; 250ms `ease`, scale-highlight/scale-ripple feedback
+- [Josh W. Comeau — CSS transitions](https://www.joshwcomeau.com/animation/css-transitions/), [easings.net](https://easings.net/)
+- [web.dev — prefers-reduced-motion](https://web.dev/articles/prefers-reduced-motion); disable *non-essential* motion, keep feedback
+- [Tailwind v4 — transitions](https://tailwindcss.com/docs/transition-property) & [theme namespaces](https://tailwindcss.com/docs/theme) (`--ease-*` → utility; durations are not)

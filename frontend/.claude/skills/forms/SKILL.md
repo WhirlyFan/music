@@ -1,11 +1,11 @@
 ---
 name: frontend-forms
-description: Form patterns for the Next.js app — TanStack Form + Zod, enabled-submit-with-inline-errors, scroll-to-first-invalid, input-level constraint enforcement, and accessible error wording. Use when building or modifying any form (multi-field create/edit, settings, auth, invite, configuration, etc.).
+description: Form patterns for this Vite + React app — TanStack Form + Zod, enabled-submit-with-inline-errors, scroll-to-first-invalid, input-level constraint enforcement, and accessible error wording. Use when building or modifying any form (multi-field create/edit, settings, auth, configuration, etc.).
 ---
 
 # Frontend Forms
 
-This skill is the **canonical form pattern** for the Next.js app (`frontend/`). Apply it to every multi-field form — create dialogs, edit pages, settings panels, invite flows, auth forms, configuration forms.
+This skill is the **canonical form pattern** for the frontend (`frontend/`). Apply it to every multi-field form — create dialogs, edit pages, settings panels, auth forms, configuration forms. The playlist-import form (`src/routes/playlists/index.tsx`) is a live example.
 
 Reference implementation: `frontend/src/app/(app)/workspace/[workspaceId]/(chrome)/capture/components/PipelineEntryForm.tsx`.
 
@@ -70,7 +70,7 @@ Do **not** use React Query for drafts. The cache is for _server_ state — its l
 | **Form field values + validation**                                                                                                                | **TanStack Form + Zod** | Schema-driven, type-safe, built-in dirty/touched/error tracking |
 | **Shared client UI state outside the form** (which dialog is open, which tab is active, selected items list, draft persistence across navigation) | **Zustand**             | Shared across components, survives the form unmounting          |
 | Server data displayed in or submitted to the form                                                                                                 | React Query             | Cached, deduped — call `useQuery` directly in the form          |
-| URL-worthy state (tab, filter on the page hosting the form)                                                                                       | nuqs                    | Shareable, bookmarkable                                         |
+| URL-worthy state (tab, filter on the page hosting the form)                                                                                       | TanStack Router search params | Shareable, bookmarkable                                   |
 | Single-component ephemeral state (popover open within a field)                                                                                    | `useState`              | Scoped to one component                                         |
 
 The **boundary**: form values themselves always live in TanStack Form, never Zustand. Zustand is for state _outside_ the form that the form interacts with (the page's open dialog flag, a multi-select selection list shared with a sibling, a persisted draft for offline resilience).
@@ -319,8 +319,6 @@ Apply this skill whenever you:
 - Edit an existing form's validation
 - Refactor `useState`-based form state to TanStack Form
 - Migrate any form that currently uses disabled-until-valid
-
-See [ENG-2486](https://linear.app/usul/issue/ENG-2486) for the codebase-wide migration scope.
 
 ## File Layout
 

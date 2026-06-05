@@ -4,10 +4,7 @@
 # live infrastructure to match. New services are provisioned; changed services
 # are rebuilt; removed services are NOT auto-deleted (safety against typos).
 #
-# Phase A (this file): frontend static site + Django backend + Postgres.
-# Hatchet engine + worker are deliberately deferred — they require paid
-# background workers ($7/mo each), and the template has no workflows wired
-# to user-visible features yet.
+# This file: frontend static site + Django backend + Postgres.
 #
 # Docs: https://render.com/docs/blueprint-spec
 # Companion walkthrough: docs/ops/deploy-render.md
@@ -24,7 +21,7 @@ services:
   # ─────────────────────────────────────────────────────────────────────────
   - type: web
     runtime: static
-    name: react-django-template-frontend
+    name: music-frontend
     rootDir: frontend
     # Render's static-site build container has BOTH `/usr/bin` and
     # `/usr/lib/node_modules` read-only — so corepack-enable AND npm-install-g
@@ -34,14 +31,7 @@ services:
     # pnpm version pinned EXACTLY (matches packageManager field in
     # frontend/package.json + the version action-setup uses in CI). Bump in
     # one place; supply-chain attack surface narrows to that one version.
-    #
-    # `cp -r ../docs ./_docs` makes the repo-root `docs/` directory visible
-    # inside the frontend build context so the in-app docs viewer's Vite
-    # glob (`import.meta.glob('/_docs/**/*.md')`) finds the markdown files.
-    # In docker compose dev that's handled by a `./docs:/app/_docs:ro` bind
-    # mount; on Render the build runs without that mount, so we copy.
     buildCommand: >-
-      rm -rf ./_docs && cp -r ../docs ./_docs &&
       npx --yes pnpm@11.3.0 install --frozen-lockfile &&
       npx --yes pnpm@11.3.0 build
     staticPublishPath: ./dist
@@ -57,19 +47,19 @@ services:
       # Order matters — most specific first.
       - type: rewrite
         source: /api/*
-        destination: https://react-django-template-backend.onrender.com/api/*
+        destination: https://music-backend.onrender.com/api/*
       - type: rewrite
         source: /_allauth/*
-        destination: https://react-django-template-backend.onrender.com/_allauth/*
+        destination: https://music-backend.onrender.com/_allauth/*
       - type: rewrite
         source: /admin/*
-        destination: https://react-django-template-backend.onrender.com/admin/*
+        destination: https://music-backend.onrender.com/admin/*
       - type: rewrite
         source: /static/*
-        destination: https://react-django-template-backend.onrender.com/static/*
+        destination: https://music-backend.onrender.com/static/*
       - type: rewrite
         source: /health
-        destination: https://react-django-template-backend.onrender.com/health/
+        destination: https://music-backend.onrender.com/health/
       # SPA fallback: anything else serves the React index so client-side
       # routing (TanStack Router) takes over.
       - type: rewrite
@@ -111,7 +101,7 @@ services:
   # ─────────────────────────────────────────────────────────────────────────
   - type: web
     runtime: docker
-    name: react-django-template-backend
+    name: music-backend
     rootDir: backend
     plan: free
     region: oregon                 # pin to one region; match the DB below
@@ -142,23 +132,23 @@ services:
       # BACKEND's host (Render proxies set Host to the destination), so the
       # backend host is what must be allowed here.
       - key: DJANGO_ALLOWED_HOSTS
-        value: react-django-template-backend.onrender.com
+        value: music-backend.onrender.com
       # CSRF middleware checks the Origin/Referer of state-changing requests.
       # Same-origin from the browser's perspective means Origin =
       # https://<frontend>.onrender.com — that's what to trust.
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://react-django-template-frontend.onrender.com
+        value: https://music-frontend.onrender.com
       # CORS is a defense-in-depth backstop. With rewrites we don't strictly
       # need it, but leaving the frontend origin allow-listed costs nothing.
       - key: DJANGO_CORS_ALLOWED_ORIGINS
-        value: https://react-django-template-frontend.onrender.com
+        value: https://music-frontend.onrender.com
 
       # FRONTEND_ORIGIN is consumed by HEADLESS_FRONTEND_URLS so password-reset
       # / email-verification links in transactional emails point at the
       # actual deployed frontend (not localhost). Change ONE value here and
       # both link generation + email content adapt.
       - key: FRONTEND_ORIGIN
-        value: https://react-django-template-frontend.onrender.com
+        value: https://music-frontend.onrender.com
 
       # ── Database ────────────────────────────────────────────────────────
       # Render auto-injects the connection string when the service is linked
@@ -167,11 +157,11 @@ services:
       # docs/ops/deploy-render.md "Phase B: restore two-role Postgres".
       - key: DATABASE_URL
         fromDatabase:
-          name: react-django-template-db
+          name: music-db
           property: connectionString
       - key: DATABASE_URL_ADMIN    # same URL — migrations + runtime share the role
         fromDatabase:
-          name: react-django-template-db
+          name: music-db
           property: connectionString
 
       # ── Gunicorn ────────────────────────────────────────────────────────
@@ -192,6 +182,19 @@ services:
       - key: DEFAULT_FROM_EMAIL
         sync: false
 
+      # ── Spotify ingest (optional) ───────────────────────────────────────
+      # Free Spotify developer app (Client ID + Secret). Unset = Spotify paste
+      # returns "not configured"; Apple Music + YouTube need nothing.
+      - key: SPOTIFY_CLIENT_ID
+        sync: false                # dashboard-managed; encrypted at rest
+      - key: SPOTIFY_CLIENT_SECRET
+        sync: false
+
+      # YouTube PO-token provider: runs co-located INSIDE the backend image
+      # (Node server on 127.0.0.1:4416, started by the entrypoint) — no separate
+      # Render service, no extra cost, wakes/sleeps with the backend. The
+      # YOUTUBE_POT_BASE_URL is baked into the image; nothing to set here.
+
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.
       # Left unset here so the file doesn't leak secrets if forked.
@@ -206,7 +209,7 @@ services:
 # 90 days (loses all data).
 # ─────────────────────────────────────────────────────────────────────────────
 databases:
-  - name: react-django-template-db
+  - name: music-db
     plan: free
     region: oregon                 # MUST match the backend service region
     # NOTE: Render does NOT auto-upgrade major versions of an existing DB.
@@ -214,4 +217,4 @@ databases:
     # in the dashboard so the blueprint re-provisions a fresh one at the
     # version below. Acceptable here because the dev/free DB is throwaway;
     # in a real prod migration you'd pg_dump + restore against a new DB.
-    postgresMajorVersion: "17"
+    postgresMajorVersion: "18"

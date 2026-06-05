@@ -79,7 +79,7 @@ About 2 hours of work. Steps:
 ### 2. Create the R2 bucket + API token
 
 1. [Cloudflare dashboard](https://dash.cloudflare.com) → R2 → Create bucket
-2. Name it (e.g. `react-django-template-uploads`)
+2. Name it (e.g. `music-uploads`)
 3. R2 → Manage R2 API Tokens → Create API token
 4. Permission: **Object Read & Write** for the bucket
 5. Copy the Access Key ID + Secret Access Key
@@ -115,7 +115,7 @@ STORAGES = {
 
 ```
 S3_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
-S3_BUCKET_NAME=react-django-template-uploads
+S3_BUCKET_NAME=music-uploads
 S3_ACCESS_KEY=<from dashboard>
 S3_SECRET_KEY=<from dashboard>
 S3_CUSTOM_DOMAIN=cdn.yourdomain.com   # optional, when you set up a custom domain

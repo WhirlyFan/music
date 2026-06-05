@@ -38,7 +38,7 @@ frontend/src/
 │   ├── login.tsx         # password + MFA challenge
 │   ├── signup.tsx
 │   ├── settings.tsx      # security section links to /account/mfa
-│   ├── notes.tsx         # day-1 vertical slice
+│   ├── playlists/        # My playlists (cover wall) + detail/editor
 │   └── account/
 │       ├── mfa.tsx       # MFA overview
 │       └── mfa/
@@ -81,42 +81,84 @@ time and codegens `routeTree.gen.ts`. Per-route metadata via the `head`
 API:
 
 ```tsx
-export const Route = createFileRoute('/notes')({
-  component: NotesPage,
-  head: () => ({ meta: [{ title: 'Notes — react-django-template' }] }),
+export const Route = createFileRoute('/playlists/')({
+  component: PlaylistsPage,
+  head: () => ({ meta: [{ title: 'My playlists — music' }] }),
 })
 ```
 
 ## Data fetching
 
 Centralized query keys in [`lib/query/keys.ts`](../frontend/src/lib/query/keys.ts).
-One namespace per domain (`sessionKeys`, `noteKeys`, `mfaKeys`, `emailKeys`),
-each with `all()` for broad invalidation + specific entries below. Every
+One namespace per domain (`sessionKeys`, `playlistKeys`, `roomKeys`, `mfaKeys`,
+`emailKeys`), each with `all()` for broad invalidation + specific entries below. Every
 entry is a function (uniform call shape):
 
 ```ts
-export const noteKeys = {
-  all: () => ['notes'] as const,
-  list: () => ['notes', 'list'] as const,
-  detail: (id: number) => ['notes', 'detail', id] as const,
+export const playlistKeys = {
+  all: () => ['playlists'] as const,
+  list: (search = '') => ['playlists', 'list', search] as const,
+  detail: (id: string) => ['playlists', 'detail', id] as const,
+  tracks: (id: string) => ['playlists', 'detail', id, 'tracks'] as const,
 }
 
-useQuery({
-  queryKey: noteKeys.list(),
-  queryFn: () => api<PaginatedNoteList>('/notes/'),
+useInfiniteQuery({
+  queryKey: playlistKeys.list(search),
+  queryFn: ({ pageParam }) => api<PaginatedPlaylistList>(`/catalog/playlists/?page=${pageParam}…`),
 })
 
 // Surgical invalidation:
-qc.invalidateQueries({ queryKey: noteKeys.detail(id) })
+qc.invalidateQueries({ queryKey: playlistKeys.detail(id) })
 // Or namespace-wide:
-qc.invalidateQueries({ queryKey: noteKeys.all() })
+qc.invalidateQueries({ queryKey: playlistKeys.all() })
 ```
 
 This pattern mirrors the reference repo
 (`~/usul-policy-research-app/frontend/lib/hooks/queries/query-keys.ts`).
 
-Optimistic create/delete with rollback on error is the pattern for the
-day-1 Notes slice. See `routes/notes.tsx`.
+## React conventions
+
+Lead rule: **server state lives in TanStack Query, local UI state in `useState`,
+nothing global.** There is no client store (Redux/Zustand) — the listening room +
+playback are server state behind `roomKeys`, so the player reads from the cache,
+not a store.
+
+- **`useEffect` is an escape hatch for external systems only** — subscriptions
+  (IntersectionObserver, ResizeObserver), `requestAnimationFrame` loops, timers
+  (the search debounce), DOM/key listeners, and wiring the `<audio>` element.
+  *Don't* use it for: derived values (compute them during render), mirroring props
+  into state (key the component to reset instead — see `EditPanel` in
+  `routes/playlists/$playlistId.tsx`), or event-driven logic (do it in the
+  handler). If you're writing `useEffect` + `setState`, stop and check
+  [react.dev/you-might-not-need-an-effect](https://react.dev/learn/you-might-not-need-an-effect).
+- **The React Compiler is on** (`vite.config.ts` `reactCompilerPreset()`), so
+  **don't hand-write `useMemo`/`useCallback`/`memo`** — it memoizes for us. Reach
+  for them only when profiling shows the compiler couldn't (rare). The
+  `eslint-plugin-react-compiler` rule flags code the compiler can't optimize —
+  fix those rather than memoizing around them.
+
+Full rules + the "is this really an effect?" decision tree live in the
+[`react-effects` skill](../.claude/skills/react-effects/SKILL.md) — read it before
+writing or reviewing a `useEffect`.
+
+## Loading skeletons (colocation)
+
+Loading states use **skeletons, not spinners**. Primitives live in
+[`components/ui/skeleton.tsx`](../frontend/src/components/ui/skeleton.tsx):
+`Skeleton` (leaf box or wrap-mode that matches its children's footprint),
+`SkeletonText` (auto-sizes to the surrounding font), `SkeletonCircle`, plus a
+`SkeletonZone`/`useSkeletonZone()` for forcing a subtree into its loading state.
+
+The rule is **don't build parallel skeleton components** — the *real* component
+renders its own skeleton state. A component checks `useSkeletonZone()` (often
+`|| !data`) and returns its normal shell filled with `Skeleton`/`SkeletonText`
+(e.g. `CoverTile` and `TrackRow` both do this), so the placeholder inherits the
+real layout and can't drift. To show a loading screen, render the real tree
+inside `<SkeletonZone>` — e.g. the playlist detail page renders the real
+`PageHeader` + N `<TrackRow/>`s in a zone while the query loads; the cover wall
+renders a static grid of zone-driven `CoverTile`s. Put `role="status" aria-busy`
+on the grouping container; leaves are `aria-hidden`. Every primitive bakes in
+`motion-reduce:animate-none`. (Pattern adopted from `~/usul-policy-research-app`.)
 
 ## Auth integration
 

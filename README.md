@@ -1,4 +1,4 @@
-# react-django-template
+# music
 
 Full-stack starter: Django + DRF + Postgres + RLS + Hatchet on the backend,
 React + Vite + TanStack + shadcn on the frontend. Auth, permissions, RLS,
@@ -31,7 +31,7 @@ time it needs it.
 
 ```bash
 # 1. Clone
-git clone <repo-url> react-django-template && cd react-django-template
+git clone <repo-url> music && cd music
 
 # 2. Env file (defaults are fine for local dev)
 cp .env.example .env
@@ -74,7 +74,7 @@ for the full flow.
 
 ```bash
 # On any docker-capable host:
-git clone <repo> && cd react-django-template
+git clone <repo> && cd music
 cp .env.production.example .env
 $EDITOR .env                              # fill in real secrets — see comments in the file
 
@@ -126,17 +126,17 @@ Skip the rename if you're just kicking the tires.
 
 ### 1. Rebrand (one-time find-and-replace)
 
-The string `react-django-template` appears in 44 places — service names,
+The string `music` appears in 44 places — service names,
 package metadata, route titles, the TOTP issuer label, the docker-compose
 project name, etc. They're all real labels you want to update.
 
 ```bash
 # Pick your new name and run from the repo root:
 NEW=my-app
-grep -rl "react-django-template" . \
+grep -rl "music" . \
   --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.venv \
   --exclude-dir=dist --exclude=pnpm-lock.yaml --exclude=uv.lock \
-  | xargs sed -i '' "s/react-django-template/${NEW}/g"   # macOS
+  | xargs sed -i '' "s/music/${NEW}/g"   # macOS
 
 # On Linux: sed -i (no '') instead of -i ''
 ```
@@ -144,7 +144,7 @@ grep -rl "react-django-template" . \
 Then verify and commit:
 
 ```bash
-grep -r "react-django-template" . --exclude-dir=node_modules --exclude-dir=.git
+grep -r "music" . --exclude-dir=node_modules --exclude-dir=.git
 # Should print zero matches.
 ```
 
@@ -222,7 +222,13 @@ make up                       # docker compose up -d (everything)
 make down                      # docker compose down
 make logs                      # tail logs from all services
 make ps                        # show running services
+make reset                     # rebuild backend image + recreate its .venv volume
 ```
+
+> **After changing backend Python deps, run `make reset`, not `make up`.** The
+> backend's `.venv` lives in an anonymous Docker volume that survives `up`, so a
+> plain `up` keeps using the *old* venv and your new deps won't appear. `make
+> reset` rebuilds the image and recreates that volume (DB volume is left intact).
 
 ### Local dev (outside Docker)
 
@@ -253,14 +259,15 @@ file alongside your model change. Other devs run `make migrate` to sync.
 make test                      # pytest (RLS isolation tests + smoke)
 
 # A specific test:
-cd backend && uv run pytest apps/notes/tests/test_rls.py::test_user_isolation -v
+cd backend && uv run pytest apps/catalog/tests/test_rls.py::test_user_isolation -v
 ```
 
-The RLS tests in `backend/apps/notes/tests/test_rls.py` prove:
-- The Note table has Postgres RLS enabled with the `owner_isolation` policy
+The RLS tests in `backend/apps/catalog/tests/test_rls.py` prove:
+- The Playlist table has Postgres RLS enabled with the `owner_isolation` policy
 - Anonymous traffic (no `rls.user_id`) returns zero rows
-- User A cannot see User B's notes — even when the viewset returns
-  `Note.objects.all()` with no app-layer filter
+- User A cannot see User B's playlists — even when the viewset returns
+  `Playlist.objects.all()` with no app-layer filter
+- `is_public` playlists are readable cross-user but not writable
 
 ### Lint, format, type-check
 
@@ -356,9 +363,9 @@ reverse proxy. Pre-push git hook auto-fixes lint + blocks broken pushes.
 - **Two Postgres roles.** `app_user` (no BYPASSRLS) is the runtime role —
   RLS policies are enforced. `app_admin` (BYPASSRLS) is used only by
   migrations, the seed command, and other admin operations.
-- **RLS day-1.** The `Note` and `WorkflowRun` models inherit `RLSModel`
-  with a `UserPolicy`. The `RLSContextMiddleware` sets per-request
-  `rls.user_id`. **Even if a viewset forgets `.filter(owner=request.user)`,
+- **RLS.** The `catalog.Playlist` model inherits `RLSModel` (owner-or-public
+  policy). The `RLSContextMiddleware` sets per-request
+  `rls.user_id`. **Even if a viewset forgets `.filter(created_by=request.user)`,
   the database blocks cross-user reads.** Proof is in the test suite.
 - **Same-origin everywhere.** Nginx fronts both apps so session cookies +
   CSRF "just work" — no CORS dance, no JWT plumbing.
@@ -378,8 +385,8 @@ reverse proxy. Pre-push git hook auto-fixes lint + blocks broken pushes.
 │   ├── apps/
 │   │   ├── users/          Custom user model
 │   │   ├── core/           RLS post-migrate hook, shared middleware
-│   │   ├── notes/          Day-1 RLS-protected Note model + viewset + tests
-│   │   └── jobs/           Hatchet workflows + WorkflowRun tracking
+│   │   ├── catalog/        Tracks/playlists/sources + ingest; RLS on Playlist
+│   │   └── rooms/          Listening room: queue + playback state
 │   ├── config/             Django settings (base/dev/prod)
 │   └── tests/              Shared pytest fixtures (set_rls_user, etc.)
 ├── frontend/               Vite + React + TS + TanStack + shadcn
@@ -387,7 +394,7 @@ reverse proxy. Pre-push git hook auto-fixes lint + blocks broken pushes.
 │   │   ├── routes/         TanStack Router file-based routes
 │   │   ├── lib/api/        fetch wrapper + GENERATED types
 │   │   ├── lib/auth/       allauth headless hooks
-│   │   └── lib/query/      TanStack Query keys + Note hooks
+│   │   └── lib/query/      TanStack Query keys + catalog/rooms hooks
 │   └── .claude/skills/     Project-scoped Claude skills (frontend)
 ├── nginx/                  Reverse-proxy configs (dev + prod)
 ├── postgres/init.sql       Creates app_user, app_admin, appdb, hatchetdb

@@ -6,8 +6,8 @@ this to set `rls.bypass = 'true'` for staff users hitting /admin/ so the
 Django admin can see + edit data across owners.
 
 Keep this scoped to /admin/ only — we don't want API endpoints to bypass
-RLS even for staff users, otherwise admin users' /api/notes/ requests
-would return everyone's notes (different from what other users see).
+RLS even for staff users, otherwise a staff user's /api/v1/catalog/playlists/
+requests would return everyone's playlists (not just their own).
 """
 
 from __future__ import annotations

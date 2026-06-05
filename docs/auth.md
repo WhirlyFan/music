@@ -168,26 +168,15 @@ See [`frontend/src/lib/auth/api.ts`](../frontend/src/lib/auth/api.ts) —
 
 | Rule | Why |
 |---|---|
-| **Optional for all users** (`MFA_REQUIRED = False`) | Most users won't enable it; nagging on signup is hostile UX |
-| **Required for `is_staff` users hitting `/admin/`** | Admin actions are higher-blast-radius. Enforced by `RequireMfaForStaffMiddleware` |
+| **Fully optional, including staff** (`MFA_REQUIRED = False`, no gate) | Nagging on signup is hostile UX; `/admin/` is already behind login + a strong password. Users enroll from Settings if they want it |
 | Three methods: TOTP, recovery codes, WebAuthn (passkeys) | TOTP covers most users; recovery codes are the backup; passkeys are modern |
 | When SAML/SSO lands, the IdP's MFA policy applies — app-level stays opt-in | Re-prompting in-app after IdP-MFA is the textbook SSO anti-pattern |
 
-Decision + rationale: [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin).
+Decision + rationale: [decisions.md → MFA policy](decisions.md#mfa-policy-fully-optional-opt-in-for-everyone).
 
 UI naming: user-facing copy uses "Multi-factor authentication" / "MFA"
 consistently (no "2FA" in user-visible strings). The `/auth/2fa/*` URL
 paths in the API are allauth's literal endpoint URLs — those stay.
-
-### Staff `/admin/` gate
-
-[`apps/core/middleware.py::RequireMfaForStaffMiddleware`](../backend/apps/core/middleware.py)
-intercepts `/admin/*` requests. If the user is authenticated, `is_staff`,
-and has zero `Authenticator` rows, redirects to
-`/account/mfa?required=true&next=<path>`. Exempt prefixes: `/account/mfa`,
-`/_allauth/`, `/account/logout`.
-
-Tests: [`apps/core/tests/test_staff_mfa_middleware.py`](../backend/apps/core/tests/test_staff_mfa_middleware.py).
 
 ### TOTP code tolerance
 

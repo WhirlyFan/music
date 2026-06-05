@@ -1,25 +1,20 @@
 ---
 name: frontend-documentation
-description: Internal frontend component documentation standards. Covers essential sections (overview, demo, features, examples, props/API, accessibility, changelog), best practices, and documentation framework options. Use when writing component documentation.
+description: How docs work in this repo and how to write component/feature docs. Use when documenting a component or feature, or adding a page to the in-app docs.
 ---
 
 # Frontend Documentation
 
-Internal frontend component documentation standards. Covers essential sections, best practices, and documentation framework options.
+## How docs work here
 
-### Documentation Framework Options
+There is **no Fumadocs/Nextra/Docusaurus** — docs are plain **Markdown files** rendered by an in-app viewer:
 
-| Framework               | Best For            | Key Features                                              |
-| ----------------------- | ------------------- | --------------------------------------------------------- |
-| **Fumadocs**            | Next.js projects    | Fast, feature-rich, built for App Router, Auto Type Table |
-| **Nextra**              | Markdown-heavy docs | Built-in search, MDX support, file-system routing         |
-| **Content Collections** | Type-safe content   | Schema validation, transforms, type generation            |
-| **Docusaurus**          | Large doc sites     | Versioning, i18n, plugin ecosystem                        |
-| **VitePress**           | Vue-powered docs    | Optimized for docs, fast HMR, Markdown extensions         |
+- **Project docs** live in `docs/` (e.g. `docs/frontend.md`, `docs/design/queue-rooms.md`). These are the source of truth for architecture/decisions; the repo-level **`docs-maintenance`** skill governs them.
+- The **in-app docs route** (`src/routes/docs/`) renders Markdown via `react-markdown` + `remark-gfm` + `rehype-highlight`, themed by the `.docs-content` styles in `src/index.css`.
 
-**Our recommendation:** Fumadocs for Next.js projects — integrates natively with App Router, supports MDX, and has Auto Type Table for generating prop documentation from TypeScript types.
+To document a feature, add/extend a Markdown file in `docs/` (and keep `docs/frontend.md` accurate). Component-level docs are inline TSDoc comments on the component/props — we don't maintain per-component doc pages.
 
-### Essential Documentation Sections
+### Section guide (when a doc warrants structure)
 
 Every component should have documentation covering these sections. Not every section needs to be long — simple components may only need Overview, Demo, Props, and a few Examples.
 
@@ -83,7 +78,7 @@ Key capabilities list. Keep it scannable:
 - **Type-safe** — Full TypeScript support with discriminated unions and generic types
 - **Theming support** — CSS variable-based design tokens, adapts to light/dark mode
 - **Lightweight** — No unnecessary dependencies, tree-shakeable
-- **SSR/SSG ready** — Works with Next.js Server Components and static generation
+- **Accessible by default** — keyboard + screen-reader support baked in (see `frontend-accessibility`)
 - **Well-documented** — Props reference, examples, accessibility notes, changelog
 ```
 

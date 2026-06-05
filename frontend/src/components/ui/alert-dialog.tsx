@@ -1,7 +1,7 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
 import * as React from 'react'
 
-import { buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const AlertDialog = AlertDialogPrimitive.Root
@@ -19,12 +19,14 @@ function AlertDialogOverlay({
     <AlertDialogPrimitive.Overlay
       ref={ref}
       data-slot="alert-dialog-overlay"
-      // Scrim is always dark (bg-black/40, not bg-foreground/X) so it dims
+      // Scrim is always dark (bg-black/50, not bg-foreground/X) so it dims
       // the page in both light + dark modes — using --foreground would
-      // invert and brighten the page in dark mode. backdrop-blur-sm adds
-      // a soft macOS-style blur to the content behind the dialog.
+      // invert and brighten the page in dark mode. NOTE: deliberately no
+      // backdrop-blur — a full-screen backdrop-filter forces any page with a
+      // live SVG filter (the gooey FAB) onto a slow compositing path, which
+      // visibly janks the dialog's open animation.
       className={cn(
-        'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/40 backdrop-blur-sm duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+        'data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out fixed inset-0 z-50 bg-black/50',
         'focus:outline-hidden',
         className,
       )}
@@ -45,8 +47,8 @@ function AlertDialogContent({
         ref={ref}
         data-slot="alert-dialog-content"
         className={cn(
-          'bg-background fixed top-[50%] left-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border p-4 shadow-lg sm:rounded-lg',
-          'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+          'bg-background fixed top-[50%] left-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl',
+          'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           'focus:outline-hidden',
           className,
         )}
@@ -99,33 +101,31 @@ function AlertDialogDescription({
   )
 }
 
+// asChild → render our <Button> so dialog actions get the same press ripple.
 function AlertDialogAction({
   className,
-  ref,
   ...props
 }: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Action>) {
   return (
-    <AlertDialogPrimitive.Action
-      ref={ref}
-      data-slot="alert-dialog-action"
-      className={cn(buttonVariants(), className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Action asChild>
+      <Button data-slot="alert-dialog-action" className={className} {...props} />
+    </AlertDialogPrimitive.Action>
   )
 }
 
 function AlertDialogCancel({
   className,
-  ref,
   ...props
 }: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Cancel>) {
   return (
-    <AlertDialogPrimitive.Cancel
-      ref={ref}
-      data-slot="alert-dialog-cancel"
-      className={cn(buttonVariants({ variant: 'outline' }), 'mt-2 sm:mt-0', className)}
-      {...props}
-    />
+    <AlertDialogPrimitive.Cancel asChild>
+      <Button
+        variant="outline"
+        data-slot="alert-dialog-cancel"
+        className={cn('mt-2 sm:mt-0', className)}
+        {...props}
+      />
+    </AlertDialogPrimitive.Cancel>
   )
 }
 

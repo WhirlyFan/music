@@ -157,7 +157,7 @@ Gmail/Yahoo's 2024 bulk-sender requirement), then tighten to
 ### Step 3: Create an API key
 
 Resend dashboard → API Keys → "Create API Key"
-- Name it (e.g. `react-django-template-prod`)
+- Name it (e.g. `music-prod`)
 - Permission: **Sending access** (don't grant full access)
 - Copy the key — it starts with `re_`. You can't view it again.
 
@@ -178,7 +178,7 @@ Trigger a password reset against the real prod URL:
 
 ```sh
 # Replace with your actual Render URL
-FRONTEND=https://react-django-template-frontend.onrender.com
+FRONTEND=https://music-frontend.onrender.com
 curl -c /tmp/cookies.txt $FRONTEND/_allauth/browser/v1/config > /dev/null
 CSRF=$(grep csrftoken /tmp/cookies.txt | awk '{print $NF}')
 curl -b /tmp/cookies.txt \

@@ -343,45 +343,7 @@ Build compound components first (composition API), then configured wrappers for 
 
 ### Virtualization
 
-For lists with 50+ items, use TanStack Virtual to only render visible DOM nodes:
-
-```tsx
-import { useVirtualizer } from '@tanstack/react-virtual'
-
-function VirtualList({ items }) {
-  const parentRef = useRef<HTMLDivElement>(null)
-
-  const virtualizer = useVirtualizer({
-    count: items.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 50,
-  })
-
-  return (
-    <div ref={parentRef} style={{ height: '400px', overflow: 'auto' }}>
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-        {virtualizer.getVirtualItems().map((virtualItem) => (
-          <div
-            key={virtualItem.key}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: `${virtualItem.size}px`,
-              transform: `translateY(${virtualItem.start}px)`,
-            }}
-          >
-            {items[virtualItem.index].name}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-```
-
-**Important:** Use callback ref + state for scroll containers that can unmount/remount — not `useRef`.
+**Not installed.** `@tanstack/react-virtual` is **not** a dependency — don't `import { useVirtualizer }` (it won't resolve). Our lists today (queue, playlists) are short and render fine as plain mapped lists. If a list genuinely grows past ~a few hundred items, add `@tanstack/react-virtual` deliberately (it composes with `@tanstack/react-table`, which **is** installed) and call it out in the PR.
 
 ### When to Use What
 
@@ -389,7 +351,7 @@ function VirtualList({ items }) {
 | -------------------------------------- | --------------------------------------- |
 | Static display, no interactivity       | shadcn `<Table>` directly               |
 | Table with sort/filter/paginate/select | `<DataTable>` (TanStack Table + shadcn) |
-| Long scrollable list (50+ items)       | TanStack Virtual                        |
+| Long scrollable list (hundreds+)       | TanStack Virtual (add the dep first)    |
 | Styled button/badge/card/input         | shadcn primitive with variant props     |
 | Domain-specific card/panel (3+ uses)   | Product wrapper around shadcn primitive |
 | One-off custom styling                 | Pass `className` to shadcn component    |

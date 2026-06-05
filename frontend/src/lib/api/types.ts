@@ -4,41 +4,7 @@
  */
 
 export interface paths {
-    "/api/v1/jobs/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description List + retrieve workflow runs the current user has triggered. */
-        get: operations["v1_jobs_list"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/jobs/{id}/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description List + retrieve workflow runs the current user has triggered. */
-        get: operations["v1_jobs_retrieve"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/jobs/trigger/": {
+    "/api/v1/catalog/ingest/": {
         parameters: {
             query?: never;
             header?: never;
@@ -47,15 +13,20 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description List + retrieve workflow runs the current user has triggered. */
-        post: operations["v1_jobs_trigger_create"];
+        /**
+         * @description Paste a source URL → loose catalog Tracks (no playlist created).
+         *
+         *     The client then chooses what to do with them: play, add to queue, or save
+         *     as a playlist (all handled by the rooms API).
+         */
+        post: operations["v1_catalog_ingest_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notes/": {
+    "/api/v1/catalog/playlists/": {
         parameters: {
             query?: never;
             header?: never;
@@ -63,31 +34,33 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description CRUD viewset for Notes.
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
          *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
-        get: operations["v1_notes_list"];
+        get: operations["v1_catalog_playlists_list"];
         put?: never;
         /**
-         * @description CRUD viewset for Notes.
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
          *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
-        post: operations["v1_notes_create"];
+        post: operations["v1_catalog_playlists_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notes/{id}/": {
+    "/api/v1/catalog/playlists/{id}/": {
         parameters: {
             query?: never;
             header?: never;
@@ -95,119 +68,715 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description CRUD viewset for Notes.
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
          *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
-        get: operations["v1_notes_retrieve"];
+        get: operations["v1_catalog_playlists_retrieve"];
         /**
-         * @description CRUD viewset for Notes.
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
          *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
-        put: operations["v1_notes_update"];
+        put: operations["v1_catalog_playlists_update"];
         post?: never;
         /**
-         * @description CRUD viewset for Notes.
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
          *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
-        delete: operations["v1_notes_destroy"];
+        delete: operations["v1_catalog_playlists_destroy"];
         options?: never;
         head?: never;
         /**
-         * @description CRUD viewset for Notes.
+         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
+         *     delete, and edit track membership.
          *
-         *     Notably, `get_queryset` returns `Note.objects.all()` with **no**
-         *     `.filter(owner=self.request.user)`. RLS policies enforce per-user
-         *     isolation at the database. Tests in `tests/test_rls.py` prove that
-         *     forgetting the app-layer filter does not leak rows.
+         *     Playlists are a shared/global table (not RLS); we scope every action to
+         *     `created_by=request.user` so a caller only ever sees and mutates their own.
+         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
+         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
          */
-        patch: operations["v1_notes_partial_update"];
+        patch: operations["v1_catalog_playlists_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/refresh/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Re-fetch this playlist from its source and mirror its tracks (sync from
+         *     source — discards manual edits). 400 if it has no source origin.
+         */
+        post: operations["v1_catalog_playlists_refresh_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/remove-track/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Remove one track from this playlist and re-pack positions. The global
+         *     Track row is untouched — only the membership (PlaylistTrack) is dropped.
+         */
+        post: operations["v1_catalog_playlists_remove_track_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/reorder/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Move one track to an absolute position; renumber the rest 0..n-1. */
+        post: operations["v1_catalog_playlists_reorder_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/tracks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Paginated tracks for one playlist, in playlist order.
+         *
+         *     The detail endpoint returns metadata only; the client pages through the
+         *     tracks here so opening a long playlist doesn't inline every track.
+         *     `?search=` narrows to tracks whose title or artist matches (server-side).
+         */
+        get: operations["v1_catalog_playlists_tracks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Retrieve tracks; resolve a track's playback source (match), proxy its
+         *     audio (stream), and self-heal cover art (refresh-artwork).
+         */
+        get: operations["v1_catalog_tracks_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Retrieve tracks; resolve a track's playback source (match), proxy its
+         *     audio (stream), and self-heal cover art (refresh-artwork).
+         */
+        get: operations["v1_catalog_tracks_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/match/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Resolve this track's YouTube source on demand (lazy — used by Play).
+         *
+         *     Returns the existing active source if already matched (no wasted
+         *     YouTube search); otherwise resolves one; 404 if nothing fits.
+         */
+        post: operations["v1_catalog_tracks_match_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/{id}/refresh-artwork/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Self-heal a broken cover: clear it and re-resolve from the origin
+         *     (Spotify/Apple), falling back to the YouTube thumbnail. The frontend calls
+         *     this when an <img> fails to load (the CDN URL rotted).
+         */
+        post: operations["v1_catalog_tracks_refresh_artwork_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/tracks/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Global song search via `?q=`. Finds songs on Spotify (relevance order)
+         *     and upserts them as catalog Tracks; YouTube audio resolves on play.
+         */
+        get: operations["v1_catalog_tracks_search_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/clear/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_clear_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/jump/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Play a specific queue item now (click any row in the queue). */
+        post: operations["v1_rooms_jump_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/me/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        get: operations["v1_rooms_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/next/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_next_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/play/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Replace the queue with a list and play from `start_index`
+         *     (Play playlist / Play all).
+         */
+        post: operations["v1_rooms_play_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/play-now/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Play one song now (clicking a track) — inserts it at the cursor; does
+         *     not pull in the surrounding list.
+         */
+        post: operations["v1_rooms_play_now_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/play-playlist/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_play_playlist_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/previous/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_previous_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/queue/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Add one or more tracks to the queue (`play_next` → right after current). */
+        post: operations["v1_rooms_queue_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/remove/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Remove a single queue item. */
+        post: operations["v1_rooms_remove_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/save-as-playlist/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's own listening room (room-of-one). All actions operate on
+         *     `request.user`'s active room — there is no other-user access.
+         */
+        post: operations["v1_rooms_save_as_playlist_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/shuffle/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reshuffle the up-next items. */
+        post: operations["v1_rooms_shuffle_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/passkey-credential-ids/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["v1_users_passkey_credential_ids_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        Note: {
-            readonly id: number;
+        /** @description Create a named playlist from a set of track ids (e.g. a saved import). */
+        CreatePlaylist: {
             title: string;
-            body?: string;
-            /** Format: date-time */
-            readonly created_at: string;
-            /** Format: date-time */
-            readonly updated_at: string;
+            track_ids: string[];
+            /**
+             * Format: uri
+             * @default
+             */
+            artwork_url: string;
+            /** Format: uuid */
+            source_playlist?: string | null;
         };
-        PaginatedNoteList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["Note"][];
+        /** @description The result of a paste: loose tracks the caller can play/queue/save. */
+        ImportResult: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly title: string;
+            readonly track_count: number;
+            readonly tracks: components["schemas"]["Track"][];
+            readonly cover: string;
+            readonly note: string | null;
+            /** Format: uuid */
+            readonly source_playlist: string | null;
+            /** Format: uuid */
+            readonly already_saved: string | null;
         };
-        PaginatedWorkflowRunList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["WorkflowRun"][];
-        };
-        PatchedNote: {
-            readonly id?: number;
-            title?: string;
-            body?: string;
-            /** Format: date-time */
-            readonly created_at?: string;
-            /** Format: date-time */
-            readonly updated_at?: string;
+        Ingest: {
+            /** Format: uri */
+            url: string;
         };
         /**
-         * @description * `PENDING` - Pending
-         *     * `RUNNING` - Running
-         *     * `SUCCEEDED` - Succeeded
-         *     * `FAILED` - Failed
-         *     * `CANCELLED` - Cancelled
+         * @description * `context` - From context
+         *     * `queue` - User queue
          * @enum {string}
          */
-        StatusEnum: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
-        WorkflowRun: {
-            readonly id: number;
-            /** @description Hatchet workflow class name */
-            workflow: string;
-            readonly hatchet_run_id: string;
-            input?: unknown;
-            readonly status: components["schemas"]["StatusEnum"];
-            readonly error: string;
+        KindEnum: "context" | "queue";
+        /**
+         * @description * `video_id` - YouTube video id
+         *     * `storage_key` - Object-storage key
+         *     * `url` - Direct URL
+         * @enum {string}
+         */
+        LocatorKindEnum: "video_id" | "storage_key" | "url";
+        /**
+         * @description * `matched_auto` - Matched (auto)
+         *     * `matched_manual` - Matched (manual correction)
+         *     * `direct` - Direct (paste/upload, no search)
+         * @enum {string}
+         */
+        OriginEnum: "matched_auto" | "matched_manual" | "direct";
+        PaginatedPlaylistList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Playlist"][];
+        };
+        PaginatedPlaylistTrackList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PlaylistTrack"][];
+        };
+        PaginatedTrackList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Track"][];
+        };
+        /** @description Edit a playlist's own metadata (rename / describe / visibility). */
+        PatchedPlaylistUpdate: {
+            title?: string;
+            description?: string;
+            is_public?: boolean;
+        };
+        /** @description Replace the context with `track_ids` and play from `start_index`. */
+        Play: {
+            track_ids: string[];
+            /** @default 0 */
+            start_index: number;
+            /** @default  */
+            label: string;
+        };
+        /** @description Play a single track now (context becomes just that song). */
+        PlayNow: {
+            /** Format: uuid */
+            track_id: string;
+        };
+        PlayPlaylist: {
+            /** Format: uuid */
+            playlist_id: string;
+            /** Format: uuid */
+            start_track_id?: string | null;
+        };
+        PlaybackSource: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly source_code: string;
+            locator_kind: components["schemas"]["LocatorKindEnum"];
+            locator: string;
+            status?: components["schemas"]["StatusEnum"];
+            origin: components["schemas"]["OriginEnum"];
+            /** Format: double */
+            confidence?: number | null;
+            duration_delta_ms?: number | null;
+            title?: string;
+            uploader?: string;
+            duration_ms?: number | null;
+        };
+        Playlist: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            /** Format: uri */
+            artwork_url?: string;
+            is_public?: boolean;
+            readonly track_count: number;
             /** Format: date-time */
             readonly created_at: string;
+        };
+        PlaylistDetail: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            description?: string;
+            /** Format: uri */
+            artwork_url?: string;
+            is_public?: boolean;
             /** Format: date-time */
-            readonly updated_at: string;
+            readonly created_at: string;
+            readonly track_count: number;
+            /** Format: uuid */
+            readonly origin: string | null;
+        };
+        PlaylistTrack: {
+            position: number;
+            readonly track: components["schemas"]["Track"];
+        };
+        /** @description Edit a playlist's own metadata (rename / describe / visibility). */
+        PlaylistUpdate: {
+            title: string;
+            description?: string;
+            is_public?: boolean;
+        };
+        /** @description Add tracks to the user queue. `play_next` puts them at the head. */
+        Queue: {
+            track_ids: string[];
+            /** @default false */
+            play_next: boolean;
+        };
+        QueueItem: {
+            /** Format: uuid */
+            readonly id: string;
+            kind?: components["schemas"]["KindEnum"];
+            position: number;
+            readonly track: components["schemas"]["Track"];
+        };
+        /** @description Reference an existing queue/context item (for jump / remove). */
+        QueueItemRef: {
+            /** Format: uuid */
+            item_id: string;
+        };
+        /**
+         * @description The room as the player needs it: now-playing + two up-next layers —
+         *     `queue` (explicit "Next in queue") and `context` (the playlist remaining,
+         *     "Next from: …"). Already-played context tracks are not surfaced (they stay in
+         *     the context, reachable via Previous).
+         */
+        Room: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly current: components["schemas"]["Track"];
+            /** Format: uuid */
+            readonly current_item_id: string | null;
+            readonly is_playing: boolean;
+            readonly position_ms: number;
+            readonly context_label: string;
+            readonly queue: components["schemas"]["QueueItem"][];
+            readonly context: components["schemas"]["QueueItem"][];
+        };
+        SaveAsPlaylist: {
+            title: string;
+        };
+        /**
+         * @description * `active` - Active
+         *     * `candidate` - Candidate
+         *     * `dead` - Dead
+         *     * `replaced` - Replaced
+         *     * `rejected` - Rejected
+         * @enum {string}
+         */
+        StatusEnum: "active" | "candidate" | "dead" | "replaced" | "rejected";
+        Track: {
+            /** Format: uuid */
+            readonly id: string;
+            title: string;
+            primary_artist: string;
+            duration_ms?: number | null;
+            isrc?: string;
+            /** Format: uri */
+            artwork_url?: string;
+            album_name?: string;
+            is_explicit?: boolean;
+            /** Format: uri */
+            preview_url?: string;
+            /** Format: uri */
+            source_url?: string;
+            readonly active_source: components["schemas"]["PlaybackSource"];
         };
     };
     responses: never;
@@ -218,51 +787,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    v1_jobs_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedWorkflowRunList"];
-                };
-            };
-        };
-    };
-    v1_jobs_retrieve: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description A unique integer value identifying this workflow run. */
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkflowRun"];
-                };
-            };
-        };
-    };
-    v1_jobs_trigger_create: {
+    v1_catalog_ingest_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -271,56 +796,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WorkflowRun"];
-                "application/x-www-form-urlencoded": components["schemas"]["WorkflowRun"];
-                "multipart/form-data": components["schemas"]["WorkflowRun"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WorkflowRun"];
-                };
-            };
-        };
-    };
-    v1_notes_list: {
-        parameters: {
-            query?: {
-                /** @description A page number within the paginated result set. */
-                page?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedNoteList"];
-                };
-            };
-        };
-    };
-    v1_notes_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["Note"];
-                "application/x-www-form-urlencoded": components["schemas"]["Note"];
-                "multipart/form-data": components["schemas"]["Note"];
+                "application/json": components["schemas"]["Ingest"];
+                "application/x-www-form-urlencoded": components["schemas"]["Ingest"];
+                "multipart/form-data": components["schemas"]["Ingest"];
             };
         };
         responses: {
@@ -329,18 +807,66 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Note"];
+                    "application/json": components["schemas"]["ImportResult"];
                 };
             };
         };
     };
-    v1_notes_retrieve: {
+    v1_catalog_playlists_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaylistList"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlaylist"];
+                "application/x-www-form-urlencoded": components["schemas"]["CreatePlaylist"];
+                "multipart/form-data": components["schemas"]["CreatePlaylist"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Playlist"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_retrieve: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -351,26 +877,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Note"];
+                    "application/json": components["schemas"]["PlaylistDetail"];
                 };
             };
         };
     };
-    v1_notes_update: {
+    v1_catalog_playlists_update: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Note"];
-                "application/x-www-form-urlencoded": components["schemas"]["Note"];
-                "multipart/form-data": components["schemas"]["Note"];
+                "application/json": components["schemas"]["PlaylistUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlaylistUpdate"];
+                "multipart/form-data": components["schemas"]["PlaylistUpdate"];
             };
         };
         responses: {
@@ -379,18 +904,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Note"];
+                    "application/json": components["schemas"]["PlaylistUpdate"];
                 };
             };
         };
     };
-    v1_notes_destroy: {
+    v1_catalog_playlists_destroy: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
@@ -405,21 +929,20 @@ export interface operations {
             };
         };
     };
-    v1_notes_partial_update: {
+    v1_catalog_playlists_partial_update: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description A unique integer value identifying this note. */
-                id: number;
+                id: string;
             };
             cookie?: never;
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["PatchedNote"];
-                "application/x-www-form-urlencoded": components["schemas"]["PatchedNote"];
-                "multipart/form-data": components["schemas"]["PatchedNote"];
+                "application/json": components["schemas"]["PatchedPlaylistUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedPlaylistUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedPlaylistUpdate"];
             };
         };
         responses: {
@@ -428,8 +951,493 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Note"];
+                    "application/json": components["schemas"]["PlaylistUpdate"];
                 };
+            };
+        };
+    };
+    v1_catalog_playlists_refresh_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistDetail"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_remove_track_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_reorder_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_tracks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaylistTrackList"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTrackList"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Track"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_match_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaybackSource"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_refresh_artwork_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A UUID string identifying this track. */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Track"];
+                };
+            };
+        };
+    };
+    v1_catalog_tracks_search_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedTrackList"];
+                };
+            };
+        };
+    };
+    v1_rooms_clear_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_jump_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueItemRef"];
+                "application/x-www-form-urlencoded": components["schemas"]["QueueItemRef"];
+                "multipart/form-data": components["schemas"]["QueueItemRef"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_me_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_next_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_play_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Play"];
+                "application/x-www-form-urlencoded": components["schemas"]["Play"];
+                "multipart/form-data": components["schemas"]["Play"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_play_now_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlayNow"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlayNow"];
+                "multipart/form-data": components["schemas"]["PlayNow"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_play_playlist_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlayPlaylist"];
+                "application/x-www-form-urlencoded": components["schemas"]["PlayPlaylist"];
+                "multipart/form-data": components["schemas"]["PlayPlaylist"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_previous_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_queue_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Queue"];
+                "application/x-www-form-urlencoded": components["schemas"]["Queue"];
+                "multipart/form-data": components["schemas"]["Queue"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_remove_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueueItemRef"];
+                "application/x-www-form-urlencoded": components["schemas"]["QueueItemRef"];
+                "multipart/form-data": components["schemas"]["QueueItemRef"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_save_as_playlist_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAsPlaylist"];
+                "application/x-www-form-urlencoded": components["schemas"]["SaveAsPlaylist"];
+                "multipart/form-data": components["schemas"]["SaveAsPlaylist"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Playlist"];
+                };
+            };
+        };
+    };
+    v1_rooms_shuffle_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_users_passkey_credential_ids_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

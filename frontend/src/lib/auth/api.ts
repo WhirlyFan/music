@@ -169,8 +169,8 @@ export const auth = {
   /**
    * Fetch the PublicKeyCredentialCreationOptions for a new passkey. The
    * response (under `data.creation_options`) is the JSON-encoded options
-   * payload — pass it through `parseCreationOptionsFromJSON` (or
-   * @github/webauthn-json's create()) before handing to navigator.credentials.
+   * payload — `lib/auth/webauthn.ts#createPasskey` runs it through the native
+   * `PublicKeyCredential.parseCreationOptionsFromJSON` + the create() ceremony.
    *
    * 401 + `reauthenticate` flow when the session isn't fresh — call
    * `reauthenticate` first, then retry this GET.
@@ -179,7 +179,7 @@ export const auth = {
 
   /**
    * Finalize passkey enrollment. `credential` is the JSON-serialized result
-   * of navigator.credentials.create() (use credential.toJSON() or webauthn-json).
+   * of navigator.credentials.create() (the native credential.toJSON()).
    * `passwordless` enables sign-in with just the passkey (no password); leave
    * false to use the passkey only as a 2nd factor.
    */

@@ -6,7 +6,7 @@ For deploy specifics, see [`ops/deploy-render.md`](ops/deploy-render.md).
 ## Local dev — first time
 
 ```sh
-git clone <repo> && cd react-django-template
+git clone <repo> && cd music
 cp .env.example .env          # adjust if needed
 make bootstrap                # brings everything up + migrate + seed
 ```
@@ -43,6 +43,7 @@ See [decisions.md → Workflow](decisions.md#workflow--trunk-based-main-only).
 | `make mm` | `makemigrations` |
 | `make migrate` | `migrate` (admin role) |
 | `make seed` | Seed data (admin role; refuses if `DEBUG=False`) |
+| `make reset` | Rebuild the backend image + recreate its `.venv` volume. **Run this after changing backend deps** — a plain `up` keeps the stale venv. DB untouched. |
 | `make reset-db` | **DESTRUCTIVE.** Drop volume, recreate, migrate, seed |
 | `make shell` | Django shell (admin role) |
 | `make test` | `pytest` |
@@ -70,6 +71,8 @@ live in `frontend/.env` (also gitignored; example tracked).
 | `DATABASE_URL_ADMIN` | ✅ | Migrations + seed — `app_admin` role |
 | `WEB_CONCURRENCY` | optional | Gunicorn workers; default 3, lower on small instances |
 | `SENTRY_DSN` | optional | Opt-in error tracking |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | optional | Spotify ingest (metadata only); unset → "not configured" |
+| `YOUTUBE_POT_BASE_URL` | optional | URL of the bgutil PO-token sidecar (see [YouTube audio playback](#youtube-audio-playback)); unset → no PO tokens |
 | `HATCHET_CLIENT_TOKEN` | for worker | Generated via `make hatchet-token` |
 | `HATCHET_CLIENT_HOST_PORT` | for worker | `hatchet:7077` in compose |
 | `DJANGO_LOG_LEVEL` | optional | Default `INFO` |
@@ -79,6 +82,41 @@ live in `frontend/.env` (also gitignored; example tracked).
 |---|---|---|
 | `VITE_API_BASE` | ✅ | Usually `/api/v1` because we proxy same-origin |
 | `VITE_SENTRY_DSN` | optional | Frontend error tracking |
+
+## YouTube audio playback
+
+Tracks are resolved to a YouTube video and the audio is proxied through the
+backend (`apps/catalog/ingest/youtube.py` + `streaming.py`). YouTube actively
+fights extraction, so the chain has several pieces — all required together:
+
+| Piece | Where | Why |
+|---|---|---|
+| **yt-dlp** | backend dep (`uv`) | resolves the audio stream URL. **Bump frequently** — stale yt-dlp breaks as YouTube changes. |
+| **deno** | baked into `backend/Dockerfile` | JS runtime that runs the challenge solver |
+| **yt-dlp-ejs** | backend dep (via `yt-dlp[default]`) | the JS **signature/n-challenge** solver scripts. *Without deno + this, YouTube returns zero playable formats.* Keep its version in lockstep with yt-dlp. |
+| **curl_cffi** | backend dep (`yt-dlp[...,curl-cffi]`) | browser-TLS impersonation (auto-used where the arch provides targets) → dodges bot detection |
+| **bgutil PO-token provider** | `bgutil-ytdlp-pot-provider` plugin (backend dep) **+** the provider's Node server **co-located in the backend image** | fetches **PO (proof-of-origin) tokens** to avoid throttling. The plugin version **and** the `brainicism/bgutil-ytdlp-pot-provider` image tag (in `backend/Dockerfile`) must match. |
+
+Notes:
+- After bumping any of these (esp. yt-dlp/yt-dlp-ejs), run **`make reset`** — the
+  backend `.venv` is an anonymous volume that a plain `up` won't refresh.
+- **The PO-token provider runs co-located inside the backend container** — its
+  Node server (copied prebuilt from the bgutil image, incl. native `canvas`) is
+  started by `docker-entrypoint.sh` on `127.0.0.1:4416`, and `YOUTUBE_POT_BASE_URL`
+  is baked into the image. No separate/paid service; it shares the backend's
+  lifecycle (wakes/sleeps with it) in both dev and prod. It's best-effort — if the
+  server isn't up, yt-dlp just resolves without PO tokens (the solver still works).
+- Cookies are **not** used. If the bot wall returns under load, PO tokens are the
+  fix, not cookies.
+- **Audio format/client matters.** `resolve_audio` pins the progressive **itag-140
+  m4a/AAC** stream via the **`web_embedded`** player client (see
+  `apps/catalog/ingest/youtube.py`). The default clients now return only an **HLS
+  manifest** for `bestaudio` (YouTube's SABR rollout) — a plain `<audio>` element
+  can't play HLS in Chrome, and on Safari the visualizer's `createMediaElementSource`
+  can't tap a native-HLS stream, so playback goes **silent while the timeline keeps
+  advancing**. `web_embedded` is the one client whose progressive URL we can fetch
+  directly (no GVS PO token / visitor-data needed). If audio ever goes silent again,
+  check that resolution still returns a non-HLS `https` m4a URL first.
 
 ## Database migrations
 
@@ -119,32 +157,22 @@ by default).
 
 Two account layers:
 1. **`KNOWN_ACCOUNTS`** — `dev@example.com` (regular) + `admin@example.com`
-   (superuser with auto-enrolled TOTP). Always present after seed; flags +
-   passwords reset every run.
+   (superuser). Always present after seed; flags + passwords reset every run.
+   MFA is optional — neither account is enrolled; enroll from Settings if wanted.
 2. **Fake users** (`--fake-users N`, default 5) — anonymous via UserFactory.
    Makes the DB feel busy + lets you visually verify RLS isolation in
    `/admin/`.
 
-Every user gets fake notes via `seed_user_data()`. When you add new
-models, append the factory call there — both account types pick it up.
+Each fake user gets a few owned playlists via `seed_user_data()` — RLS-scoped,
+so owner isolation is visible in `/admin/`. The dev account gets the real
+Spotify/Apple seed playlists instead.
 
 Flags:
-- `--notes N` (default 10) — notes per user
+- `--playlists N` (default 2) — owned playlists per fake user
 - `--fake-users N` (default 5) — anonymous accounts
-- `--flush` — wipe notes + non-superuser users before seeding
+- `--flush` — wipe the catalog + non-superuser users before seeding
+- `--skip-real-playlists` — skip the network import of the real seed playlists
 - `--allow-in-prod` — escape hatch from the DEBUG guard (almost certainly wrong)
-
-### Why the seed bakes a fixed TOTP
-
-`admin@example.com` is `is_staff=True`. The `RequireMfaForStaffMiddleware`
-redirects `/admin/` to `/account/mfa` until they enroll. Without the seed
-enrolling TOTP, every fresh `make seed` leaves admin unable to reach
-`/admin/`. The fixed secret means devs can keep one authenticator-app
-entry across reseeds.
-
-The DEBUG guard ensures this can never run in prod. See
-[decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin)
-and [auth.md](auth.md).
 
 ## Health check
 
@@ -175,13 +203,11 @@ stdout. No in-process file rotation.
 
 ```sh
 make test                          # all backend tests
-docker compose exec backend pytest apps/notes/tests/test_rls.py -v
-docker compose exec backend pytest -k mfa
+docker compose exec backend pytest apps/catalog/tests/test_rls.py -v
 ```
 
-Backend test count today: **11**.
-- 6 in `apps/notes/tests/test_rls.py` (RLS load-bearing)
-- 5 in `apps/core/tests/test_staff_mfa_middleware.py` (MFA gate)
+RLS load-bearing tests live in `apps/catalog/tests/test_rls.py` (Playlist
+owner-isolation + public-read).
 
 ## Pre-push hook
 

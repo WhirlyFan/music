@@ -98,15 +98,15 @@ Six containers in dev:
 
 ## Request paths (illustrative)
 
-### `POST /api/v1/notes/` from the React app (logged in)
+### `POST /api/v1/catalog/playlists/` from the React app (logged in)
 
-1. Browser sends `POST /api/v1/notes/` to `localhost:80`
+1. Browser sends `POST /api/v1/catalog/playlists/` to `localhost:80`
 2. nginx matches `/api/*` → proxies to `backend:8000`
 3. Django middleware chain runs (see [auth.md](auth.md) + [rls.md](rls.md))
 4. DRF SessionAuthentication reads session cookie → resolves `request.user`
 5. `RLSContextMiddleware` sets Postgres session var `rls.user_id = request.user.id`
-6. `NoteViewSet.create()` runs; the `INSERT` happens under the `app_user` role
-7. RLS policy on the new row uses `current_setting('rls.user_id')` to set `owner_id`
+6. `PlaylistViewSet.create()` runs; the `INSERT` happens under the `app_user` role
+7. RLS lets the row through only because `created_by` matches `rls.user_id`
 8. Response → nginx → browser; session cookie unchanged
 
 ### `POST /api/jobs/<workflow>/trigger`
@@ -146,7 +146,7 @@ Six containers in dev:
 │   ├── manage.py
 │   ├── docker-entrypoint.sh    # migrates as admin role, then exec gunicorn/runserver
 │   ├── config/                 # Django project (settings, urls, asgi/wsgi)
-│   └── apps/                   # users, core, notes, jobs
+│   └── apps/                   # users, core, catalog, rooms
 ├── frontend/                   # React + Vite
 │   ├── Dockerfile              # multi-stage; prod stage = nginx + dist/
 │   ├── package.json

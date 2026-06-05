@@ -11,12 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as NotesRouteImport } from './routes/notes'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as DocsRouteImport } from './routes/docs'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as DocsIndexRouteImport } from './routes/docs/index'
-import { Route as DocsSplatRouteImport } from './routes/docs/$'
+import { Route as PlaylistsIndexRouteImport } from './routes/playlists/index'
+import { Route as PlaylistsPlaylistIdRouteImport } from './routes/playlists/$playlistId'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
 import { Route as AccountMfaRouteImport } from './routes/account/mfa'
 import { Route as AccountEmailRouteImport } from './routes/account/email'
@@ -40,9 +40,9 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
-const NotesRoute = NotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -50,9 +50,9 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DocsRoute = DocsRouteImport.update({
-  id: '/docs',
-  path: '/docs',
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -60,15 +60,15 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DocsIndexRoute = DocsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => DocsRoute,
+const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
+  id: '/playlists/',
+  path: '/playlists/',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const DocsSplatRoute = DocsSplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => DocsRoute,
+const PlaylistsPlaylistIdRoute = PlaylistsPlaylistIdRouteImport.update({
+  id: '/playlists/$playlistId',
+  path: '/playlists/$playlistId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AccountVerifyEmailRoute = AccountVerifyEmailRouteImport.update({
   id: '/account/verify-email',
@@ -134,16 +134,16 @@ const AccountPasswordResetKeyKeyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/docs': typeof DocsRouteWithChildren
+  '/import': typeof ImportRoute
   '/login': typeof LoginRoute
-  '/notes': typeof NotesRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
-  '/docs/$': typeof DocsSplatRoute
-  '/docs/': typeof DocsIndexRoute
+  '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -156,13 +156,14 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/import': typeof ImportRoute
   '/login': typeof LoginRoute
-  '/notes': typeof NotesRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
-  '/docs/$': typeof DocsSplatRoute
-  '/docs': typeof DocsIndexRoute
+  '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/playlists': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -176,16 +177,16 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/docs': typeof DocsRouteWithChildren
+  '/import': typeof ImportRoute
   '/login': typeof LoginRoute
-  '/notes': typeof NotesRoute
+  '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
-  '/docs/$': typeof DocsSplatRoute
-  '/docs/': typeof DocsIndexRoute
+  '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -200,16 +201,16 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/docs'
+    | '/import'
     | '/login'
-    | '/notes'
+    | '/search'
     | '/settings'
     | '/signup'
     | '/account/email'
     | '/account/mfa'
     | '/account/verify-email'
-    | '/docs/$'
-    | '/docs/'
+    | '/playlists/$playlistId'
+    | '/playlists/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -222,13 +223,14 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/import'
     | '/login'
-    | '/notes'
+    | '/search'
     | '/settings'
     | '/signup'
     | '/account/email'
-    | '/docs/$'
-    | '/docs'
+    | '/playlists/$playlistId'
+    | '/playlists'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -241,16 +243,16 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
-    | '/docs'
+    | '/import'
     | '/login'
-    | '/notes'
+    | '/search'
     | '/settings'
     | '/signup'
     | '/account/email'
     | '/account/mfa'
     | '/account/verify-email'
-    | '/docs/$'
-    | '/docs/'
+    | '/playlists/$playlistId'
+    | '/playlists/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -264,14 +266,16 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  DocsRoute: typeof DocsRouteWithChildren
+  ImportRoute: typeof ImportRoute
   LoginRoute: typeof LoginRoute
-  NotesRoute: typeof NotesRoute
+  SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
   AccountEmailRoute: typeof AccountEmailRoute
   AccountMfaRoute: typeof AccountMfaRouteWithChildren
   AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
+  PlaylistsPlaylistIdRoute: typeof PlaylistsPlaylistIdRoute
+  PlaylistsIndexRoute: typeof PlaylistsIndexRoute
   AccountPasswordChangeRoute: typeof AccountPasswordChangeRoute
   AccountPasswordForgotRoute: typeof AccountPasswordForgotRoute
   AccountPasswordResetKeyKeyRoute: typeof AccountPasswordResetKeyKeyRoute
@@ -293,11 +297,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/notes': {
-      id: '/notes'
-      path: '/notes'
-      fullPath: '/notes'
-      preLoaderRoute: typeof NotesRouteImport
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -307,11 +311,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/docs': {
-      id: '/docs'
-      path: '/docs'
-      fullPath: '/docs'
-      preLoaderRoute: typeof DocsRouteImport
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -321,19 +325,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/docs/': {
-      id: '/docs/'
-      path: '/'
-      fullPath: '/docs/'
-      preLoaderRoute: typeof DocsIndexRouteImport
-      parentRoute: typeof DocsRoute
+    '/playlists/': {
+      id: '/playlists/'
+      path: '/playlists'
+      fullPath: '/playlists/'
+      preLoaderRoute: typeof PlaylistsIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/docs/$': {
-      id: '/docs/$'
-      path: '/$'
-      fullPath: '/docs/$'
-      preLoaderRoute: typeof DocsSplatRouteImport
-      parentRoute: typeof DocsRoute
+    '/playlists/$playlistId': {
+      id: '/playlists/$playlistId'
+      path: '/playlists/$playlistId'
+      fullPath: '/playlists/$playlistId'
+      preLoaderRoute: typeof PlaylistsPlaylistIdRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/account/verify-email': {
       id: '/account/verify-email'
@@ -422,18 +426,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface DocsRouteChildren {
-  DocsSplatRoute: typeof DocsSplatRoute
-  DocsIndexRoute: typeof DocsIndexRoute
-}
-
-const DocsRouteChildren: DocsRouteChildren = {
-  DocsSplatRoute: DocsSplatRoute,
-  DocsIndexRoute: DocsIndexRoute,
-}
-
-const DocsRouteWithChildren = DocsRoute._addFileChildren(DocsRouteChildren)
-
 interface AccountMfaRouteChildren {
   AccountMfaRecoveryCodesRoute: typeof AccountMfaRecoveryCodesRoute
   AccountMfaTotpRoute: typeof AccountMfaTotpRoute
@@ -467,14 +459,16 @@ const AccountVerifyEmailRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  DocsRoute: DocsRouteWithChildren,
+  ImportRoute: ImportRoute,
   LoginRoute: LoginRoute,
-  NotesRoute: NotesRoute,
+  SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   AccountEmailRoute: AccountEmailRoute,
   AccountMfaRoute: AccountMfaRouteWithChildren,
   AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,
+  PlaylistsPlaylistIdRoute: PlaylistsPlaylistIdRoute,
+  PlaylistsIndexRoute: PlaylistsIndexRoute,
   AccountPasswordChangeRoute: AccountPasswordChangeRoute,
   AccountPasswordForgotRoute: AccountPasswordForgotRoute,
   AccountPasswordResetKeyKeyRoute: AccountPasswordResetKeyKeyRoute,

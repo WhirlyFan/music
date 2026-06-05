@@ -61,7 +61,7 @@ def test_anonymous_api_request_not_gated(db):
     IsAuthenticated permission returns 401. The verified-email gate is
     only this middleware's concern when the user IS authenticated."""
     client = Client()
-    response = client.get("/api/v1/notes/")
+    response = client.get("/api/v1/catalog/playlists/")
     # 401 (or 403) from DRF, not our 403 with email_verification_required
     if response.status_code == 403:
         body = json.loads(response.content)
@@ -72,7 +72,7 @@ def test_anonymous_api_request_not_gated(db):
 def test_verified_user_can_reach_api(verified_user):
     client = Client()
     client.force_login(verified_user)
-    response = client.get("/api/v1/notes/")
+    response = client.get("/api/v1/catalog/playlists/")
     # Should reach the view — 200 or any non-403-email-required
     if response.status_code == 403:
         body = json.loads(response.content)
@@ -83,7 +83,7 @@ def test_verified_user_can_reach_api(verified_user):
 def test_unverified_user_blocked_from_api(unverified_user):
     client = Client()
     client.force_login(unverified_user)
-    response = client.get("/api/v1/notes/")
+    response = client.get("/api/v1/catalog/playlists/")
     assert response.status_code == 403
     body = json.loads(response.content)
     assert body["detail"] == "email_verification_required"

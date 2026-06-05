@@ -2,7 +2,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
 # Differences from dev:
-#   - backend / worker run gunicorn + DJANGO_SETTINGS_MODULE=config.settings.prod
+#   - backend runs gunicorn + DJANGO_SETTINGS_MODULE=config.settings.prod
 #   - frontend builds the React bundle into a single nginx-based image
 #     (Dockerfile target=prod). That image becomes the public entry point on :80.
 #   - The dev `nginx` service is disabled — its job (proxying to Vite + Django)
@@ -23,18 +23,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-
-  worker:
-    environment:
-      DJANGO_DEBUG: "false"
-      DJANGO_SETTINGS_MODULE: config.settings.prod
-    volumes: []
-    depends_on:
-      backend:
-        # Worker waits until backend is up — guarantees migrations have run.
-        condition: service_healthy
-      hatchet:
-        condition: service_started
 
   # Single image that serves the built React bundle AND reverse-proxies /api/*.
   # In prod this REPLACES both the dev `frontend` (Vite) and `nginx` services.

@@ -10,4 +10,6 @@ urlpatterns = [
         views.passkey_credential_ids,
         name="passkey-credential-ids",
     ),
+    path("invite/", views.invite, name="invite"),
+    path("invite/redeem/", views.redeem_invite, name="redeem-invite"),
 ]

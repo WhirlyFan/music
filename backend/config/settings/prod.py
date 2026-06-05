@@ -50,12 +50,9 @@ MIDDLEWARE = [
 # ENFORCED. We audited every HTML surface Django serves under this exact policy:
 #   - /admin/             — all assets same-origin /static/, no inline scripts ✓
 #   - DRF browsable API   — same-origin /static/, no inline scripts ✓
-#   - /api/docs/ Swagger  — made CSP-clean by serving assets from /static/
-#                           (drf-spectacular-sidecar) + the bootstrap as an
-#                           external file (SpectacularSwaggerSplitView), so no
-#                           CDN and no inline <script>. See base.py + urls.py.
-# `style-src` keeps 'unsafe-inline' because admin/Swagger widgets use inline
-# style attributes (styles can't run code, so this is low-risk). Everything
+# (No Swagger UI is served — only the raw /api/schema/ JSON, used for codegen.)
+# `style-src` keeps 'unsafe-inline' because admin widgets use inline style
+# attributes (styles can't run code, so this is low-risk). Everything
 # else is locked to 'self'. If you add a surface that needs an external script
 # or connects to another origin, widen the specific directive — or scope it to
 # that view with csp.decorators.csp_update rather than loosening the global.
@@ -63,7 +60,7 @@ CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": [SELF],
         "script-src": [SELF],
-        "style-src": [SELF, "'unsafe-inline'"],  # admin + Swagger inline styles
+        "style-src": [SELF, "'unsafe-inline'"],  # admin inline styles
         "img-src": [SELF, "data:"],
         "font-src": [SELF],
         "connect-src": [SELF],

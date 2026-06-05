@@ -9,6 +9,14 @@
 
 set -e
 
+# Start the co-located PO-token provider (internal :4416) in the background.
+# Best-effort: if it isn't up, yt-dlp just resolves without PO tokens (the
+# bundled solver still works), so a failure here never blocks playback.
+if [ -f /opt/bgutil/build/main.js ]; then
+  echo "[entrypoint] starting PO-token provider on :4416…"
+  node /opt/bgutil/build/main.js >/tmp/bgutil.log 2>&1 &
+fi
+
 if [ -n "$DATABASE_URL_ADMIN" ]; then
   echo "[entrypoint] running migrations as admin role…"
   DATABASE_URL="$DATABASE_URL_ADMIN" python manage.py migrate --noinput

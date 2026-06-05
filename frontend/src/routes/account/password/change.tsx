@@ -9,11 +9,11 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { useChangePassword } from '@/lib/auth/hooks'
+import { useChangePassword } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/account/password/change')({
   component: ChangePasswordPage,
-  head: () => ({ meta: [{ title: 'Change password — react-django-template' }] }),
+  head: () => ({ meta: [{ title: 'Change password — music' }] }),
 })
 
 const schema = z

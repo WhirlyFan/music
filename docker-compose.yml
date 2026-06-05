@@ -1,6 +1,6 @@
 # Pin the compose project name so containers/volumes stay namespaced as
-# `react-django-template_*` regardless of which directory the file lives in.
-name: react-django-template
+# `music_*` regardless of which directory the file lives in.
+name: music
 
 # Shared logging config — applied to every long-running service so logs
 # never fill the host disk. The container runtime captures stdout/stderr;
@@ -13,7 +13,7 @@ x-logging: &default-logging
 
 services:
   db:
-    image: postgres:17.10-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     command: postgres -c 'max_connections=200'
     environment:
@@ -21,7 +21,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a major-version subdir under
+      # /var/lib/postgresql (NOT /data) — mount the parent, per the official image.
+      - postgres_data:/var/lib/postgresql
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"
@@ -30,10 +32,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      # Postgres can be slow to come up on first boot (running init.sql,
-      # then user-creation, then becoming ready). Skip the healthcheck
-      # retry counter during this warm-up so the container isn't marked
-      # unhealthy before it finishes starting.
       start_period: 30s
     logging: *default-logging
 
@@ -49,31 +47,6 @@ services:
       - "1025:1025"   # SMTP listener
     logging: *default-logging
 
-  hatchet:
-    image: ghcr.io/hatchet-dev/hatchet/hatchet-lite:v0.86.29
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: "postgresql://app_admin:app_admin@db:5432/hatchetdb?sslmode=disable"
-      SERVER_AUTH_COOKIE_DOMAIN: localhost
-      SERVER_AUTH_COOKIE_INSECURE: "t"
-      SERVER_GRPC_BIND_ADDRESS: "0.0.0.0"
-      SERVER_GRPC_INSECURE: "t"
-      SERVER_GRPC_BROADCAST_ADDRESS: hatchet:7077
-      SERVER_GRPC_PORT: "7077"
-      SERVER_URL: http://localhost:8888
-      SERVER_AUTH_SET_EMAIL_VERIFIED: "t"
-      SERVER_DEFAULT_ENGINE_VERSION: "V1"
-      SERVER_INTERNAL_CLIENT_INTERNAL_GRPC_BROADCAST_ADDRESS: hatchet:7077
-    ports:
-      - "8888:8888"  # admin UI
-      - "7077:7077"  # gRPC
-    volumes:
-      - hatchet_config:/config
-    logging: *default-logging
-
   backend:
     build:
       context: ./backend
@@ -84,19 +57,22 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+    # Secrets are fetched from Doppler *inside* the container at startup (see the
+    # `entrypoint` below), so they live only in the process — never in a file and
+    # never in this compose allowlist. Add a var in Doppler → it's here on the
+    # next `make up`, no edits. We only pass the bootstrap DOPPLER_* (from your
+    # shell, via `make up`) plus non-secret dev defaults; `doppler run` overrides
+    # the latter if the same key exists in Doppler.
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      DATABASE_URL_ADMIN: ${DATABASE_URL_ADMIN}
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DOPPLER_TOKEN: ${DOPPLER_TOKEN:-}
+      DOPPLER_PROJECT: ${DOPPLER_PROJECT:-}
+      DOPPLER_CONFIG: ${DOPPLER_CONFIG:-}
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.dev}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
       DJANGO_CORS_ALLOWED_ORIGINS: ${DJANGO_CORS_ALLOWED_ORIGINS:-http://localhost}
-      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
-      HATCHET_CLIENT_HOST_PORT: hatchet:7077
-      HATCHET_CLIENT_TLS_STRATEGY: none
-      SENTRY_DSN: ${SENTRY_DSN:-}
-      MFA_FIELD_ENCRYPTION_KEY: ${MFA_FIELD_ENCRYPTION_KEY}
+      # YOUTUBE_POT_BASE_URL is baked into the image (http://127.0.0.1:4416) — the
+      # PO-token provider runs co-located inside the backend container. Override
+      # here only to point at an external provider.
     volumes:
       - ./backend:/app
       # Anonymous volume to preserve the Linux .venv built into the image.
@@ -104,32 +80,11 @@ services:
       - /app/.venv
     ports:
       - "8000:8000"
+    # `doppler run` wraps the migrate-then-serve entrypoint so BOTH the migration
+    # step and the server see the fetched secrets. (Prod/Render doesn't override
+    # the entrypoint — it injects env directly, no Doppler in the loop.)
+    entrypoint: ["doppler", "run", "--", "/app/docker-entrypoint.sh"]
     command: python manage.py runserver 0.0.0.0:8000
-    logging: *default-logging
-
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      db:
-        condition: service_healthy
-      hatchet:
-        condition: service_started
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
-      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.dev}
-      HATCHET_CLIENT_TOKEN: ${HATCHET_CLIENT_TOKEN:-}
-      HATCHET_CLIENT_HOST_PORT: hatchet:7077
-      HATCHET_CLIENT_TLS_STRATEGY: none
-      MFA_FIELD_ENCRYPTION_KEY: ${MFA_FIELD_ENCRYPTION_KEY}
-    volumes:
-      - ./backend:/app
-      - /app/.venv
-    command: python manage.py hatchet_worker
     logging: *default-logging
 
   frontend:
@@ -143,12 +98,6 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-      # Mount the repo-root `docs/` inside the frontend's project root at
-      # `/app/_docs` so Vite's `import.meta.glob('/_docs/**/*.md')` can
-      # resolve it as a project-root-relative path. Read-only — the SPA
-      # only reads. (The `_docs` name avoids collision with any future
-      # `frontend/docs/` directory.)
-      - ./docs:/app/_docs:ro
     ports:
       - "5173:5173"
     command: pnpm dev --host
@@ -168,4 +117,3 @@ services:
 
 volumes:
   postgres_data:
-  hatchet_config:

@@ -24,7 +24,7 @@ The `nginx` service binds to `localhost:80` and routes by URL prefix:
 |---|---|
 | `/api/*`, `/admin/*`, `/_allauth/*`, `/health/`, `/static/*` | `backend:8000` (Django + DRF) |
 | `/hatchet-ui/*` (optional) | `hatchet:8080` (Hatchet admin UI) |
-| Everything else (`/`, `/notes`, `/login`, bundles) | `frontend:5173` (Vite dev server) |
+| Everything else (`/`, `/playlists`, `/login`, bundles) | `frontend:5173` (Vite dev server) |
 | WebSocket Upgrade headers | `frontend:5173` (Vite HMR) |
 
 The *whole point* is **same-origin**: the browser only ever talks to

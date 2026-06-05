@@ -24,10 +24,21 @@ Safety:
 from __future__ import annotations
 
 from allauth.mfa.models import Authenticator
-from rest_framework import permissions
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework import permissions, serializers, status
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
+
+from .invites import InviteError, create_invitation, redeem_invitation
+
+
+class InviteRateThrottle(UserRateThrottle):
+    """Caps how many invites one member can send (keyed on user id). An invite triggers
+    an outbound email, so an uncapped endpoint is an email-abuse / quota-burn vector.
+    Rate set by DEFAULT_THROTTLE_RATES['invites']."""
+
+    scope = "invites"
 
 
 @api_view(["GET"])
@@ -38,3 +49,43 @@ def passkey_credential_ids(request: Request) -> Response:
         type=Authenticator.Type.WEBAUTHN,
     )
     return Response({row.pk: (row.data or {}).get("credential", {}).get("id") for row in rows})
+
+
+class _InviteSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+@throttle_classes([InviteRateThrottle])
+def invite(request: Request) -> Response:
+    """Any logged-in member invites an email to the (invite-only) platform: creates a
+    pending invitation and emails the signup link. 400 if the email is already a member."""
+    s = _InviteSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    email = s.validated_data["email"]
+    try:
+        create_invitation(email, invited_by=request.user)
+    except InviteError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"email": email.strip().lower()}, status=status.HTTP_201_CREATED)
+
+
+class _RedeemSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def redeem_invite(request: Request) -> Response:
+    """Anonymous (pre-signup): the invite link redeems its token here, which stashes
+    the email as verified for the imminent signup and returns it for the form to
+    pre-fill. 404 if the token is invalid/expired/used (the SPA then falls back to a
+    normal signup + email verification)."""
+    s = _RedeemSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    try:
+        inv = redeem_invitation(s.validated_data["token"], request)
+    except InviteError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"email": inv.email})

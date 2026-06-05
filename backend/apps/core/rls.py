@@ -30,3 +30,14 @@ def owner_scoped_policy(
             f"OR current_setting('rls.bypass', true) = 'true'"
         ),
     )
+
+
+def public_readable_policy(*, name: str = "public_readable") -> CustomPolicy:
+    """SELECT-only policy: a row is *additionally* readable when `is_public`.
+
+    Postgres ORs permissive policies for the same command, so pairing this with
+    `owner_scoped_policy` gives reads = "owner OR is_public OR bypass" while
+    writes (covered only by the owner policy) stay "owner OR bypass". The model
+    must have a boolean `is_public` column.
+    """
+    return CustomPolicy(name=name, expression="is_public", operation="SELECT")

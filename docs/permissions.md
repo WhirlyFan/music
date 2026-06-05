@@ -34,7 +34,7 @@ Both flags are independent. Combinations:
 
 ### In the app (the SPA + DRF API)
 **Neither flag does anything by default.** A staff or superuser logged into
-the SPA sees the same UI, same data scoping, same RLS-filtered notes as a
+the SPA sees the same UI, same data scoping, same RLS-filtered playlists as a
 regular user. To make staff/superuser-only features in the app, you'd
 have to:
 - Add `is_staff` to the serializer + `useSession()`
@@ -55,15 +55,11 @@ This is gated by `is_staff` (not `is_superuser`) so a Support group with
 `view_note` perm can read every user's notes for support reasons, without
 needing the full superuser footgun.
 
-## MFA staff gate
+## MFA
 
-Independent of perms: `is_staff` users hitting `/admin/` must have at least
-one enrolled MFA authenticator. See [auth.md](auth.md) +
-[`apps/core/middleware.py`](../backend/apps/core/middleware.py).
-
-The MFA gate fires for any `is_staff` user regardless of how they
-authenticated — password, social, eventual SAML. It's a *role-scoped*
-policy, not an *auth-method* policy. See [decisions.md → MFA policy](decisions.md#mfa-policy-optional-for-users-required-for-admin).
+MFA is **fully optional** — there is no staff/`/admin/` gate. Users enroll
+voluntarily from Settings. See [auth.md](auth.md) and
+[decisions.md → MFA policy](decisions.md#mfa-policy-fully-optional-opt-in-for-everyone).
 
 ## The conventional pattern
 
@@ -87,12 +83,12 @@ to all Notes. **Object-level** perms are per-row: "user X can edit Note
 
 ### Why deferred
 
-RLS already enforces owner isolation at the DB layer. For the day-1 slice
-(every user sees only their own notes), object-level perms add nothing
+RLS already enforces owner isolation at the DB layer. For the current model
+(every user sees only their own playlists), object-level perms add nothing
 beyond a junction table and a join on every check.
 
-The *trigger* to add them is a **sharing** feature: "share this note with
-user Y." We don't have one yet. Premature.
+The *trigger* to add them is a **sharing** feature: "share this playlist with
+user Y" (beyond the `is_public` read flag). We don't have one yet. Premature.
 
 ### Decision matrix when we do add them
 

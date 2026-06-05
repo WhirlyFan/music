@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build using uv. Final image contains only runtime deps.
 
-FROM python:3.13.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -26,12 +26,34 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY . .
 
 # ---- Final runtime stage ----
-FROM python:3.13.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
-# Postgres client lib needed by psycopg
+# libpq5: Postgres client lib needed by psycopg.
+# ffmpeg: required by yt-dlp to extract/convert audio.
+# libexpat1: the only system lib the co-located PO-token server's bundled
+#            `canvas` needs that isn't vendored alongside it.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq5 && \
+    apt-get install -y --no-install-recommends libpq5 ffmpeg libexpat1 && \
     rm -rf /var/lib/apt/lists/*
+
+# Doppler CLI (static Go binary, pinned). Dev wraps startup in `doppler run` so
+# secrets are fetched from Doppler into the process env at boot — never a file,
+# never the compose allowlist. Unused in prod (Render injects env directly).
+COPY --from=dopplerhq/cli:3.76.0 /bin/doppler /usr/local/bin/doppler
+
+# deno: JS runtime yt-dlp uses to solve YouTube's signature / n challenges
+# (with `remote_components=ejs:github`). Without it, YouTube returns no playable
+# audio formats. Pinned for reproducibility.
+COPY --from=denoland/deno:bin-2.8.2 /deno /usr/local/bin/deno
+
+# bgutil PO-token provider — co-located IN this image (its Node binary + the
+# prebuilt server, incl. the native `canvas` it needs). The entrypoint starts it
+# on internal :4416; yt-dlp's bgutil plugin fetches YouTube PO tokens from it to
+# avoid throttling. Running it in-container (vs a separate service) means it's
+# free and shares the backend's lifecycle — wakes/sleeps with it. Keep this image
+# tag in lockstep with the bgutil-ytdlp-pot-provider plugin in pyproject.toml.
+COPY --from=brainicism/bgutil-ytdlp-pot-provider:1.3.1 /usr/local/bin/node /usr/local/bin/node
+COPY --from=brainicism/bgutil-ytdlp-pot-provider:1.3.1 /app /opt/bgutil
 
 # Non-root user
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
@@ -44,6 +66,7 @@ COPY --from=builder --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    YOUTUBE_POT_BASE_URL=http://127.0.0.1:4416 \
     DJANGO_SETTINGS_MODULE=config.settings.prod
 
 # --- Collect static files into STATIC_ROOT so WhiteNoise can serve them.

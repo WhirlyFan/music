@@ -1,6 +1,33 @@
+import hashlib
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.db import models
+from django.utils import timezone
+
+INVITE_TTL = timedelta(days=14)
+
+
+def _hash_token(raw: str) -> str:
+    """SHA-256 of an invite token. The raw token lives only in the emailed link; the DB
+    stores only this hash, so a leaked database can't be used to redeem invites (OWASP —
+    treat invite tokens like password-reset tokens). The token is high-entropy (256-bit),
+    so a plain unsalted hash is sufficient — no per-token salt/stretching needed."""
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _invite_token_hash() -> str:
+    """Field default: a fresh unguessable hash whose raw token is intentionally
+    discarded. `Invitation.issue_token()` overrides this when a redeemable link is
+    needed; the default just keeps directly-created rows (e.g. in tests) valid + unique."""
+    return _hash_token(secrets.token_urlsafe(32))
+
+
+def _invite_expiry():
+    return timezone.now() + INVITE_TTL
+
 
 # Letters, numbers, underscore, dash. 3-30 chars. Same pattern enforced by
 # the frontend Zod schema so client + server agree.
@@ -84,3 +111,83 @@ class User(AbstractUser):
         """Best human-readable label: 'First Last' if both set, else username."""
         full = f"{self.first_name} {self.last_name}".strip()
         return full or self.username
+
+
+class Invitation(models.Model):
+    """An invite to join the platform. Any logged-in member can create one for an email;
+    while the `invite_only` waffle switch is on, the custom AccountAdapter lets *only*
+    emails with a pending (unaccepted, unexpired) invitation sign up. Marked accepted
+    when that email signs up. The first/admin user is bootstrapped via `createsuperuser`,
+    which bypasses the signup flow (and thus this gate)."""
+
+    email = models.EmailField(db_index=True)
+    # SHA-256 of the invite-link token (the raw token is emailed, never stored). 64 hex
+    # chars. The link doesn't expose the email in the URL either.
+    token_hash = models.CharField(
+        max_length=64, unique=True, default=_invite_token_hash, editable=False
+    )
+    invited_by = models.ForeignKey(
+        "users.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_invitations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(default=_invite_expiry)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"invite:{self.email}"
+
+    @property
+    def is_pending(self) -> bool:
+        return self.accepted_at is None and self.expires_at > timezone.now()
+
+    def issue_token(self) -> str:
+        """Mint a fresh raw token, store only its hash on this (unsaved) instance, and
+        return the raw token for the emailed link. Re-issuing on resend rotates the
+        token, invalidating any older link. The caller must save() afterwards."""
+        raw = secrets.token_urlsafe(32)
+        self.token_hash = _hash_token(raw)
+        return raw
+
+    @classmethod
+    def pending_for(cls, email: str):
+        """The current pending invitation for `email` (case-insensitive), or None."""
+        return (
+            cls.objects.filter(
+                email__iexact=email.strip(),
+                accepted_at__isnull=True,
+                expires_at__gt=timezone.now(),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+    @classmethod
+    def pending_by_token(cls, raw_token: str):
+        """The pending invitation whose token hashes to `raw_token`, or None. Constant
+        work regardless of validity (single indexed hash lookup)."""
+        return cls.objects.filter(
+            token_hash=_hash_token(raw_token),
+            accepted_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        ).first()
+
+    @classmethod
+    def permits_signup(cls, email: str) -> bool:
+        """Whether `email` is allowed to sign up under the invite-only gate: it has an
+        invitation that is either still pending (unaccepted + unexpired) *or* already
+        accepted. The "accepted" case matters because allauth re-validates the email
+        during post-signup setup (after `save_user` has marked the invite accepted) — a
+        stricter pending-only check would reject the email mid-signup and drop the
+        verified-email stash. An expired, never-accepted invite does not qualify."""
+        return (
+            cls.objects.filter(email__iexact=email.strip())
+            .filter(models.Q(accepted_at__isnull=False) | models.Q(expires_at__gt=timezone.now()))
+            .exists()
+        )

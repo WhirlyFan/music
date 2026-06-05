@@ -2,7 +2,7 @@
 
 1. Enable RLS + create policies for every RLSModel. (django-rls's own
    post_migrate handler silently no-ops when an app's dotted name like
-   `apps.notes` doesn't match its label `notes` — so we do it ourselves.)
+   `apps.catalog` doesn't match its label `catalog` — so we do it ourselves.)
 2. Grant `app_user` table-level CRUD on every table that admin just
    created. RLS policies still apply on top — app_user can act on rows
    only where the policy permits. This makes the dev DB *and* every

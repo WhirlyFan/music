@@ -14,7 +14,7 @@ type ThemeStore = {
   setTheme: (theme: Theme) => void
 }
 
-const STORAGE_KEY = 'rdt-theme' // react-django-template
+const STORAGE_KEY = 'music-theme' // music
 
 export const useThemeStore = create<ThemeStore>()(
   persist(

@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { UserMenu } from '@/components/layout/user-menu'
-import { useSession } from '@/lib/auth/hooks'
+import { useSession } from '@/lib/hooks/queries/auth'
 
 type SessionUser = {
   email?: string
@@ -28,29 +28,20 @@ export function AppHeader() {
 
   return (
     <header className="border-border bg-card text-card-foreground border-b">
-      <nav className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-6">
+      <nav className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:gap-6 sm:px-6">
         <Link to="/" className="font-semibold tracking-tight">
-          react-django-template
+          music
         </Link>
 
         {isAuthed && (
           <Link
-            to="/notes"
+            to="/playlists"
             className="text-muted-foreground hover:text-foreground text-sm"
             activeProps={{ className: 'text-foreground font-medium' }}
           >
-            Notes
+            playlists
           </Link>
         )}
-
-        {/* Docs are public — anyone can read them without signing in. */}
-        <Link
-          to="/docs"
-          className="text-muted-foreground hover:text-foreground text-sm"
-          activeProps={{ className: 'text-foreground font-medium' }}
-        >
-          Docs
-        </Link>
 
         <div className="ml-auto flex items-center gap-2">
           {/* Theme toggle lives outside the auth-state branch so it's always
