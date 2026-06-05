@@ -114,6 +114,14 @@ services:
     healthCheckPath: /health/      # used by Render's edge to gate traffic
     autoDeploy: true
     envVars:
+      # Pin the primary HTTP port. The image ALSO runs the co-located PO-token
+      # provider on :4416; without an explicit PORT, Render's auto-detection
+      # preferred 4416 (it opens first and answers HTTP 200) and restart-looped
+      # health-checking the wrong port. Gunicorn binds ${PORT:-8000}, so pinning
+      # PORT here makes Render route to gunicorn and treat 4416 as a side port.
+      - key: PORT
+        value: "8000"
+
       # ── Django core ─────────────────────────────────────────────────────
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings.prod

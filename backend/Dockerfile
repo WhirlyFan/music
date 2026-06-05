@@ -99,9 +99,14 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 #                                 `app` user can't create (read-only /app) — it
 #                                 logs "Permission denied" on every boot. We don't
 #                                 use the control interface, so disable it.
+#   --bind 0.0.0.0:${PORT:-8000}  Bind the platform-assigned port. Render injects PORT
+#                                 (we also pin it in render.yaml). Hardcoding 8000 made
+#                                 Render's port detection prefer the co-located PO-token
+#                                 provider on :4416 and time out / restart-loop. Defaults
+#                                 to 8000 for local docker-compose (which maps 8000).
 ENV WEB_CONCURRENCY=3
 CMD ["sh", "-c", "gunicorn config.wsgi:application \
-    --bind 0.0.0.0:8000 \
+    --bind 0.0.0.0:${PORT:-8000} \
     --workers ${WEB_CONCURRENCY} \
     --max-requests 1000 \
     --max-requests-jitter 100 \
