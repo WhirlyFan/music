@@ -1,5 +1,6 @@
 import {
   keepPreviousData,
+  skipToken,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -50,8 +51,9 @@ export function useSongSearch(query: string) {
   const q = query.trim()
   return useQuery({
     queryKey: searchKeys.songs(q),
-    queryFn: () => api<Track[]>(`/catalog/tracks/search/?q=${encodeURIComponent(q)}`),
-    enabled: q.length > 0,
+    queryFn: q
+      ? () => api<Track[]>(`/catalog/tracks/search/?q=${encodeURIComponent(q)}`)
+      : skipToken,
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
   })
@@ -60,8 +62,7 @@ export function useSongSearch(query: string) {
 export function usePlaylist(id: string) {
   return useQuery({
     queryKey: playlistKeys.detail(id),
-    queryFn: () => api<PlaylistDetail>(`/catalog/playlists/${id}/`),
-    enabled: Boolean(id),
+    queryFn: id ? () => api<PlaylistDetail>(`/catalog/playlists/${id}/`) : skipToken,
   })
 }
 
@@ -75,14 +76,15 @@ export function useInfinitePlaylistTracks(id: string, search = '') {
   const q = search.trim()
   return useInfiniteQuery({
     queryKey: [...playlistKeys.tracks(id), q],
-    queryFn: ({ pageParam }) =>
-      api<PaginatedPlaylistTrackList>(
-        `/catalog/playlists/${id}/tracks/?page=${pageParam}${q ? `&search=${encodeURIComponent(q)}` : ''}`,
-      ),
+    queryFn: id
+      ? ({ pageParam }) =>
+          api<PaginatedPlaylistTrackList>(
+            `/catalog/playlists/${id}/tracks/?page=${pageParam}${q ? `&search=${encodeURIComponent(q)}` : ''}`,
+          )
+      : skipToken,
     initialPageParam: 1,
     // DRF returns a `next` URL while more pages remain; pages are sequential.
     getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
-    enabled: Boolean(id),
     placeholderData: keepPreviousData,
   })
 }
@@ -96,8 +98,9 @@ export function useInfinitePlaylistTracks(id: string, search = '') {
 export function useImport(url: string) {
   return useQuery({
     queryKey: importKeys.result(url),
-    queryFn: () => api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
-    enabled: Boolean(url),
+    queryFn: url
+      ? () => api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } })
+      : skipToken,
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
@@ -135,25 +138,22 @@ export function useRefreshPlaylist() {
   return useMutation({
     mutationFn: (id: string) =>
       api<PlaylistDetail>(`/catalog/playlists/${id}/refresh/`, { method: 'POST' }),
-    onSuccess: (_data, id) => {
-      qc.invalidateQueries({ queryKey: playlistKeys.detail(id) })
-      qc.invalidateQueries({ queryKey: playlistKeys.tracks(id) })
+    onSuccess: (data, id) => {
+      qc.setQueryData(playlistKeys.detail(id), data) // endpoint returns the fresh detail — seed it
+      qc.invalidateQueries({ queryKey: playlistKeys.tracks(id) }) // tracks aren't in the body
       qc.invalidateQueries({ queryKey: playlistKeys.list() })
     },
   })
 }
 
 /** Lazily resolve a single track's YouTube source (used right before play). */
-export function useMatchTrack(playlistId?: string) {
+export function useMatchTrack() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (trackId: string) =>
       api<PlaybackSource>(`/catalog/tracks/${trackId}/match/`, { method: 'POST' }),
-    onSuccess: () => {
-      // The room player reads each track's active_source — refresh it too.
-      qc.invalidateQueries({ queryKey: roomKeys.all() })
-      if (playlistId) qc.invalidateQueries({ queryKey: playlistKeys.detail(playlistId) })
-    },
+    // `match/` returns only the PlaybackSource; the room embeds active_source → refetch it.
+    onSuccess: () => qc.invalidateQueries({ queryKey: roomKeys.all() }),
   })
 }
 
@@ -182,10 +182,8 @@ export function useUpdatePlaylist() {
         // Undefined fields are dropped by JSON.stringify → a true partial update.
         body: { title: args.title, description: args.description, is_public: args.isPublic },
       }),
-    onSuccess: (_data, args) => {
-      qc.invalidateQueries({ queryKey: playlistKeys.all() })
-      qc.invalidateQueries({ queryKey: playlistKeys.detail(args.id) })
-    },
+    // playlistKeys.all() is the broad prefix — it already covers detail(id) + list.
+    onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.all() }),
   })
 }
 
