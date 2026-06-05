@@ -1,0 +1,62 @@
+"""Stage 3: every room mutation fans out to the room's channel group."""
+
+import asyncio
+
+import pytest
+from allauth.account.models import EmailAddress
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from rest_framework.test import APIClient
+
+from apps.rooms import broadcast, services
+from apps.users.tests.factories import UserFactory
+
+
+def authed():
+    user = UserFactory()
+    EmailAddress.objects.update_or_create(
+        user=user, email=user.email, defaults={"verified": True, "primary": True}
+    )
+    api = APIClient()
+    api.force_authenticate(user)
+    return api, user
+
+
+def _recv(layer, chan, timeout=3):
+    async def go():
+        return await asyncio.wait_for(layer.receive(chan), timeout)
+
+    return async_to_sync(go)()
+
+
+@pytest.mark.django_db
+def test_mutation_broadcasts_room_update_to_group():
+    api, user = authed()
+    room = services.get_active_room(user)
+    layer = get_channel_layer()
+    chan = async_to_sync(layer.new_channel)()
+    async_to_sync(layer.group_add)(broadcast.group_name(room.id), chan)
+
+    res = api.post("/api/v1/rooms/clear/")
+    assert res.status_code == 200
+
+    msg = _recv(layer, chan)
+    assert msg["type"] == "room.update"
+    assert msg["room"]["id"] == str(room.id)
+    assert msg["generation"] >= 1
+
+
+@pytest.mark.django_db
+def test_generation_increments_each_mutation():
+    api, _ = authed()
+    g1 = api.post("/api/v1/rooms/clear/").json()["generation"]
+    g2 = api.post("/api/v1/rooms/clear/").json()["generation"]
+    assert g2 == g1 + 1
+
+
+@pytest.mark.django_db
+def test_read_endpoints_do_not_bump_generation():
+    api, _ = authed()
+    g1 = api.get("/api/v1/rooms/me/").json()["generation"]
+    g2 = api.get("/api/v1/rooms/me/").json()["generation"]
+    assert g1 == g2  # plain reads have no side effects

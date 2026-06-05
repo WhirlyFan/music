@@ -18,7 +18,7 @@ import random
 import secrets
 
 from django.db import transaction
-from django.db.models import Max, Min
+from django.db.models import F, Max, Min
 
 from .models import PlaybackState, QueueItem, Room, RoomMember
 
@@ -38,6 +38,12 @@ def get_active_room(user) -> Room:
     room, _ = Room.objects.get_or_create(host=user, is_active=True)
     PlaybackState.objects.get_or_create(room=room)
     return room
+
+
+def bump_generation(room: Room) -> None:
+    """Advance the room's monotonic generation counter. Called once per broadcast
+    so connected clients can drop frames older than the latest they've applied."""
+    PlaybackState.objects.filter(room=room).update(generation=F("generation") + 1)
 
 
 # --- Jam (sharing / membership) ---------------------------------------------

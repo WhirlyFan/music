@@ -9,7 +9,7 @@ from rest_framework.response import Response
 from apps.catalog.models import Playlist, Track
 from apps.catalog.serializers import PlaylistSerializer
 
-from . import services
+from . import broadcast, services
 from .models import QueueItem, Room
 from .serializers import (
     JoinRoomSerializer,
@@ -54,41 +54,49 @@ class RoomViewSet(viewsets.ViewSet):
             .get(pk=room_id)
         )
 
-    def _room_detail(self, user) -> Room:
-        room = services.get_active_room(user)  # ensure room + playback exist
-        return self._load(room.id)
+    def _data(self, room) -> dict:
+        """Serialize a room in the player's shape (re-loads it fully prefetched)."""
+        return RoomSerializer(self._load(room.id)).data
 
-    def _respond(self, user):
-        return Response(RoomSerializer(self._room_detail(user)).data)
+    def _read(self, room):
+        """Plain read — no generation bump, no broadcast."""
+        return Response(self._data(room))
 
-    def _respond_room(self, room):
-        return Response(RoomSerializer(self._load(room.id)).data)
+    def _mutated(self, room):
+        """A state change: bump the generation, serialize, broadcast to the room's
+        group so every connected member converges, and return the same payload to
+        the caller. Broadcast runs after the service's transaction has committed
+        (we're past the service call here), so listeners never see pre-commit state."""
+        services.bump_generation(room)
+        data = self._data(room)  # re-load picks up the new generation
+        broadcast.publish(room.id, data)
+        return Response(data)
 
     @extend_schema(responses=RoomSerializer)
     @action(detail=False, methods=["get"])
     def me(self, request):
-        return self._respond(request.user)
+        return self._read(services.get_active_room(request.user))
 
     @extend_schema(responses=RoomSerializer)
     @action(detail=False, methods=["get"])
     def current(self, request):
         """The room the user is actively in — a Jam they've joined as a guest,
         else their own room. This is what the player subscribes to."""
-        return self._respond_room(services.current_room(request.user))
+        return self._read(services.current_room(request.user))
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def share(self, request):
         """Turn the caller's room into a Jam (assigns a join code)."""
         room = services.share_room(services.get_active_room(request.user))
-        return self._respond_room(room)
+        return self._mutated(room)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def unshare(self, request):
         """End the Jam — drop guests, clear the code, go private again."""
         room = services.unshare_room(services.get_active_room(request.user))
-        return self._respond_room(room)
+        return self._mutated(room)
 
     @extend_schema(request=JoinRoomSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -100,7 +108,7 @@ class RoomViewSet(viewsets.ViewSet):
             room = services.join_by_code(request.user, s.validated_data["code"])
         except services.RoomNotFound:
             raise Http404("No open jam with that code.") from None
-        return self._respond_room(room)
+        return self._mutated(room)
 
     @extend_schema(request=PlaySerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -118,7 +126,7 @@ class RoomViewSet(viewsets.ViewSet):
             added_by=request.user,
             label=s.validated_data["label"],
         )
-        return self._respond(request.user)
+        return self._mutated(room)
 
     @extend_schema(request=PlayNowSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"], url_path="play-now")
@@ -130,7 +138,7 @@ class RoomViewSet(viewsets.ViewSet):
         track = get_object_or_404(Track, pk=s.validated_data["track_id"])
         room = services.get_active_room(request.user)
         services.play_now(room, track, added_by=request.user)
-        return self._respond(request.user)
+        return self._mutated(room)
 
     @extend_schema(request=PlayPlaylistSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"], url_path="play-playlist")
@@ -145,7 +153,7 @@ class RoomViewSet(viewsets.ViewSet):
             start_track_id=s.validated_data.get("start_track_id"),
             added_by=request.user,
         )
-        return self._respond(request.user)
+        return self._mutated(room)
 
     @extend_schema(request=QueueSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -160,19 +168,21 @@ class RoomViewSet(viewsets.ViewSet):
                 services.enqueue(room, track, added_by=request.user, play_next=True)
         else:
             services.enqueue_many(room, tracks, added_by=request.user)
-        return self._respond(request.user)
+        return self._mutated(room)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def next(self, request):
-        services.next_track(services.get_active_room(request.user))
-        return self._respond(request.user)
+        room = services.get_active_room(request.user)
+        services.next_track(room)
+        return self._mutated(room)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def previous(self, request):
-        services.previous_track(services.get_active_room(request.user))
-        return self._respond(request.user)
+        room = services.get_active_room(request.user)
+        services.previous_track(room)
+        return self._mutated(room)
 
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -180,8 +190,9 @@ class RoomViewSet(viewsets.ViewSet):
         """Play a specific queue item now (click any row in the queue)."""
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        services.jump(services.get_active_room(request.user), s.validated_data["item_id"])
-        return self._respond(request.user)
+        room = services.get_active_room(request.user)
+        services.jump(room, s.validated_data["item_id"])
+        return self._mutated(room)
 
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -189,21 +200,24 @@ class RoomViewSet(viewsets.ViewSet):
         """Remove a single queue item."""
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        services.remove(services.get_active_room(request.user), s.validated_data["item_id"])
-        return self._respond(request.user)
+        room = services.get_active_room(request.user)
+        services.remove(room, s.validated_data["item_id"])
+        return self._mutated(room)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def shuffle(self, request):
         """Reshuffle the up-next items."""
-        services.shuffle(services.get_active_room(request.user))
-        return self._respond(request.user)
+        room = services.get_active_room(request.user)
+        services.shuffle(room)
+        return self._mutated(room)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def clear(self, request):
-        services.clear(services.get_active_room(request.user))
-        return self._respond(request.user)
+        room = services.get_active_room(request.user)
+        services.clear(room)
+        return self._mutated(room)
 
     @extend_schema(request=SaveAsPlaylistSerializer, responses=PlaylistSerializer)
     @action(detail=False, methods=["post"], url_path="save-as-playlist")
