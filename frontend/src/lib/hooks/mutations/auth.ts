@@ -1,7 +1,17 @@
 import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query'
 
+import { api } from '@/lib/api/client'
 import { auth } from '@/lib/auth/api'
 import { emailKeys, playlistKeys, roomKeys, sessionKeys } from '@/lib/hooks/keys'
+
+/** Invite an email to the (invite-only) platform — any logged-in member can.
+ *  The backend creates a pending invitation and emails the signup link. */
+export function useInvite() {
+  return useMutation({
+    mutationFn: (email: string) =>
+      api<{ email: string }>('/users/invite/', { method: 'POST', body: { email } }),
+  })
+}
 
 /**
  * Reset cache for an auth boundary (login/signup/logout/MFA-complete). Session +

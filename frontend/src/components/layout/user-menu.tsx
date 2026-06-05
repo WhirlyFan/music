@@ -1,5 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Settings, UserPlus } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -10,8 +11,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ApiError } from '@/lib/api/client'
 import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
-import { useLogout } from '@/lib/hooks/mutations/auth'
+import { useInvite, useLogout } from '@/lib/hooks/mutations/auth'
+import { promptText } from '@/lib/overlay'
+
+/** Pull the backend's specific message (e.g. "already has an account") off a 400. */
+function inviteErrorMessage(e: unknown): string {
+  if (e instanceof ApiError && typeof e.detail === 'object' && e.detail) {
+    const detail = (e.detail as { detail?: string }).detail
+    if (detail) return detail
+  }
+  return 'Couldn’t send the invite — try again.'
+}
 
 type Props = {
   username: string
@@ -30,6 +42,22 @@ type Props = {
 export function UserMenu({ username, email, firstName, lastName }: Props) {
   const navigate = useNavigate()
   const logout = useLogout()
+  const invite = useInvite()
+
+  const handleInvite = async () => {
+    const email = (
+      await promptText({
+        title: 'Invite a friend',
+        label: 'Their email address',
+        confirmLabel: 'Send invite',
+      })
+    )?.trim()
+    if (!email) return
+    invite.mutate(email, {
+      onSuccess: () => toast.success(`Invite sent to ${email}.`),
+      onError: (e) => toast.error(inviteErrorMessage(e)),
+    })
+  }
 
   // Pick the best human label: "First Last" if both set, else username.
   const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim()
@@ -71,6 +99,11 @@ export function UserMenu({ username, email, firstName, lastName }: Props) {
         <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
           <Settings className="mr-2 h-4 w-4" />
           Settings
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onSelect={handleInvite}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Invite a friend
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

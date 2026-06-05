@@ -11,6 +11,9 @@ import { isEmailVerificationPending } from '@/lib/auth/guards'
 import { useSignup } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/signup')({
+  // Invite emails link here with ?email=… so the field is pre-filled.
+  validateSearch: (search: Record<string, unknown>): { email?: string } =>
+    typeof search.email === 'string' ? { email: search.email } : {},
   component: SignupPage,
   head: () => ({ meta: [{ title: 'Sign up — music' }] }),
 })
@@ -39,9 +42,10 @@ const signupSchema = z
 function SignupPage() {
   const navigate = useNavigate()
   const signup = useSignup()
+  const { email: invitedEmail } = Route.useSearch()
 
   const form = useForm({
-    defaultValues: { email: '', username: '', password: '', confirm: '' },
+    defaultValues: { email: invitedEmail ?? '', username: '', password: '', confirm: '' },
     onSubmit: async ({ value }) => {
       // Idempotency guard: if a request is already in-flight, ignore the
       // submission. Belt-and-suspenders with the `disabled` button below.
