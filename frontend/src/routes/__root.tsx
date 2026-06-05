@@ -7,14 +7,20 @@ import {
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 
-import { AppHeader } from '@/components/layout/app-header'
 import { GlobalSearchPill } from '@/components/layout/global-search-pill'
 import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
+import { TopNav } from '@/components/layout/top-nav'
+import { UserMenu } from '@/components/layout/user-menu'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
 import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/guards'
 import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
+import { useSession } from '@/lib/hooks/queries/auth'
+
+type SessionUser = { email?: string; username?: string; first_name?: string; last_name?: string }
+type SessionData = { user?: SessionUser }
 
 // Paths the verified-email guard MUST let through, even when the session is
 // authenticated-but-unverified. Mirrors the backend's
@@ -100,6 +106,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 })
 
 function RootLayout() {
+  const { data: session } = useSession()
+  const authed = isSessionAuthenticated(session)
+  const user = (session?.data as SessionData | undefined)?.user
+
   return (
     <div className="bg-background text-foreground min-h-screen">
       {/*
@@ -121,14 +131,25 @@ function RootLayout() {
           lives at components/ui/sonner.tsx. Use `toast.*` from 'sonner' anywhere. */}
       <Toaster />
 
-      <AppHeader />
+      {/* The top bar is gone (only Home + Playlists remain). Floating chrome
+          instead: brand + Playlists top-left (authed), account/theme top-right. */}
+      {authed && <TopNav />}
+      <div className="fixed top-3 right-4 z-40">
+        {user?.username && user.email ? (
+          <UserMenu
+            username={user.username}
+            firstName={user.first_name}
+            lastName={user.last_name}
+          />
+        ) : (
+          // Logged out: theme stays globally reachable here (authed users get it
+          // inside the gooey FAB instead).
+          <ThemeToggle />
+        )}
+      </div>
 
-      {/* pb-28 keeps content clear of the fixed now-playing bar. */}
-      <main
-        id="main-content"
-        tabIndex={-1}
-        className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8"
-      >
+      {/* pt-16 clears the floating top chrome; pb-28 clears the fixed player. */}
+      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-4 pt-16 pb-28 sm:px-6">
         <Outlet />
       </main>
 

@@ -1,5 +1,5 @@
-import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { Import, Save, Shuffle } from 'lucide-react'
+import { useRouterState } from '@tanstack/react-router'
+import { Moon, Save, Shuffle, Sun } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { routeHasFloatingSearch } from '@/components/layout/global-search-pill'
@@ -11,22 +11,24 @@ import { useRoom } from '@/lib/hooks/queries/rooms'
 import { promptText } from '@/lib/overlay'
 import { useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
+import { useThemeStore } from '@/lib/theme/store'
 import { useMediaQuery } from '@/lib/use-media-query'
 
 const GAP = 8 // matches the player/queue/pill gaps
 const PILL_H = 48 // the floating search pill is h-12
 
 /**
- * Global bottom-right quick-actions FAB (gooey menu). Import is always offered;
- * Shuffle + Save-queue appear when something's queued. Authed-only.
+ * Global bottom-right quick-actions FAB (gooey menu). Shuffle + Save-queue appear
+ * when something's queued; a theme toggle is always present. Authed-only.
  */
 export function QuickActionsFab() {
-  const navigate = useNavigate()
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const { data: room } = useRoom(authed)
   const shuffle = useShuffle()
   const save = useSaveQueueAsPlaylist()
+  const resolvedTheme = useThemeStore((s) => s.resolved)
+  const toggleTheme = useThemeStore((s) => s.toggle)
   const [queueOpen] = useQueueOpen()
   const queueHeight = usePlayerUiStore((s) => s.queueHeight)
   const playerHeight = usePlayerUiStore((s) => s.playerHeight)
@@ -39,13 +41,14 @@ export function QuickActionsFab() {
 
   if (!authed) return null
 
+  // Theme lives here now that the top bar is gone: a sun/moon toggle, its icon
+  // reflecting the current mode. (The logged-out theme control is the standalone
+  // toggle in the root layout.)
+  const isDark = resolvedTheme === 'dark'
+  const ThemeIcon = isDark ? Moon : Sun
+
   const hasQueue = (room?.context?.length ?? 0) > 0
   const items: GooeyItem[] = [
-    {
-      icon: <Import className="size-5" />,
-      label: 'Import a playlist',
-      onSelect: () => navigate({ to: '/' }),
-    },
     ...(hasQueue
       ? [
           {
@@ -68,6 +71,11 @@ export function QuickActionsFab() {
           },
         ]
       : []),
+    {
+      icon: <ThemeIcon className="size-5" />,
+      label: isDark ? 'Switch to light theme' : 'Switch to dark theme',
+      onSelect: toggleTheme,
+    },
   ]
 
   // Hug the bottom-right corner, lifting only as much as the current width needs —
