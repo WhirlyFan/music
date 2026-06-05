@@ -10,7 +10,7 @@ from django.test import RequestFactory
 from rest_framework.test import APIClient
 
 from apps.users.adapter import AccountAdapter
-from apps.users.invites import InviteError, create_invitation
+from apps.users.invites import InviteError, create_invitation, redeem_invitation
 from apps.users.models import Invitation
 from apps.users.tests.factories import UserFactory
 
@@ -76,7 +76,7 @@ def test_create_invitation_sends_email(member):
     assert inv is not None and inv.invited_by == member
     assert len(mail.outbox) == 1
     assert "friend@example.com" in mail.outbox[0].to
-    assert "/signup?email=" in mail.outbox[0].body  # link prefills the invitee's email
+    assert "/signup?invite=" in mail.outbox[0].body  # link carries the redeemable token
 
 
 @pytest.mark.django_db
@@ -112,3 +112,34 @@ def test_invite_endpoint_requires_auth(db):
 def test_invite_endpoint_existing_member_is_400(client, member):
     r = client.post(INVITE, {"email": member.email}, format="json")
     assert r.status_code == 400
+
+
+# ── redeem (the invite link → stash verified email, Auth0/Clerk pattern) ─────
+REDEEM = "/api/v1/users/invite/redeem/"
+
+
+@pytest.mark.django_db
+def test_redeem_returns_email(member):
+    create_invitation("redeemer@example.com", invited_by=member)
+    token = Invitation.pending_for("redeemer@example.com").token
+    r = APIClient().post(REDEEM, {"token": token}, format="json")  # anonymous, pre-signup
+    assert r.status_code == 200, r.content
+    assert r.data["email"] == "redeemer@example.com"
+
+
+@pytest.mark.django_db
+def test_redeem_invalid_token_is_404():
+    r = APIClient().post(REDEEM, {"token": "not-a-real-token"}, format="json")
+    assert r.status_code == 404
+
+
+@pytest.mark.django_db
+def test_redeem_stashes_verified_email_for_signup(member):
+    # The stash is allauth's native "this email is pre-verified" channel — signup then
+    # creates the EmailAddress verified + sends no confirmation mail.
+    create_invitation("stash@example.com", invited_by=member)
+    token = Invitation.pending_for("stash@example.com").token
+    req = RequestFactory().post("/")
+    req.session = {}
+    redeem_invitation(token, req)
+    assert req.session.get("account_verified_email") == "stash@example.com"

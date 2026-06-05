@@ -29,7 +29,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from .invites import InviteError, create_invitation
+from .invites import InviteError, create_invitation, redeem_invitation
 
 
 @api_view(["GET"])
@@ -59,3 +59,23 @@ def invite(request: Request) -> Response:
     except InviteError as e:
         return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"email": email.strip().lower()}, status=status.HTTP_201_CREATED)
+
+
+class _RedeemSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
+@api_view(["POST"])
+@permission_classes([permissions.AllowAny])
+def redeem_invite(request: Request) -> Response:
+    """Anonymous (pre-signup): the invite link redeems its token here, which stashes
+    the email as verified for the imminent signup and returns it for the form to
+    pre-fill. 404 if the token is invalid/expired/used (the SPA then falls back to a
+    normal signup + email verification)."""
+    s = _RedeemSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    try:
+        inv = redeem_invitation(s.validated_data["token"], request)
+    except InviteError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"email": inv.email})

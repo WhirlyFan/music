@@ -6,14 +6,31 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
+import { api } from '@/lib/api/client'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
 import { isEmailVerificationPending } from '@/lib/auth/guards'
 import { useSignup } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/signup')({
-  // Invite emails link here with ?email=… so the field is pre-filled.
-  validateSearch: (search: Record<string, unknown>): { email?: string } =>
-    typeof search.email === 'string' ? { email: search.email } : {},
+  // Invite links arrive as /signup?invite=<token>. The loader redeems it (proving the
+  // signer controls the address) — the backend stashes the email as verified for this
+  // signup, so the new account is created already-verified with no confirmation mail.
+  validateSearch: (search: Record<string, unknown>): { invite?: string } =>
+    typeof search.invite === 'string' && search.invite ? { invite: search.invite } : {},
+  loaderDeps: ({ search }) => ({ invite: search.invite }),
+  loader: async ({ deps }): Promise<{ invitedEmail: string }> => {
+    if (!deps.invite) return { invitedEmail: '' }
+    try {
+      const { email } = await api<{ email: string }>('/users/invite/redeem/', {
+        method: 'POST',
+        body: { token: deps.invite },
+      })
+      return { invitedEmail: email }
+    } catch {
+      // Invalid/expired invite → fall back to a normal signup + email verification.
+      return { invitedEmail: '' }
+    }
+  },
   component: SignupPage,
   head: () => ({ meta: [{ title: 'Sign up — music' }] }),
 })
@@ -42,10 +59,10 @@ const signupSchema = z
 function SignupPage() {
   const navigate = useNavigate()
   const signup = useSignup()
-  const { email: invitedEmail } = Route.useSearch()
+  const { invitedEmail } = Route.useLoaderData()
 
   const form = useForm({
-    defaultValues: { email: invitedEmail ?? '', username: '', password: '', confirm: '' },
+    defaultValues: { email: invitedEmail, username: '', password: '', confirm: '' },
     onSubmit: async ({ value }) => {
       // Idempotency guard: if a request is already in-flight, ignore the
       // submission. Belt-and-suspenders with the `disabled` button below.

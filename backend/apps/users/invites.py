@@ -1,13 +1,16 @@
-"""Invite-only signup: create + email invitations.
+"""Invite-only signup: create, email, and redeem invitations.
 
-Any logged-in member can invite an email; `apps.users.adapter.AccountAdapter` then
-gates signup to emails with a pending invitation. The invite email links to the
-signup page with the email pre-filled (`/signup?email=…`); the gate itself is
-email-based, so the link is a convenience, not the credential.
+Any logged-in member can invite an email; `apps.users.adapter.AccountAdapter` gates
+signup to emails with a pending invitation. The invite email links to
+`/signup?invite=<token>`; opening it `redeem`s the token, which proves the signer
+received the email (controls the address) and stashes the email as *verified* for the
+imminent signup — so allauth creates the account already-verified and sends no separate
+confirmation mail (the Auth0/Clerk "invitation = email verification" pattern).
 """
 
 from __future__ import annotations
 
+from allauth.account.adapter import get_adapter
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -17,7 +20,7 @@ from .models import INVITE_TTL, Invitation, User
 
 
 class InviteError(Exception):
-    """A problem creating an invite (surfaced to the API as a 400)."""
+    """A problem creating/redeeming an invite (surfaced to the API)."""
 
 
 def create_invitation(email: str, *, invited_by) -> Invitation:
@@ -37,8 +40,23 @@ def create_invitation(email: str, *, invited_by) -> Invitation:
     return inv
 
 
+def redeem_invitation(token: str, request) -> Invitation:
+    """Validate an invite token from the signup link and stash its email as *verified*
+    for the imminent signup (allauth's `unstash_verified_email` then creates the new
+    account's EmailAddress already-verified, skipping the confirmation mail). Redeeming
+    requires the token from the emailed link, which proves the signer controls the
+    address. Raises InviteError if the token is invalid / expired / already used."""
+    inv = Invitation.objects.filter(
+        token=token, accepted_at__isnull=True, expires_at__gt=timezone.now()
+    ).first()
+    if inv is None:
+        raise InviteError("This invite link is invalid or has expired.")
+    get_adapter(request).stash_verified_email(request, inv.email)
+    return inv
+
+
 def _send_invite_email(inv: Invitation, invited_by) -> None:
-    link = f"{settings.FRONTEND_ORIGIN}/signup?{urlencode({'email': inv.email})}"
+    link = f"{settings.FRONTEND_ORIGIN}/signup?{urlencode({'invite': inv.token})}"
     inviter = getattr(invited_by, "display_name", None) or "A member"
     send_mail(
         subject="You're invited",
