@@ -20,7 +20,7 @@ export function useInvite() {
  * (room/queue, playlists, song search, per-route search text) is *removed* so the
  * next session never inherits it and refetches fresh. Prefix keys match sub-queries.
  */
-function resetForSession(qc: QueryClient) {
+export function resetForSession(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: sessionKeys.all() })
   qc.invalidateQueries({ queryKey: emailKeys.all() })
   qc.removeQueries({ queryKey: roomKeys.all() })

@@ -1,5 +1,5 @@
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -7,9 +7,11 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api/client'
+import { auth } from '@/lib/auth/api'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { isEmailVerificationPending } from '@/lib/auth/guards'
-import { useSignup } from '@/lib/hooks/mutations/auth'
+import { isEmailVerificationPending, isSessionAuthenticated } from '@/lib/auth/guards'
+import { sessionKeys } from '@/lib/hooks/keys'
+import { resetForSession, useSignup } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/signup')({
   // Invite links arrive as /signup?invite=<token>. The loader redeems it (proving the
@@ -17,6 +19,24 @@ export const Route = createFileRoute('/signup')({
   // signup, so the new account is created already-verified with no confirmation mail.
   validateSearch: (search: Record<string, unknown>): { invite?: string } =>
     typeof search.invite === 'string' && search.invite ? { invite: search.invite } : {},
+  // Handle clicking signup/an invite while already logged in (otherwise allauth's
+  // signup rejects the active session with 409 Conflict). With an invite, sign out
+  // first so the invite is accepted as a fresh identity — and so the loader's redeem
+  // (next) stashes the verified email into the *new* anonymous session; logging out
+  // flushes the session, which would otherwise discard a stash done beforehand.
+  // Without an invite, a logged-in visitor is already a member → send them home.
+  beforeLoad: async ({ context, search }) => {
+    const session = await context.queryClient.fetchQuery({
+      queryKey: sessionKeys.all(),
+      queryFn: () => auth.session(),
+      staleTime: 5 * 60 * 1000,
+    })
+    if (!isSessionAuthenticated(session)) return
+    if (!search.invite) throw redirect({ to: '/' })
+    await auth.logout()
+    resetForSession(context.queryClient)
+    toast.info('Signed out to accept this invite.')
+  },
   loaderDeps: ({ search }) => ({ invite: search.invite }),
   loader: async ({ deps }): Promise<{ invitedEmail: string }> => {
     if (!deps.invite) return { invitedEmail: '' }
