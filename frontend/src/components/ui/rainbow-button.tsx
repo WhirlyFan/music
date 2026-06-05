@@ -1,17 +1,37 @@
-import { Button, type ButtonProps } from '@/components/ui/button'
+import type * as React from 'react'
+
 import { cn } from '@/lib/utils'
 
 /**
- * A solid button wrapped in an animated rainbow *glow* halo (annnimate
- * "rainbow-button"). The glow lives on the wrapper, not the Button: the Button clips
- * overflow for its press ripple, which would otherwise cut the halo off. The
- * `.rainbow-glow` class (index.css) draws the moving, blurred gradient behind the
- * button; the global reduce-motion rule freezes it.
+ * Annnimate "rainbow-button": a dark, glossy pill with a soft animated rainbow that
+ * bleeds out the bottom edge and brightens on hover (see `.rainbow-glow` in index.css).
+ *
+ * The glow lives on the wrapper `<span>`, not the button — the button's opaque dark
+ * fill sits on top and hides all but the bottom spill. Renders a real `<button>`, so it
+ * takes the usual button props (type, onClick, disabled, …).
  */
-export function RainbowButton({ className, ...props }: ButtonProps) {
+export function RainbowButton({
+  className,
+  children,
+  ...props
+}: React.ComponentPropsWithRef<'button'>) {
   return (
     <span className="rainbow-glow">
-      <Button className={cn('relative', className)} {...props} />
+      <button
+        className={cn(
+          'relative inline-flex h-12 items-center justify-center rounded-full px-8',
+          'text-sm font-medium text-white',
+          // Flat near-black (no gloss) — the rainbow hairline is the only edge treatment.
+          'bg-neutral-900 shadow-md',
+          'transition-[transform,box-shadow] duration-200 hover:shadow-lg active:scale-[0.98]',
+          'focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-hidden',
+          'disabled:pointer-events-none disabled:opacity-60',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </button>
     </span>
   )
 }

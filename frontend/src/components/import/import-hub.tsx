@@ -93,7 +93,7 @@ export function OmniBox({
           is just Enter (it's a search box; a "Search" button would be redundant). The
           import itself runs on /import, which shows the loading state. */}
       {isUrl && (
-        <RainbowButton type="submit" size="lg" className="h-12 shrink-0 rounded-full">
+        <RainbowButton type="submit" className="shrink-0">
           Import
         </RainbowButton>
       )}
