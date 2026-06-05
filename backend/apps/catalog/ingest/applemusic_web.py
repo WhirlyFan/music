@@ -138,4 +138,8 @@ def fetch_playlist(storefront: str, pid: str) -> dict:
         "kind": "playlist",
         "tracks": tracks,
         "cover": _art(attr.get("artwork")),
+        "owner_name": attr.get("curatorName") or "",
+        "owner_url": "",
+        # lastModifiedDate changes when the playlist changes → our snapshot for refresh.
+        "snapshot": attr.get("lastModifiedDate") or "",
     }

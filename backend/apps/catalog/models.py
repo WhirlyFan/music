@@ -138,6 +138,17 @@ class Playlist(BaseModel, RLSModel):
         related_name="playlists",
     )
     is_public = models.BooleanField(default=False)
+    # Provenance for an imported playlist: the shared SourcePlaylist cache it was
+    # forked from + the snapshot it was forked at. Null for from-scratch playlists.
+    # Lets "Refresh from source" re-fetch + reconcile (see services.refresh_playlist).
+    origin = models.ForeignKey(
+        "SourcePlaylist",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="forks",
+    )
+    origin_snapshot_id = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -310,3 +321,57 @@ class PlaylistImport(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.source.code} import → {self.playlist_id} ({self.track_count} tracks)"
+
+
+class SourcePlaylist(BaseModel):
+    """A shared, read-only cache of an external playlist (Spotify/Apple) as it exists
+    at the source — deduped by (source, external_id). Catalog data: NOT user-owned and
+    NOT RLS. The first import of a playlist fetches + stores it; later imports of the
+    same URL (by anyone) ride this cache instead of re-hitting the source API.
+
+    `snapshot_id` (Spotify revisionId / Apple lastModifiedDate / a content hash)
+    detects source changes so "refresh" is cheap. Users never edit this — they fork it
+    into an owned Playlist (Playlist.origin), which is where their edits live."""
+
+    source = models.ForeignKey(Source, on_delete=models.PROTECT, related_name="source_playlists")
+    external_id = models.CharField(max_length=255)
+    title = models.CharField(max_length=512, blank=True)
+    owner_name = models.CharField(max_length=512, blank=True)  # the external creator
+    owner_url = models.URLField(max_length=1024, blank=True)
+    cover_url = models.URLField(max_length=1024, blank=True)
+    snapshot_id = models.CharField(max_length=255, blank=True)
+    track_count = models.IntegerField(default=0)
+    last_fetched_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "external_id"], name="uniq_sourceplaylist_source_external"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.source.code}:{self.external_id} ({self.title})"
+
+
+class SourcePlaylistTrack(BaseModel):
+    """Ordered membership of a Track in a SourcePlaylist (mirrors the source order).
+    Deduped per (source_playlist, track) — like a user playlist, each song appears once."""
+
+    source_playlist = models.ForeignKey(
+        SourcePlaylist, on_delete=models.CASCADE, related_name="items"
+    )
+    track = models.ForeignKey(Track, on_delete=models.PROTECT, related_name="source_playlist_items")
+    position = models.IntegerField()
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source_playlist", "track"],
+                name="uniq_sourceplaylisttrack_playlist_track",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.source_playlist_id}[{self.position}] → {self.track_id}"

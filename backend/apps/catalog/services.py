@@ -12,9 +12,11 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 from django.db import transaction
+from django.utils import timezone
 
 from .ingest import applemusic, spotify, youtube
 from .ingest.normalize import make_match_key
+from .ingest.spotify import SpotifyError
 from .models import (
     PlaybackSource,
     Playlist,
@@ -22,6 +24,8 @@ from .models import (
     PlaylistTrack,
     Source,
     SourceLink,
+    SourcePlaylist,
+    SourcePlaylistTrack,
     Track,
 )
 
@@ -142,18 +146,103 @@ def _record(source: Source, parsed: dict, url: str, *, user=None, on_track=None)
     }
 
 
+@transaction.atomic
+def _cache_source_playlist(
+    source: Source, external_id: str, parsed: dict, url: str
+) -> SourcePlaylist:
+    """Upsert the shared SourcePlaylist cache + its ordered membership from a fresh
+    fetch. Tracks dedupe globally (so cached YouTube matches carry over); membership
+    is rebuilt to mirror the source. Runs only on a cache miss / refresh."""
+    sp, _ = SourcePlaylist.objects.update_or_create(
+        source=source,
+        external_id=external_id,
+        defaults={
+            "title": parsed.get("title") or "",
+            "owner_name": parsed.get("owner_name") or "",
+            "owner_url": parsed.get("owner_url") or "",
+            "cover_url": parsed.get("cover") or "",
+            "snapshot_id": parsed.get("snapshot") or "",
+            "last_fetched_at": timezone.now(),
+        },
+    )
+    SourcePlaylistTrack.objects.filter(source_playlist=sp).delete()  # rebuild to mirror source
+    seen: set = set()
+    position = 0
+    for row in parsed["tracks"]:
+        track = _upsert_track(row)
+        if track.id in seen:
+            continue  # source listed the same song twice — keep one (like a user playlist)
+        seen.add(track.id)
+        SourcePlaylistTrack.objects.create(source_playlist=sp, track=track, position=position)
+        position += 1
+        if row.get("external_id"):  # per-track source link, so we can re-resolve later
+            SourceLink.objects.update_or_create(
+                source=source,
+                external_id=row["external_id"],
+                kind=SourceLink.Kind.TRACK,
+                defaults={"url": row.get("source_url") or "", "track": track, "is_active": True},
+            )
+    sp.track_count = position
+    sp.save(update_fields=["track_count", "updated_at"])
+    return sp
+
+
+def _import_from_source_playlist(sp: SourcePlaylist, *, url: str, user=None) -> dict:
+    """Build an import result from the cached SourcePlaylist (no source API). Logs a
+    PlaylistImport for provenance (who pulled it, when, at which snapshot)."""
+    imp = PlaylistImport.objects.create(
+        source=sp.source,
+        source_url=url,
+        source_external_id=sp.external_id,
+        source_snapshot_id=sp.snapshot_id,
+        imported_by=user,
+        track_count=sp.track_count,
+        status=PlaylistImport.Status.COMPLETED if sp.track_count else PlaylistImport.Status.FAILED,
+    )
+    tracks = [
+        it.track
+        for it in sp.items.select_related("track")
+        .prefetch_related("track__playback_sources")
+        .order_by("position")
+    ]
+    return {
+        "import": imp,
+        "title": sp.title or "Imported",
+        "tracks": tracks,
+        "cover": sp.cover_url,
+        "source_playlist": sp,
+    }
+
+
+def _ingest_collection(source_code: str, module, url: str, *, user=None) -> dict:
+    """Spotify/Apple ingest. **Playlists** resolve through the shared SourcePlaylist
+    cache — the first import of a URL fetches + stores it; later imports of the same
+    URL (by anyone) ride the cache with zero source API calls. Albums/tracks stay on
+    the loose-track path. Refresh (services.refresh_playlist) re-fetches on demand."""
+    source = Source.objects.get(code=source_code)
+    try:
+        kind, external_id = module._classify(url)  # cheap, no network
+    except SpotifyError:  # only spotify._classify raises; applemusic returns a fallback
+        kind, external_id = None, None
+    if kind == "playlist" and external_id:
+        sp = SourcePlaylist.objects.filter(source=source, external_id=external_id).first()
+        if not (sp and sp.items.exists()):  # cache miss → fetch once + store
+            sp = _cache_source_playlist(source, external_id, module.ingest_with_meta(url), url)
+        return _import_from_source_playlist(sp, url=url, user=user)
+    return _record(source, module.ingest_with_meta(url), url, user=user)
+
+
 def ingest_apple(url: str, *, user=None) -> dict:
-    """Apple Music playlist/album/song → loose Tracks (matched to YouTube on play)."""
-    return _record(Source.objects.get(code=Source.APPLE_MUSIC), applemusic.ingest_with_meta(url), url, user=user)
+    """Apple Music playlist/album/song → loose Tracks (matched to YouTube on play).
+    Playlists ride the SourcePlaylist cache (see _ingest_collection)."""
+    return _ingest_collection(Source.APPLE_MUSIC, applemusic, url, user=user)
 
 
 def ingest_spotify(url: str, *, user=None) -> dict:
     """Spotify playlist/album/track → loose Tracks (matched to YouTube on play).
-    API-first (full list + ISRC when creds are set); falls back to the keyless embed
-    scrape when the API refuses, returns nothing, or caps a playlist — keeping the
-    larger read. No partial warning: we just recover as many tracks as we can."""
-    parsed = spotify.ingest_with_meta(url)
-    return _record(Source.objects.get(code=Source.SPOTIFY), parsed, url, user=user)
+    Playlists ride the SourcePlaylist cache; albums/tracks use the API-first path
+    (full list + ISRC) with the keyless scrape as fallback. See _ingest_collection."""
+    return _ingest_collection(Source.SPOTIFY, spotify, url, user=user)
 
 
 def ingest_youtube(url: str, *, user=None) -> dict:

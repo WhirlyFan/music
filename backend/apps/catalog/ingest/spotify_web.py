@@ -268,10 +268,16 @@ def fetch_playlist(sid: str) -> dict:
         offset += _PAGE
     tracks = [row for row in (_normalize(it) for it in items) if row]
     images = (pl.get("images") or {}).get("items") or [{}]
+    owner = (pl.get("ownerV2") or {}).get("data") or {}
+    username = owner.get("username") or ""
     return {
         "title": (pl.get("name") or "").strip() or "Spotify import",
         "external_id": sid,
         "kind": "playlist",
         "tracks": tracks,
         "cover": _pick_image(images[0].get("sources")),
+        "owner_name": owner.get("name") or "",
+        "owner_url": f"https://open.spotify.com/user/{username}" if username else "",
+        # revisionId changes whenever the playlist changes → our snapshot for refresh.
+        "snapshot": pl.get("revisionId") or "",
     }
