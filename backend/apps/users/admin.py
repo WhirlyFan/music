@@ -34,5 +34,7 @@ class UserAdmin(BaseUserAdmin):
 class InvitationAdmin(admin.ModelAdmin):
     list_display = ("email", "invited_by", "is_pending", "created_at", "accepted_at", "expires_at")
     search_fields = ("email",)
-    readonly_fields = ("token", "created_at")
+    # token_hash is unguessable and useless without the raw token, but it's not something
+    # to edit; show it read-only. The raw token only ever exists in the emailed link.
+    readonly_fields = ("token_hash", "created_at")
     # Delete an invite to revoke it: the adapter gate then blocks that email's signup.

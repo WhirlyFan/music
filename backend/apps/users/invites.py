@@ -30,13 +30,16 @@ def create_invitation(email: str, *, invited_by) -> Invitation:
     if User.objects.filter(email__iexact=email).exists():
         raise InviteError("That email already has an account.")
     inv = Invitation.pending_for(email)
-    if inv:  # re-inviting an outstanding email → refresh expiry + inviter, resend
+    if inv:  # re-inviting an outstanding email → refresh expiry + inviter, rotate, resend
         inv.expires_at = timezone.now() + INVITE_TTL
         inv.invited_by = invited_by
-        inv.save(update_fields=["expires_at", "invited_by"])
+        raw = inv.issue_token()  # rotate → the previous link stops working
+        inv.save(update_fields=["expires_at", "invited_by", "token_hash"])
     else:
-        inv = Invitation.objects.create(email=email, invited_by=invited_by)
-    _send_invite_email(inv, invited_by)
+        inv = Invitation(email=email, invited_by=invited_by)
+        raw = inv.issue_token()
+        inv.save()
+    _send_invite_email(inv, invited_by, raw)
     return inv
 
 
@@ -46,17 +49,15 @@ def redeem_invitation(token: str, request) -> Invitation:
     account's EmailAddress already-verified, skipping the confirmation mail). Redeeming
     requires the token from the emailed link, which proves the signer controls the
     address. Raises InviteError if the token is invalid / expired / already used."""
-    inv = Invitation.objects.filter(
-        token=token, accepted_at__isnull=True, expires_at__gt=timezone.now()
-    ).first()
+    inv = Invitation.pending_by_token(token)
     if inv is None:
         raise InviteError("This invite link is invalid or has expired.")
     get_adapter(request).stash_verified_email(request, inv.email)
     return inv
 
 
-def _send_invite_email(inv: Invitation, invited_by) -> None:
-    link = f"{settings.FRONTEND_ORIGIN}/signup?{urlencode({'invite': inv.token})}"
+def _send_invite_email(inv: Invitation, invited_by, raw_token: str) -> None:
+    link = f"{settings.FRONTEND_ORIGIN}/signup?{urlencode({'invite': raw_token})}"
     inviter = getattr(invited_by, "display_name", None) or "A member"
     send_mail(
         subject="You're invited",

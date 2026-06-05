@@ -25,11 +25,20 @@ from __future__ import annotations
 
 from allauth.mfa.models import Authenticator
 from rest_framework import permissions, serializers, status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 
 from .invites import InviteError, create_invitation, redeem_invitation
+
+
+class InviteRateThrottle(UserRateThrottle):
+    """Caps how many invites one member can send (keyed on user id). An invite triggers
+    an outbound email, so an uncapped endpoint is an email-abuse / quota-burn vector.
+    Rate set by DEFAULT_THROTTLE_RATES['invites']."""
+
+    scope = "invites"
 
 
 @api_view(["GET"])
@@ -48,6 +57,7 @@ class _InviteSerializer(serializers.Serializer):
 
 @api_view(["POST"])
 @permission_classes([permissions.IsAuthenticated])
+@throttle_classes([InviteRateThrottle])
 def invite(request: Request) -> Response:
     """Any logged-in member invites an email to the (invite-only) platform: creates a
     pending invitation and emails the signup link. 400 if the email is already a member."""

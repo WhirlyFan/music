@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 from datetime import timedelta
 
@@ -9,8 +10,19 @@ from django.utils import timezone
 INVITE_TTL = timedelta(days=14)
 
 
-def _invite_token() -> str:
-    return secrets.token_urlsafe(32)
+def _hash_token(raw: str) -> str:
+    """SHA-256 of an invite token. The raw token lives only in the emailed link; the DB
+    stores only this hash, so a leaked database can't be used to redeem invites (OWASP —
+    treat invite tokens like password-reset tokens). The token is high-entropy (256-bit),
+    so a plain unsalted hash is sufficient — no per-token salt/stretching needed."""
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _invite_token_hash() -> str:
+    """Field default: a fresh unguessable hash whose raw token is intentionally
+    discarded. `Invitation.issue_token()` overrides this when a redeemable link is
+    needed; the default just keeps directly-created rows (e.g. in tests) valid + unique."""
+    return _hash_token(secrets.token_urlsafe(32))
 
 
 def _invite_expiry():
@@ -109,8 +121,11 @@ class Invitation(models.Model):
     signup flow (and thus this gate)."""
 
     email = models.EmailField(db_index=True)
-    # Unguessable token for the invite link (doesn't expose the email in the URL).
-    token = models.CharField(max_length=64, unique=True, default=_invite_token, editable=False)
+    # SHA-256 of the invite-link token (the raw token is emailed, never stored). 64 hex
+    # chars. The link doesn't expose the email in the URL either.
+    token_hash = models.CharField(
+        max_length=64, unique=True, default=_invite_token_hash, editable=False
+    )
     invited_by = models.ForeignKey(
         "users.User",
         on_delete=models.SET_NULL,
@@ -132,6 +147,14 @@ class Invitation(models.Model):
     def is_pending(self) -> bool:
         return self.accepted_at is None and self.expires_at > timezone.now()
 
+    def issue_token(self) -> str:
+        """Mint a fresh raw token, store only its hash on this (unsaved) instance, and
+        return the raw token for the emailed link. Re-issuing on resend rotates the
+        token, invalidating any older link. The caller must save() afterwards."""
+        raw = secrets.token_urlsafe(32)
+        self.token_hash = _hash_token(raw)
+        return raw
+
     @classmethod
     def pending_for(cls, email: str):
         """The current pending invitation for `email` (case-insensitive), or None."""
@@ -144,3 +167,13 @@ class Invitation(models.Model):
             .order_by("-created_at")
             .first()
         )
+
+    @classmethod
+    def pending_by_token(cls, raw_token: str):
+        """The pending invitation whose token hashes to `raw_token`, or None. Constant
+        work regardless of validity (single indexed hash lookup)."""
+        return cls.objects.filter(
+            token_hash=_hash_token(raw_token),
+            accepted_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        ).first()

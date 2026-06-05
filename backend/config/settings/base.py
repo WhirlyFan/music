@@ -297,6 +297,9 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/hour",
         "user": "1000/hour",
+        # Per-member cap on invite sends (each one emails someone). Redeem stays on the
+        # default `anon` rate — its token is 256-bit, so brute force is infeasible anyway.
+        "invites": "20/day",
     },
 }
 
