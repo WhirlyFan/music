@@ -21,7 +21,13 @@ import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
 // _VERIFIED_EMAIL_EXEMPT_PREFIXES in apps/core/middleware.py — keep them in
 // sync. Without these, a freshly-signed-up user would be redirect-looped
 // on the very page they need to reach to fix the situation.
-const VERIFY_EXEMPT_PREFIXES = ['/account/verify-email', '/account/logout', '/login', '/signup']
+const VERIFY_EXEMPT_PREFIXES = [
+  '/account/verify-email',
+  '/account/logout',
+  '/login',
+  '/signup',
+  '/auth/callback',
+]
 
 // Routes a logged-OUT user is allowed to visit. Everything else redirects to
 // /login (with the attempted path as ?redirect). Includes the password-reset +
@@ -34,6 +40,9 @@ const PUBLIC_PREFIXES = [
   '/account/verify-email',
   '/account/password/forgot',
   '/account/password/reset',
+  // Social-login landing: it finalizes the session (or shows the error) itself,
+  // so the guard must not bounce it to /login before its component runs.
+  '/auth/callback',
 ]
 const isPublicPath = (path: string) =>
   path === '/' || PUBLIC_PREFIXES.some((p) => path.startsWith(p))
@@ -105,6 +114,13 @@ function RootLayout() {
         Skip to main content
       </a>
 
+      {/* Global toast surface (theme-synced, top-right). Mounted BEFORE <Outlet/>
+          so its subscriber is listening before any route's mount effect fires —
+          otherwise a toast emitted on a fresh page load (e.g. the social-login
+          callback) is dropped because no Toaster was subscribed yet. The wrapper
+          lives at components/ui/sonner.tsx. Use `toast.*` from 'sonner' anywhere. */}
+      <Toaster />
+
       <AppHeader />
 
       {/* pb-28 keeps content clear of the fixed now-playing bar. */}
@@ -126,12 +142,6 @@ function RootLayout() {
 
       {/* Global bottom-right quick-actions (gooey FAB). */}
       <QuickActionsFab />
-
-      {/* Global toast surface (theme-synced, top-right). The wrapper
-          component lives at components/ui/sonner.tsx — that's where to
-          tune positioning, duration, etc. Use `toast.success/error/...`
-          from 'sonner' anywhere to emit. */}
-      <Toaster />
 
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </div>

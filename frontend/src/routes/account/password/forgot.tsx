@@ -4,7 +4,7 @@ import { ArrowLeft, Loader2, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
@@ -55,10 +55,12 @@ function ForgotPasswordPage() {
             expires in a few hours.
           </p>
         </div>
-        <Link to="/login" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-          <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
-          Back to log in
-        </Link>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/login">
+            <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
+            Back to log in
+          </Link>
+        </Button>
       </div>
     )
   }

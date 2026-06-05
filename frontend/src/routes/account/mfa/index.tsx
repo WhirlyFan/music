@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { bannerError } from '@/lib/auth/errors'
 import { useAuthenticators, useDeactivateTotp } from '@/lib/auth/mfa'
 import { confirm } from '@/lib/overlay'
@@ -99,12 +99,9 @@ function TwoFactorOverview() {
           enrolled={hasTotp}
           description="Use Google Authenticator, 1Password, Authy, or similar. Recommended."
           enrollLink={
-            <Link
-              to="/account/mfa/totp"
-              className={buttonVariants({ variant: hasTotp ? 'outline' : 'default', size: 'sm' })}
-            >
-              {hasTotp ? 'Manage' : 'Enroll'}
-            </Link>
+            <Button asChild variant={hasTotp ? 'outline' : 'default'} size="sm">
+              <Link to="/account/mfa/totp">{hasTotp ? 'Manage' : 'Enroll'}</Link>
+            </Button>
           }
           onRemove={hasTotp ? handleRemoveTotp : undefined}
           removeBusy={deactivateTotp.isPending}
@@ -114,15 +111,9 @@ function TwoFactorOverview() {
           enrolled={hasWebAuthn}
           description="Touch ID, Face ID, YubiKey, or another WebAuthn device."
           enrollLink={
-            <Link
-              to="/account/mfa/webauthn"
-              className={buttonVariants({
-                variant: hasWebAuthn ? 'outline' : 'default',
-                size: 'sm',
-              })}
-            >
-              {hasWebAuthn ? 'Manage' : 'Enroll'}
-            </Link>
+            <Button asChild variant={hasWebAuthn ? 'outline' : 'default'} size="sm">
+              <Link to="/account/mfa/webauthn">{hasWebAuthn ? 'Manage' : 'Enroll'}</Link>
+            </Button>
           }
         />
         {/* Recovery codes are intrinsically tied to TOTP — allauth refuses
@@ -137,15 +128,11 @@ function TwoFactorOverview() {
             enrolled={hasRecoveryCodes}
             description="Single-use backup codes. Use one if you lose your authenticator."
             enrollLink={
-              <Link
-                to="/account/mfa/recovery-codes"
-                className={buttonVariants({
-                  variant: hasRecoveryCodes ? 'outline' : 'default',
-                  size: 'sm',
-                })}
-              >
-                {hasRecoveryCodes ? 'View' : 'Generate'}
-              </Link>
+              <Button asChild variant={hasRecoveryCodes ? 'outline' : 'default'} size="sm">
+                <Link to="/account/mfa/recovery-codes">
+                  {hasRecoveryCodes ? 'View' : 'Generate'}
+                </Link>
+              </Button>
             }
           />
         ) : null}

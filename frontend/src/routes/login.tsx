@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { AuthCard } from '@/components/auth/auth-card'
 import { GoogleButton } from '@/components/auth/google-button'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
@@ -82,9 +83,18 @@ function LoginPage() {
   const parsed = parseAllAuthErrors(login.data)
 
   return (
-    <div className="mx-auto max-w-sm space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
-
+    <AuthCard
+      title="Log in"
+      description="Welcome back — sign in to keep listening."
+      footer={
+        <>
+          Don&apos;t have an account?{' '}
+          <Link to="/signup" className="text-primary hover:underline">
+            Sign up
+          </Link>
+        </>
+      }
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -182,14 +192,7 @@ function LoginPage() {
       </div>
 
       <GoogleButton />
-
-      <p className="text-muted-foreground text-center text-sm">
-        Don&apos;t have an account?{' '}
-        <Link to="/signup" className="text-primary hover:underline">
-          Sign up
-        </Link>
-      </p>
-    </div>
+    </AuthCard>
   )
 }
 
@@ -244,14 +247,10 @@ function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }
   const busy = mfa.isPending || trust.isPending
 
   return (
-    <div className="mx-auto max-w-sm space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Multi-factor code</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Enter the 6-digit code from your authenticator app, or one of your recovery codes.
-        </p>
-      </div>
-
+    <AuthCard
+      title="Multi-factor code"
+      description="Enter the 6-digit code from your authenticator app, or one of your recovery codes."
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -312,6 +311,6 @@ function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }
           Cancel
         </Button>
       </form>
-    </div>
+    </AuthCard>
   )
 }

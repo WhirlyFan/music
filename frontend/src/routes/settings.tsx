@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 
 import { GoogleIcon } from '@/components/auth/google-button'
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/client'
 import { providerRedirect } from '@/lib/auth/api'
@@ -47,12 +47,9 @@ function SettingsPage() {
           title="Email"
           description={user?.email ?? 'The address you sign in and receive mail at.'}
           action={
-            <Link
-              to="/account/email"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              Change
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/account/email">Change</Link>
+            </Button>
           }
         />
         <UsernameRow username={user?.username} />
@@ -61,12 +58,9 @@ function SettingsPage() {
           title="Password"
           description="Set a new password. At least 12 characters."
           action={
-            <Link
-              to="/account/password/change"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              Change
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/account/password/change">Change</Link>
+            </Button>
           }
         />
       </Section>
@@ -88,15 +82,9 @@ function SettingsPage() {
           }
           status={mfaEnrolled ? 'on' : 'off'}
           action={
-            <Link
-              to="/account/mfa"
-              className={buttonVariants({
-                variant: mfaEnrolled ? 'outline' : 'default',
-                size: 'sm',
-              })}
-            >
-              {mfaEnrolled ? 'Manage' : 'Set up'}
-            </Link>
+            <Button asChild variant={mfaEnrolled ? 'outline' : 'default'} size="sm">
+              <Link to="/account/mfa">{mfaEnrolled ? 'Manage' : 'Set up'}</Link>
+            </Button>
           }
         />
       </Section>
@@ -221,7 +209,7 @@ function GoogleConnectionRow() {
             onClick={() =>
               void providerRedirect('google', {
                 process: 'connect',
-                callbackUrl: '/auth/callback?next=/settings',
+                callbackUrl: '/auth/callback?from=/settings',
               })
             }
           >

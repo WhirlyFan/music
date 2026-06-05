@@ -3,7 +3,7 @@ import { MailCheck, RefreshCw } from 'lucide-react'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { bannerError } from '@/lib/auth/errors'
 import { hasVerifiedPrimaryEmail } from '@/lib/auth/guards'
 import { useResendEmailVerification } from '@/lib/hooks/mutations/auth'
@@ -91,9 +91,9 @@ function VerifyEmailWaitingPage() {
 
       <p className="text-muted-foreground text-center text-xs">
         Wrong account?{' '}
-        <Link to="/login" className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
-          Log in
-        </Link>
+        <Button asChild variant="ghost" size="sm">
+          <Link to="/login">Log in</Link>
+        </Button>
       </p>
     </div>
   )

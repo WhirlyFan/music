@@ -1,6 +1,7 @@
 import './index.css'
 
 import { QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -40,6 +41,9 @@ createRoot(rootElement).render(
         <RouterProvider router={router} />
         {/* Sibling to the router so overlays render above all routes. */}
         <OverlayRenderer />
+        {/* Dev-only TanStack Query inspector (cache, fetch states). Tree-shaken
+            out of prod builds. Toggle via its own floating button. */}
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </RootErrorBoundary>
   </StrictMode>,
