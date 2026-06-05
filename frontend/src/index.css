@@ -545,3 +545,43 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * View Transitions (TanStack Router `defaultViewTransition`). Keep the root swap
+ * INSTANT so ordinary navigation is unchanged — only named regions animate.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/*
+ * The auth card opens/closes like a modal across navigations — including the
+ * Back button, which a plain route unmount can't animate. The outgoing snapshot
+ * plays the "close" (drop + fade), the incoming plays the "open" (rise + fade).
+ */
+::view-transition-old(auth-card) {
+  animation: auth-card-out 0.2s var(--ease-standard) both;
+}
+::view-transition-new(auth-card) {
+  animation: auth-card-in 0.3s var(--ease-out-back) both;
+}
+@keyframes auth-card-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(auth-card),
+  ::view-transition-new(auth-card) {
+    animation: none !important;
+  }
+}

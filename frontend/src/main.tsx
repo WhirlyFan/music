@@ -20,6 +20,11 @@ applyInitialTheme()
 const router = createRouter({
   routeTree,
   defaultPreload: 'intent',
+  // Wrap navigations (incl. Back/Forward) in the View Transitions API so routes
+  // can animate OUT, not just in. We scope the visible effect in index.css: the
+  // root swap stays instant (ordinary pages unchanged), and only named regions
+  // like the auth card play an open/close — see `::view-transition-*(auth-card)`.
+  defaultViewTransition: true,
   context: { queryClient },
 })
 

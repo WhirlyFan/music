@@ -29,7 +29,10 @@ export function AuthCard({
         aria-hidden
         className="bg-primary/15 pointer-events-none absolute -top-12 left-1/2 -z-10 size-64 -translate-x-1/2 rounded-full blur-3xl"
       />
-      <div className="motion-safe:animate-slide-up space-y-4">
+      {/* Named view-transition region → opens/closes like a modal across
+          navigations, including the Back button. Enter + exit are driven by
+          `::view-transition-*(auth-card)` in index.css. */}
+      <div className="space-y-4 [view-transition-name:auth-card]">
         <div className="bg-card/95 border-border space-y-6 rounded-2xl border p-8 shadow-xl backdrop-blur">
           <div className="space-y-1.5">
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
