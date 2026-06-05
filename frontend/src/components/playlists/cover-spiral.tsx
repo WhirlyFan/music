@@ -32,21 +32,47 @@ export type CoverItem = {
 
 const FRICTION = 0.92
 const TAP_THRESHOLD = 6 // px of movement below which a press counts as a tap
-// Golden angle — the sunflower/phyllotaxis spacing that fills a disc evenly with no
-// preferred axis, so the cluster looks organic rather than like rings or spokes.
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
-// Radius grows as STEP*sqrt(i): even areal density (sunflower). 0.62*card packs them
-// into a tight overlapping cluster at the centre that fans outward.
-const STEP_FACTOR = 0.62
+const GAP = 18 // space between cards so the grid spiral never overlaps
 const cardFor = (width: number) => (width < 640 ? 116 : 148)
 
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
- * A finite, click-and-drag cluster of playlist covers laid out on a golden-angle
- * spiral — one tile per playlist (no repeating/tiling). The covers bunch around the
- * centre and fan outward; drag to pan with inertia, tap a cover to open it.
+ * Integer (col,row) cells of a square "Ulam" spiral walked outward from the centre —
+ * run lengths 1,1,2,2,3,3,… turning right → down → left → up. Tile i lands on cells[i],
+ * so the covers fill a tight grid that spirals out from the centre (no overlap).
+ */
+function spiralCells(n: number): { x: number; y: number }[] {
+  const cells = [{ x: 0, y: 0 }]
+  const dirs = [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+  ]
+  let x = 0
+  let y = 0
+  let d = 0
+  let run = 1
+  while (cells.length < n) {
+    for (let twice = 0; twice < 2; twice++) {
+      for (let s = 0; s < run && cells.length < n; s++) {
+        x += dirs[d][0]
+        y += dirs[d][1]
+        cells.push({ x, y })
+      }
+      d = (d + 1) % 4
+    }
+    run++
+  }
+  return cells
+}
+
+/**
+ * A finite, click-and-drag cluster of playlist covers laid out on a square grid spiral —
+ * one tile per playlist (no repeating/tiling, no overlap). The covers fill a grid that
+ * spirals out from the centre; drag to pan with inertia, tap a cover to open it.
  *
  * Positions are static (computed from the cover count + size); only a drag `offset` is
  * mutated in a rAF loop and written to each tile's `transform: translate3d`, so tiles
@@ -97,12 +123,11 @@ export function CoverSpiral({
     const el = containerRef.current
     if (!el) return
     const c = cardFor(el.clientWidth)
-    const step = c * STEP_FACTOR
-    const pos = items.map((_, i) => {
-      const r = step * Math.sqrt(i)
-      const a = i * GOLDEN_ANGLE
-      return { x: r * Math.cos(a), y: r * Math.sin(a) }
-    })
+    const pitch = c + GAP // grid cell size → adjacent cards sit a GAP apart, never overlap
+    const pos = spiralCells(items.length).map((cell) => ({
+      x: cell.x * pitch,
+      y: cell.y * pitch,
+    }))
     layout.current = {
       cx: (el.clientWidth - c) / 2,
       cy: (el.clientHeight - c) / 2,
@@ -216,7 +241,6 @@ export function CoverSpiral({
         onPointerCancel={onPointerUp}
         className="size-full cursor-grab touch-none select-none active:cursor-grabbing"
       >
-        {/* Centre tiles render last so they sit on top of the outer ones they overlap. */}
         {items.map((item, i) => (
           <div
             key={item.id}
@@ -224,8 +248,9 @@ export function CoverSpiral({
               tileEls.current[i] = el
             }}
             data-pid={item.id}
-            style={{ width: card, height: card, zIndex: items.length - i, willChange: 'transform' }}
-            className="absolute top-0 left-0 hover:z-[999]"
+            style={{ width: card, height: card, willChange: 'transform' }}
+            // hover:z lifts the tilted card above its grid neighbours.
+            className="absolute top-0 left-0 hover:z-10"
           >
             <CoverTile item={item} onDelete={onDelete} />
           </div>
