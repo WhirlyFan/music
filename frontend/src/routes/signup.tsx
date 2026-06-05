@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api/client'
@@ -101,9 +101,9 @@ function ConfirmSignOut({
           This invite link is invalid or has expired. You’re still signed in as{' '}
           <span className="font-medium">{signedInAs}</span>.
         </p>
-        <Button asChild className="w-full">
-          <Link to="/">Go home</Link>
-        </Button>
+        <Link to="/" className={buttonVariants({ className: 'w-full' })}>
+          Go home
+        </Link>
       </div>
     )
   }
@@ -131,9 +131,9 @@ function ConfirmSignOut({
         create that account.
       </p>
       <div className="flex gap-3">
-        <Button variant="outline" className="flex-1" disabled={busy} asChild>
-          <Link to="/">Cancel</Link>
-        </Button>
+        <Link to="/" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
+          Cancel
+        </Link>
         <Button
           className="flex-1"
           onClick={onContinue}
