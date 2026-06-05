@@ -273,6 +273,12 @@ HEADLESS_FRONTEND_URLS = {
     "account_confirm_email": f"{FRONTEND_ORIGIN}/account/verify-email/{{key}}",
     "account_reset_password_from_key": (f"{FRONTEND_ORIGIN}/account/password/reset/key/{{key}}"),
     "account_signup": f"{FRONTEND_ORIGIN}/signup",
+    # Where allauth sends the browser when a social login fails (and the flow's
+    # own `next`/callback_url is unavailable). REQUIRED once a social provider is
+    # enabled — allauth raises ImproperlyConfigured (→ 500 on the OAuth callback)
+    # if a social error occurs and this key is missing. Our /auth/callback reads
+    # the appended `?error=` and shows the right message.
+    "socialaccount_login_error": f"{FRONTEND_ORIGIN}/auth/callback",
 }
 
 # --- allauth MFA ---
