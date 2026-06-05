@@ -557,8 +557,22 @@
   animation: var(--animate-text-shimmer);
 }
 
-/* Animated rainbow fill (annnimate rainbow-button). */
-.rainbow-button {
+/* Animated rainbow GLOW around a solid button (annnimate rainbow-button). The glow
+ * is a blurred, moving gradient on this wrapper — not the Button — because the Button
+ * clips overflow for its press ripple, which would otherwise cut the halo. `isolation`
+ * contains the behind-layer so it stays behind the button, not the whole page. */
+.rainbow-glow {
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+  border-radius: 9999px;
+}
+.rainbow-glow::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: inherit;
   background: linear-gradient(
     90deg,
     oklch(0.68 0.21 25),
@@ -569,7 +583,8 @@
     oklch(0.68 0.21 25)
   );
   background-size: 200% auto;
-  color: #fff;
+  filter: blur(9px);
+  opacity: 0.85;
   animation: var(--animate-rainbow);
 }
 
