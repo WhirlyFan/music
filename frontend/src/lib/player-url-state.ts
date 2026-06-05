@@ -10,7 +10,7 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
  */
 type Flag = 'nowPlaying' | 'queue'
 
-function useUrlFlag(key: Flag, viewTransition = false) {
+function useUrlFlag(key: Flag) {
   const value = useRouterState({
     select: (s) => Boolean((s.location.search as Record<string, unknown>)[key]),
   })
@@ -23,15 +23,11 @@ function useUrlFlag(key: Flag, viewTransition = false) {
         return { ...prev, [key]: open ? true : undefined } // undefined drops the param
       }) as never,
       replace: true,
-      // Opt OUT of view transitions for these toggles (overriding the router's
-      // defaultViewTransition). Both panels are always-mounted and animate via CSS
-      // (opacity/transform / max-height); a VT snapshot would freeze that mid-animation.
-      viewTransition,
     })
   return [value, setValue] as const
 }
 
-/** Full-screen "now playing" view open? (?nowPlaying=true) — linkable, survives refresh. */
+/** Full-screen "now playing" view open? (?nowPlaying=true) — linkable. */
 export const useNowPlayingOpen = () => useUrlFlag('nowPlaying')
 
 /** Queue panel open? (?queue=true) — retained across navigation. */

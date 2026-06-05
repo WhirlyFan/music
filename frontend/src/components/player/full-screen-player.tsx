@@ -22,7 +22,6 @@ function sourceLabel(url: string): string {
  * duplicated playback state. Immersive blurred-cover backdrop; Esc / × to close.
  */
 export function FullScreenPlayer({
-  open,
   track,
   analyser,
   playing,
@@ -36,7 +35,6 @@ export function FullScreenPlayer({
   onSeek,
   onClose,
 }: {
-  open: boolean
   track: Track
   analyser: AnalyserNode | null
   playing: boolean
@@ -51,13 +49,12 @@ export function FullScreenPlayer({
   onClose: () => void
 }) {
   useEffect(() => {
-    if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [onClose])
 
   const source = track.active_source
   const ytUrl =
@@ -72,12 +69,8 @@ export function FullScreenPlayer({
       role="dialog"
       aria-modal="true"
       aria-label={`Now playing: ${track.title}`}
-      aria-hidden={!open}
-      inert={!open}
       onClick={onClose}
-      className={`ease-out-quint fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden transition-opacity duration-200 motion-reduce:transition-none ${
-        open ? 'opacity-100' : 'pointer-events-none opacity-0'
-      }`}
+      className="motion-safe:animate-fade-in fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
     >
       {/* Immersive backdrop: an always-opaque base, then the cover blurred on top,
           then a darkening scrim. The opaque base matters on track change — the new
@@ -94,23 +87,22 @@ export function FullScreenPlayer({
       )}
       <div aria-hidden className="bg-background/70 absolute inset-0" />
 
-      {/* Big, obvious minimize target (top-right) with a solid chip so it reads on
-          any cover. Tapping anywhere outside the card also closes. */}
+      {/* Big, obvious minimize target (top-left, thumb-reachable) with a solid
+          chip so it reads on any cover. Tapping anywhere outside the card also
+          closes. */}
       <Button
         size="icon"
         variant="ghost"
         onClick={onClose}
         aria-label="Close now playing"
-        className="bg-background/60 hover:bg-background/80 absolute top-3 right-3 z-20 size-11 rounded-full"
+        className="bg-background/60 hover:bg-background/80 absolute top-3 left-3 z-20 size-11 rounded-full"
       >
         <ChevronDown className="size-6" />
       </Button>
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`ease-out-quint relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6 transition-transform duration-300 motion-reduce:transition-none ${
-          open ? 'translate-y-0' : 'translate-y-4'
-        }`}
+        className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6"
       >
         <div className="relative grid size-72 place-items-center sm:size-96">
           <AudioVisualizer analyser={analyser} artworkUrl={track.artwork_url} />
