@@ -64,7 +64,8 @@ def _send_invite_email(inv: Invitation, invited_by, raw_token: str) -> None:
         message=(
             f"{inviter} invited you to join.\n\n"
             f"Create your account: {link}\n\n"
-            "This invite expires in 14 days. If you weren't expecting it, ignore this email."
+            f"This invite expires in {INVITE_TTL.days} days. "
+            "If you weren't expecting it, ignore this email."
         ),
         from_email=None,  # falls back to DEFAULT_FROM_EMAIL
         recipient_list=[inv.email],

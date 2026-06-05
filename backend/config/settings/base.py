@@ -49,6 +49,7 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     "drf_spectacular_sidecar",  # self-hosted Swagger UI assets (CSP-friendly)
     "axes",
+    "waffle",
     "pghistory",
     "pgtrigger",
     "health_check",

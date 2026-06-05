@@ -99,6 +99,7 @@ dependencies = [
     { name = "django-pgtrigger" },
     { name = "django-ratelimit" },
     { name = "django-rls" },
+    { name = "django-waffle" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
     { name = "drf-spectacular-sidecar" },
@@ -145,6 +146,7 @@ requires-dist = [
     { name = "django-pgtrigger", specifier = ">=4.13" },
     { name = "django-ratelimit", specifier = ">=4.1" },
     { name = "django-rls", specifier = ">=0.4" },
+    { name = "django-waffle", specifier = ">=4.2" },
     { name = "djangorestframework", specifier = ">=3.16" },
     { name = "drf-spectacular", specifier = ">=0.28" },
     { name = "drf-spectacular-sidecar", specifier = ">=2024.7.1" },
@@ -692,6 +694,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d8/01/419bc3cd882f3ec645d5a4511085202dd6bd3ef8d385871dcd2d32cc15b3/django_stubs_ext-6.0.5.tar.gz", hash = "sha256:1cc325e991303849bce70e19748981b225ef08b37256f263e113caf97cd3bcc0", size = 6666, upload-time = "2026-05-25T08:46:36.012Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ef/bf/7ee71071d84ad4e0efcd77e2681afed254a5f65c27524441a9caf8c60467/django_stubs_ext-6.0.5-py3-none-any.whl", hash = "sha256:a9932c8233d6dd4e34ae0b192026379c1a9be8f0b7c27aa1fa09ae215169773e", size = 10362, upload-time = "2026-05-25T08:46:34.467Z" },
+]
+
+[[package]]
+name = "django-waffle"
+version = "5.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/22/e1/6f533da0d4ac89f427dfd9410e39bfc14ae3a23335ecd549d76be4b2a834/django_waffle-5.0.0.tar.gz", hash = "sha256:62f9d00eedf68dafb82657beab56e601bddedc1ea1ccfef91d83df8658708509", size = 37761, upload-time = "2025-06-12T07:38:54.895Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/d2/6f0d664bd35a3fdd0403655c7c32ec290704923f11541ef356b180cd8fbf/django_waffle-5.0.0-py3-none-any.whl", hash = "sha256:3312851d9d926b76b9e90712355781700a383b82b5bf2b61e1f1be97532c0f3d", size = 48137, upload-time = "2025-06-12T07:38:53.698Z" },
 ]
 
 [[package]]

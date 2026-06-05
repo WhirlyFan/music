@@ -11,6 +11,7 @@ from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory
 from rest_framework.test import APIClient
+from waffle.testutils import override_switch
 
 from apps.users.adapter import AccountAdapter
 from apps.users.invites import InviteError, create_invitation, redeem_invitation
@@ -58,6 +59,7 @@ def _authed_request(user):
     return req
 
 
+@override_switch("invite_only", active=True)
 @pytest.mark.django_db
 def test_adapter_blocks_uninvited_signup():
     with context.request_context(_anon_request()):  # anonymous → a signup
@@ -65,6 +67,7 @@ def test_adapter_blocks_uninvited_signup():
             AccountAdapter().clean_email("stranger@example.com")
 
 
+@override_switch("invite_only", active=True)
 @pytest.mark.django_db
 def test_adapter_allows_invited_signup():
     Invitation.objects.create(email="invited@example.com")
@@ -73,6 +76,15 @@ def test_adapter_allows_invited_signup():
         assert AccountAdapter().clean_email("Invited@example.com") == "Invited@example.com"
 
 
+@override_switch("invite_only", active=False)
+@pytest.mark.django_db
+def test_adapter_allows_uninvited_signup_when_flag_off():
+    # Switch off → open signups; an uninvited stranger is allowed (normal verification).
+    with context.request_context(_anon_request()):
+        assert AccountAdapter().clean_email("stranger@example.com") == "stranger@example.com"
+
+
+@override_switch("invite_only", active=True)
 @pytest.mark.django_db
 def test_adapter_allows_authed_email_change(member):
     # Authenticated user changing email → not a signup, so no invite required.

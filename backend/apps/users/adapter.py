@@ -1,10 +1,11 @@
 """Custom allauth account adapter — enforces invite-only signup.
 
 `clean_email` is allauth's hook for "(dynamically) restrict what email addresses can
-be chosen". We allow a *signup* only when the email has a pending invitation; an
-authenticated user changing their own email is unaffected. On signup we mark the
-matching invite accepted. `createsuperuser` bypasses this entirely (it doesn't go
-through the signup flow), which bootstraps the first/admin user.
+be chosen". While the `invite_only` waffle switch is on, a *signup* is allowed only
+when the email has a pending invitation; flip the switch off (in /admin/) and signups
+are open. Either way, an authenticated user changing their own email is unaffected. On
+signup we mark the matching invite accepted. `createsuperuser` bypasses this entirely
+(it doesn't go through the signup flow), which bootstraps the first/admin user.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 from allauth.account.adapter import DefaultAccountAdapter
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from waffle import switch_is_active
 
 from .models import Invitation
 
@@ -25,7 +27,7 @@ class AccountAdapter(DefaultAccountAdapter):
         is_signup = not (
             request and getattr(request, "user", None) and request.user.is_authenticated
         )
-        if is_signup and Invitation.pending_for(email) is None:
+        if is_signup and switch_is_active("invite_only") and Invitation.pending_for(email) is None:
             raise ValidationError(
                 "This platform is invite-only — ask a member to send you an invite."
             )

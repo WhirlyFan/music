@@ -114,11 +114,11 @@ class User(AbstractUser):
 
 
 class Invitation(models.Model):
-    """An invite to join the (invite-only) platform. Any logged-in member can create
-    one for an email; the custom AccountAdapter then lets *only* emails with a pending
-    (unaccepted, unexpired) invitation sign up. Marked accepted when that email signs
-    up. The first/admin user is bootstrapped via `createsuperuser`, which bypasses the
-    signup flow (and thus this gate)."""
+    """An invite to join the platform. Any logged-in member can create one for an email;
+    while the `invite_only` waffle switch is on, the custom AccountAdapter lets *only*
+    emails with a pending (unaccepted, unexpired) invitation sign up. Marked accepted
+    when that email signs up. The first/admin user is bootstrapped via `createsuperuser`,
+    which bypasses the signup flow (and thus this gate)."""
 
     email = models.EmailField(db_index=True)
     # SHA-256 of the invite-link token (the raw token is emailed, never stored). 64 hex

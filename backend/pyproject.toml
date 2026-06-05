@@ -24,6 +24,7 @@ dependencies = [
     "django-guid>=3.6",
     "django-axes>=8.0",
     "django-ratelimit>=4.1",
+    "django-waffle>=4.2",
     "django-health-check>=4.4",
     "django-pghistory>=3.5",
     "django-pgtrigger>=4.13",
