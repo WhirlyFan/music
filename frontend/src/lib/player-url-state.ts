@@ -10,7 +10,7 @@ import { useNavigate, useRouterState } from '@tanstack/react-router'
  */
 type Flag = 'nowPlaying' | 'queue'
 
-function useUrlFlag(key: Flag) {
+function useUrlFlag(key: Flag, viewTransition = false) {
   const value = useRouterState({
     select: (s) => Boolean((s.location.search as Record<string, unknown>)[key]),
   })
@@ -23,12 +23,19 @@ function useUrlFlag(key: Flag) {
         return { ...prev, [key]: open ? true : undefined } // undefined drops the param
       }) as never,
       replace: true,
+      // Opt this search-only navigation into a View Transition. The router only
+      // auto-transitions route (pathname) changes, so without this the overlay's
+      // close (a `?nowPlaying` toggle) snaps instead of animating its
+      // `::view-transition-*(full-screen-player)`.
+      viewTransition,
     })
   return [value, setValue] as const
 }
 
-/** Full-screen "now playing" view open? (?nowPlaying=true) — linkable. */
-export const useNowPlayingOpen = () => useUrlFlag('nowPlaying')
+/** Full-screen "now playing" view open? (?nowPlaying=true) — linkable. View-transitioned
+ *  so the overlay animates open/closed (incl. Back). */
+export const useNowPlayingOpen = () => useUrlFlag('nowPlaying', true)
 
-/** Queue panel open? (?queue=true) — retained across navigation. */
+/** Queue panel open? (?queue=true) — retained across navigation. No view transition:
+ *  the queue uses an always-mounted max-height transition that a snapshot would freeze. */
 export const useQueueOpen = () => useUrlFlag('queue')
