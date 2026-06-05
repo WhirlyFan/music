@@ -94,6 +94,11 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 #                                 memory creep self-heals.
 #   --timeout 30                  Kill long-running workers before they pile up.
 #   --access-logfile - / --error-logfile -  stdout; orchestrator captures it.
+#   --no-control-socket           Gunicorn 26 defaults its control socket to
+#                                 /app/.gunicorn/gunicorn.ctl, which the non-root
+#                                 `app` user can't create (read-only /app) — it
+#                                 logs "Permission denied" on every boot. We don't
+#                                 use the control interface, so disable it.
 ENV WEB_CONCURRENCY=3
 CMD ["sh", "-c", "gunicorn config.wsgi:application \
     --bind 0.0.0.0:8000 \
@@ -101,5 +106,6 @@ CMD ["sh", "-c", "gunicorn config.wsgi:application \
     --max-requests 1000 \
     --max-requests-jitter 100 \
     --timeout 30 \
+    --no-control-socket \
     --access-logfile - \
     --error-logfile -"]
