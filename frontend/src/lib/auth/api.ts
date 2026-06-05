@@ -56,8 +56,52 @@ async function call<T = unknown>(
   return res.json() as Promise<AllAuthResponse<T>>
 }
 
+/**
+ * Begin a social login via allauth's browser redirect flow. This is a REAL
+ * browser navigation (a synthesized form POST), not a fetch — the endpoint
+ * responds with a 302 to the provider, which fetch can't follow across origins.
+ * allauth returns to `callbackUrl` afterward: authenticated on success, or with
+ * `?error=<code>&error_process=login` on failure (e.g. `signup_closed` when the
+ * invite gate rejects a new Google user). CSRF: the headless POST accepts the
+ * `csrfmiddlewaretoken` form field (form posts can't set the X-CSRFToken header),
+ * so we seed the cookie first and pass it through.
+ */
+export async function providerRedirect(
+  provider: string,
+  opts: { process?: 'login' | 'connect'; callbackUrl: string },
+): Promise<void> {
+  await ensureCsrfCookie()
+  const fields: Record<string, string> = {
+    provider,
+    process: opts.process ?? 'login',
+    callback_url: opts.callbackUrl,
+  }
+  const csrf = getCsrfCookie()
+  if (csrf) fields.csrfmiddlewaretoken = csrf
+
+  const form = document.createElement('form')
+  form.method = 'POST'
+  form.action = `${ALLAUTH}/auth/provider/redirect`
+  for (const [name, value] of Object.entries(fields)) {
+    const input = document.createElement('input')
+    input.type = 'hidden'
+    input.name = name
+    input.value = value
+    form.append(input)
+  }
+  document.body.append(form)
+  form.submit()
+}
+
 export const auth = {
   session: () => call('GET', '/auth/session'),
+  /** Public allauth config — includes the list of configured social providers. */
+  config: () => call('GET', '/config'),
+  /** Social accounts connected to the signed-in user. */
+  providerAccounts: () => call('GET', '/account/providers'),
+  /** Disconnect a connected social account (by provider id + account uid). */
+  disconnectProvider: (provider: string, account: string) =>
+    call('DELETE', '/account/providers', { provider, account }),
 
   /**
    * Login by EITHER email or username. We detect which by the '@' in the

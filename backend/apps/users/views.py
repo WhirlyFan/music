@@ -24,6 +24,7 @@ Safety:
 from __future__ import annotations
 
 from allauth.mfa.models import Authenticator
+from django.contrib.auth import get_user_model
 from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.request import Request
@@ -89,3 +90,25 @@ def redeem_invite(request: Request) -> Response:
     except InviteError as e:
         return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
     return Response({"email": inv.email})
+
+
+class _UsernameSerializer(serializers.Serializer):
+    # Mirror the frontend rule: 3–30 chars, letters/digits/_/- .
+    username = serializers.RegexField(r"^[a-zA-Z0-9_-]{3,30}$")
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def change_username(request: Request) -> Response:
+    """Change the signed-in user's handle. Usernames are case-insensitive
+    (ACCOUNT_PRESERVE_USERNAME_CASING is off), so we store it lowercased and reject a
+    case-insensitive collision with anyone else."""
+    s = _UsernameSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    username = s.validated_data["username"].lower()
+    user_model = get_user_model()
+    if user_model.objects.exclude(pk=request.user.pk).filter(username__iexact=username).exists():
+        return Response({"detail": "That username is taken."}, status=status.HTTP_409_CONFLICT)
+    request.user.username = username
+    request.user.save(update_fields=["username"])
+    return Response({"username": username})

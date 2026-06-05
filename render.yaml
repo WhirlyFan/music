@@ -54,6 +54,11 @@ services:
       - type: rewrite
         source: /admin/*
         destination: https://music-backend-ll7r.onrender.com/admin/*
+      # Social-login OAuth callback (/accounts/google/login/callback/). Must be
+      # same-origin so the session cookie allauth sets lands on this host.
+      - type: rewrite
+        source: /accounts/*
+        destination: https://music-backend-ll7r.onrender.com/accounts/*
       - type: rewrite
         source: /static/*
         destination: https://music-backend-ll7r.onrender.com/static/*
@@ -124,6 +129,18 @@ services:
       # repo. If lost, existing TOTP rows can't be decrypted — users must
       # re-enroll. Don't rotate without a migration plan.
       - key: MFA_FIELD_ENCRYPTION_KEY
+        sync: false
+
+      # ── Google social login (optional) ──────────────────────────────────
+      # OAuth 2.0 Web client from Google Cloud Console (free). Until both are
+      # set, the "Continue with Google" button simply doesn't render (the app
+      # reads the configured providers from allauth's /config). Set the
+      # authorized redirect URI in Google to:
+      #   https://music.whirlyfan.com/accounts/google/login/callback/
+      # New Google signups still require an invite (SocialAccountAdapter gate).
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
 
       # ── Host / origin allow-lists ───────────────────────────────────────

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { GoogleButton } from '@/components/auth/google-button'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
@@ -173,6 +174,14 @@ function LoginPage() {
           )}
         </Button>
       </form>
+
+      <div className="flex items-center gap-3" aria-hidden="true">
+        <span className="bg-border h-px flex-1" />
+        <span className="text-muted-foreground text-xs">or</span>
+        <span className="bg-border h-px flex-1" />
+      </div>
+
+      <GoogleButton />
 
       <p className="text-muted-foreground text-center text-sm">
         Don&apos;t have an account?{' '}
