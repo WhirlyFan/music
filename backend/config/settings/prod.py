@@ -3,13 +3,23 @@
 from csp.constants import NONE, SELF
 
 from .base import *  # noqa: F401,F403
-from .base import INSTALLED_APPS, MIDDLEWARE, env
+from .base import ALLOWED_HOSTS, INSTALLED_APPS, MIDDLEWARE, env
 
 # anymail must be in INSTALLED_APPS for the backend to load.
 # Append in prod only — dev uses Mailpit via plain SMTP backend.
 INSTALLED_APPS = [*INSTALLED_APPS, "anymail"]
 
 DEBUG = False
+
+# --- Allowed hosts ---
+# Render gives each service a (possibly suffixed) public hostname — e.g.
+# `music-backend-ll7r.onrender.com` when the plain name is taken — and injects
+# it as RENDER_EXTERNAL_HOSTNAME. Trust it automatically so the backend accepts
+# its own host (and Render's health probe) regardless of any random suffix,
+# without having to keep DJANGO_ALLOWED_HOSTS in sync with it by hand.
+_render_host = env("RENDER_EXTERNAL_HOSTNAME", default="")
+if _render_host and _render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS = [*ALLOWED_HOSTS, _render_host]
 
 # --- Behind-a-proxy posture ---
 # Cloudflare / nginx / load balancer terminates TLS; the origin sees HTTP.

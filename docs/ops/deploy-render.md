@@ -10,7 +10,13 @@ bottom.
 |---|---|---|
 | `https://music-frontend.onrender.com` | React app, public | Static Site (free forever) |
 | `https://music-backend.onrender.com` | Django + DRF, public but only accessed via frontend rewrites | Web Service (free, sleeps 15 min) |
-| (managed) | Postgres 17 | Database (free for 90 days, then $7/mo) |
+| (managed) | Postgres 18 | Database (free, then $7/mo — see expiry note below) |
+
+> **Free-database expiry:** Render deletes free Postgres after a fixed window
+> and **only allows one free database per workspace**. That window has been as
+> short as 30 days (it was 90 historically) — check Render's current pricing
+> before relying on a number. Upgrade to Starter ($7/mo) to keep the data +
+> get backups, or delete-and-recreate to reset the clock (wipes all data).
 
 The frontend's `render.yaml` rewrites `/api/*`, `/_allauth/*`, `/admin/*`,
 `/static/*`, and `/health` to the backend, so from the browser's perspective
@@ -46,15 +52,25 @@ The `render.yaml` at the repo root drives the deploy spec.
 
 ### 3. Set secrets that aren't in the blueprint
 
-Two env vars in `render.yaml` are marked to skip auto-sync (`sync: false`)
-because they're sensitive or environment-specific:
+Several env vars in `render.yaml` are marked to skip auto-sync (`sync: false`)
+because they're sensitive or environment-specific. Set them in the **backend
+service → Environment**:
 
-| Variable | Where to set | Why |
+| Variable | Required? | Why / where to get it |
 |---|---|---|
-| `SENTRY_DSN` | Backend service → Environment → Add Secret File or env var | Optional; enables error tracking. Get a free DSN from [sentry.io](https://sentry.io). |
+| `MFA_FIELD_ENCRYPTION_KEY` | **Yes** | Fernet key encrypting TOTP secrets at rest. Generate: `python -c "import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"`. **Store it** — if lost, enrolled MFA can't be decrypted and users must re-enroll. |
+| `RESEND_API_KEY` | **Yes for email** | Signup-verification + invite emails. Free key from [resend.com](https://resend.com). Without it those flows silently fail — and signup is invite-only by default (see below). |
+| `DEFAULT_FROM_EMAIL` | with Resend | A verified sender; unset falls back to `onboarding@resend.dev` (fine for testing). |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Optional | Enables Spotify import. Apple Music + YouTube need nothing. |
+| `SENTRY_DSN` | Optional | Error tracking. Free DSN from [sentry.io](https://sentry.io). |
 
 The blueprint generates `DJANGO_SECRET_KEY` automatically via
-`generateValue: true`.
+`generateValue: true`, and wires `DATABASE_URL` from the linked database.
+
+> **Invite-only gate:** the `invite_only` waffle switch is ON by default (data
+> migration). On a fresh prod DB with no members, nobody can self-sign-up —
+> create the superuser first (step 5) and invite from the app, or flip the
+> switch off in `/admin/` → Waffle → Switches to allow open signup.
 
 ### 4. First deploy completes
 
@@ -96,6 +112,24 @@ the stack:
   `python manage.py shell -c "1/0"` via the Render shell
 - [ ] `/health/` returns 200 (Render's health check should already be green)
 
+## Custom domain (music.whirlyfan.com)
+
+The domain attaches to the **frontend** static site only — the backend stays on
+its `.onrender.com` URL and is reached through the frontend rewrites, so the
+whole app is same-origin under the custom domain.
+
+1. **Render:** `music-frontend` → Settings → Custom Domains → add
+   `music.whirlyfan.com`. Render shows a DNS target (a CNAME value).
+2. **DNS** (wherever `whirlyfan.com` is hosted): add a `CNAME` record —
+   name `music`, value = the target Render showed. On Cloudflare, set it
+   **DNS-only (grey cloud)** until Render issues the cert, then you may proxy.
+   Free SSL provisions automatically once Render sees the record.
+3. **Backend origins** (already set in `render.yaml`): `DJANGO_CSRF_TRUSTED_ORIGINS`
+   and `DJANGO_CORS_ALLOWED_ORIGINS` list both `https://music.whirlyfan.com` and
+   the `.onrender.com` origin; `FRONTEND_ORIGIN` points at the custom domain so
+   emailed links use it. `DJANGO_ALLOWED_HOSTS` stays the backend host — the
+   rewrites preserve it, so the custom domain does **not** go there.
+
 ## Common gotchas
 
 ### Cold start on the free tier
@@ -108,11 +142,12 @@ If you change the service name, regenerate `DJANGO_ALLOWED_HOSTS` to match
 the new `<service>.onrender.com` URL. The blueprint hard-codes the current
 name; update it together.
 
-### Database expires at 90 days
-Render emails warnings starting around day 75. Either:
-- Upgrade to Starter ($7/mo) — keeps all data
-- Delete + recreate the database — starts a fresh 90-day clock but **loses
-  all data** (acceptable for a learning deployment)
+### Free database expires
+See the expiry note up top — Render deletes free Postgres after a fixed window
+(verify the current length on their pricing page) and emails warnings first. Either:
+- Upgrade to Starter ($7/mo) — keeps all data + adds backups
+- Delete + recreate the database — resets the clock but **loses all data**
+  (acceptable for a learning deployment)
 
 ### CSRF 403 on POST
 If you see "Origin checking failed" or "Forbidden (CSRF token missing or
