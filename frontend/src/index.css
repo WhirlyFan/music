@@ -396,8 +396,8 @@
    * mounted until the exit animation ends, so `forwards` on the *-out variants
    * holds the end frame until unmount. No animation library.
    */
-  --animate-dialog-in: dialog-in 0.2s var(--ease-out-quint);
-  --animate-dialog-out: dialog-out 0.15s var(--ease-standard) forwards;
+  --animate-dialog-in: dialog-in 0.28s var(--ease-out-back); /* slight spring on settle */
+  --animate-dialog-out: dialog-out 0.16s var(--ease-standard) forwards;
   --animate-sheet-up-in: sheet-up-in 0.3s var(--ease-out-quint);
   --animate-sheet-up-out: sheet-up-out 0.2s var(--ease-standard) forwards;
 }
@@ -410,31 +410,35 @@
     opacity: 0;
   }
 }
-/* Centered dialog content — fade + subtle zoom. Keeps the -50%/-50% centering
-   transform so it doesn't jump while scaling. */
-/* Scale + fade only — NOT transform-translate. The content centers via Tailwind's
-   `translate-x/y-[-50%]`, which in v4 use the CSS `translate` property; animating
-   `transform: translate(...)` here would STACK with that (double −50%) and make the
-   dialog lag in from the top-left. Animating `scale` (its own property) composes
-   cleanly with `translate`. */
+/* Centered dialog content — a soft 3D perspective flip-in: fade + lift + a slight
+   rotateX tilt that settles flat, scaling up into place.
+
+   We animate the `transform` property (perspective/translateY/rotateX/scale), NOT the
+   `translate` property. Tailwind centers the dialog with `translate-x/y-[-50%]`, which
+   in v4 is the CSS `translate` property; the individual `translate`/`rotate`/`scale`
+   properties and `transform` compose in that fixed order, so our `transform` layers
+   cleanly on top of the centering. (Animating `transform: translate(...)` instead would
+   stack with the `translate` −50% and lag the dialog in from the top-left.) transform-
+   origin stays the element's center, so it pivots in place; the `perspective()` first in
+   the chain gives the rotateX real depth. */
 @keyframes dialog-in {
   from {
     opacity: 0;
-    scale: 0.96;
+    transform: perspective(1200px) translateY(14px) rotateX(8deg) scale(0.94);
   }
   to {
     opacity: 1;
-    scale: 1;
+    transform: perspective(1200px) translateY(0) rotateX(0deg) scale(1);
   }
 }
 @keyframes dialog-out {
   from {
     opacity: 1;
-    scale: 1;
+    transform: perspective(1200px) translateY(0) rotateX(0deg) scale(1);
   }
   to {
     opacity: 0;
-    scale: 0.96;
+    transform: perspective(1200px) translateY(8px) rotateX(5deg) scale(0.97);
   }
 }
 /* Bottom sheets — slide up from the edge (ready for a future Sheet component). */
