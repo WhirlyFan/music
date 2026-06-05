@@ -3,6 +3,10 @@
 .env.local
 *.env
 
+# Doppler — local config + encrypted secrets fallback cache. Never commit:
+# secrets come from Doppler at runtime, not the repo.
+.doppler/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -39,3 +43,7 @@ media/
 
 # Docker volumes (shouldn't be committed, just in case)
 postgres_data/
+
+# Tooling caches / build artifacts (regenerated; pure churn in git)
+.cache/
+frontend/.tanstack/
