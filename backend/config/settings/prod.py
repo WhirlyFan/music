@@ -43,6 +43,23 @@ CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_SAMESITE = "Lax"
 X_FRAME_OPTIONS = "DENY"
 
+# --- Cross-subdomain cookie scope (WebSocket backend) ---
+# Render static sites don't proxy WebSocket upgrades, so the SPA
+# (music.whirlyfan.com) connects its jam socket directly to the backend on its
+# own custom domain (api.whirlyfan.com). For the session cookie to ride along on
+# that upgrade, it must be scoped to the shared parent domain rather than being
+# host-only. music. ↔ api. is same-site (registrable domain whirlyfan.com), so
+# SameSite=Lax still sends it — no SameSite=None needed.
+#
+# Set DJANGO_SESSION_COOKIE_DOMAIN=.whirlyfan.com ONLY once both custom domains
+# are live. Leave it unset on *.onrender.com hosts (a parent-domain cookie won't
+# be sent there, which would break auth). Unset → host-only cookie = today's
+# same-origin-rewrite behavior, unchanged.
+_cookie_domain = env("DJANGO_SESSION_COOKIE_DOMAIN", default="")
+if _cookie_domain:
+    SESSION_COOKIE_DOMAIN = _cookie_domain
+    CSRF_COOKIE_DOMAIN = _cookie_domain
+
 # --- Response security headers (prod only) ---
 # CSP + Permissions-Policy aren't wired in dev: Vite's HMR uses inline scripts,
 # eval, and ws: connections that a strict policy would flag as noise that

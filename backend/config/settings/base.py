@@ -41,6 +41,7 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
+    "channels",
     "rest_framework",
     "corsheaders",
     "django_extensions",
@@ -68,7 +69,10 @@ LOCAL_APPS = [
     "apps.rooms",
 ]
 
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+# `daphne` MUST be first: in Channels 4 it provides the ASGI `runserver` that
+# serves WebSockets (and static files in DEBUG) in dev. Listed first so its
+# management command overrides Django's default WSGI runserver.
+INSTALLED_APPS = ["daphne", *DJANGO_APPS, *THIRD_PARTY_APPS, *LOCAL_APPS]
 
 # --- Middleware (order matters — see plan) ---
 MIDDLEWARE = [
@@ -114,6 +118,27 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
+
+# --- Channels (WebSockets) ---
+# In-process channel layer: the fan-out for jam broadcasts lives in memory.
+# This REQUIRES the backend to run as a SINGLE process (WEB_CONCURRENCY=1) —
+# an in-memory layer can't reach sockets held by other workers. When we outgrow
+# one process, swap BACKEND to "channels_redis.core.RedisChannelLayer" with a
+# Redis URL; nothing else changes.
+CHANNEL_LAYERS = {
+    "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
+}
+
+# Origins allowed to open a WebSocket — the WS analogue of CSRF (guards against
+# cross-site WebSocket hijacking, since cookies are sent on the upgrade). In dev
+# the SPA and API share the localhost origin; in prod the SPA is on
+# music.whirlyfan.com while the socket connects to api.whirlyfan.com, so the
+# SPA's hostname must be listed. Entries are hostnames (OriginValidator matches
+# the Origin header's host); "*" disables the check.
+WEBSOCKET_ALLOWED_ORIGINS = env.list(
+    "DJANGO_WEBSOCKET_ALLOWED_ORIGINS",
+    default=["localhost", "127.0.0.1"],
+)
 
 # --- Database ---
 # We connect to Postgres using one of two roles, controlled by which env var

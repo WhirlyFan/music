@@ -36,6 +36,14 @@ dependencies = [
     "django-cors-headers>=4.9",
     "whitenoise>=6.8",
     "gunicorn>=23.0",
+    # Realtime: Channels serves WebSockets for synchronized "jam" listening.
+    # channels[daphne] pulls Daphne, which provides the ASGI `runserver` used in
+    # dev (serves WS + static files in DEBUG). Prod runs gunicorn with a uvicorn
+    # worker (see Dockerfile). The channel layer is in-memory and therefore
+    # SINGLE-PROCESS for now (WEB_CONCURRENCY=1) — swap CHANNEL_LAYERS to
+    # channels-redis when we outgrow one worker; that's a settings-only change.
+    "channels[daphne]>=4.2",
+    "uvicorn[standard]>=0.34",
     "pwned-passwords-django>=5.2.0",
     # Resolves a track to a YouTube video + extracts audio (needs ffmpeg + deno at
     # runtime). The [default] extra bundles yt-dlp's recommended deps incl. the

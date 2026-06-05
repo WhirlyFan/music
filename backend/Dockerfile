@@ -88,11 +88,21 @@ EXPOSE 8000
 # Migrate-then-exec wrapper. Runs on every container start; idempotent.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
-# Gunicorn flags chosen to match the standard production checklist:
-#   --workers $WEB_CONCURRENCY    Env-overridable worker count.
-#   --max-requests / --jitter     Recycle workers periodically so any slow
-#                                 memory creep self-heals.
-#   --timeout 30                  Kill long-running workers before they pile up.
+# Gunicorn serves the ASGI app (config.asgi) via a uvicorn worker so the SAME
+# process handles HTTP and WebSockets. Flags match the standard prod checklist:
+#   -k uvicorn.workers.UvicornWorker  ASGI worker (HTTP + WS on one port).
+#   --workers $WEB_CONCURRENCY    Env-overridable worker count. MUST be 1 while
+#                                 CHANNEL_LAYERS uses the in-memory backend — an
+#                                 in-memory layer can't fan out across workers.
+#                                 One async worker handles many concurrent
+#                                 sockets/requests on its event loop. Raise this
+#                                 only after switching to channels-redis.
+#   --max-requests / --jitter     Recycle the worker periodically so any slow
+#                                 memory creep self-heals. (Open WS connections
+#                                 finish their current frame, then drain.)
+#   --timeout 30                  Worker boot/silence watchdog — applies to the
+#                                 worker, not to active async connections, so
+#                                 long-lived sockets aren't killed by it.
 #   --access-logfile - / --error-logfile -  stdout; orchestrator captures it.
 #   --no-control-socket           Gunicorn 26 defaults its control socket to
 #                                 /app/.gunicorn/gunicorn.ctl, which the non-root
@@ -104,8 +114,9 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 #                                 Render's port detection prefer the co-located PO-token
 #                                 provider on :4416 and time out / restart-loop. Defaults
 #                                 to 8000 for local docker-compose (which maps 8000).
-ENV WEB_CONCURRENCY=3
-CMD ["sh", "-c", "gunicorn config.wsgi:application \
+ENV WEB_CONCURRENCY=1
+CMD ["sh", "-c", "gunicorn config.asgi:application \
+    -k uvicorn.workers.UvicornWorker \
     --bind 0.0.0.0:${PORT:-8000} \
     --workers ${WEB_CONCURRENCY} \
     --max-requests 1000 \

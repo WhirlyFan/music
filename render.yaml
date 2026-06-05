@@ -113,6 +113,14 @@ services:
     branch: main                   # auto-deploy from main; change to a release branch later if desired
     healthCheckPath: /health/      # used by Render's edge to gate traffic
     autoDeploy: true
+    # Custom domain for the WebSocket endpoint. Render static sites don't proxy
+    # WS upgrades, so the SPA connects its jam socket straight to the backend
+    # here (api.whirlyfan.com) instead of through the frontend's rewrites. After
+    # `render deploy` picks this up, add the CNAME it shows you at your DNS
+    # registrar; Render provisions TLS automatically. HTTP keeps flowing through
+    # the frontend rewrites — only WS uses this hostname.
+    domains:
+      - api.whirlyfan.com
     envVars:
       # Pin the primary HTTP port. The image ALSO runs the co-located PO-token
       # provider on :4416; without an explicit PORT, Render's auto-detection
@@ -159,8 +167,10 @@ services:
       # Render appended a random suffix because `music-backend` was taken, so the
       # real host is music-backend-ll7r.onrender.com. prod.py ALSO auto-trusts
       # RENDER_EXTERNAL_HOSTNAME, so this stays correct even if the suffix changes.
+      # api.whirlyfan.com is the WS custom domain (Host header on direct socket
+      # connections); the onrender host stays for the HTTP rewrites + health probe.
       - key: DJANGO_ALLOWED_HOSTS
-        value: music-backend-ll7r.onrender.com
+        value: music-backend-ll7r.onrender.com,api.whirlyfan.com
       # CSRF middleware checks the Origin/Referer of state-changing requests.
       # The browser sends the origin it actually loaded, so once the custom
       # domain is live that's https://music.whirlyfan.com. We trust BOTH it and
@@ -173,6 +183,20 @@ services:
       # need it, but leaving both frontend origins allow-listed costs nothing.
       - key: DJANGO_CORS_ALLOWED_ORIGINS
         value: https://music.whirlyfan.com,https://music-frontend.onrender.com
+
+      # Origins allowed to open a WebSocket (CSWSH guard). The SPA loads from
+      # music.whirlyfan.com, so that's the Origin on the jam socket's upgrade —
+      # NOT the backend's own host. Hostnames only (OriginValidator matches the
+      # Origin header's host).
+      - key: DJANGO_WEBSOCKET_ALLOWED_ORIGINS
+        value: music.whirlyfan.com,music-frontend.onrender.com
+
+      # Cross-subdomain session cookie so it rides the WS upgrade to
+      # api.whirlyfan.com. SET THIS ONLY after api.whirlyfan.com's DNS is live
+      # and you're accessing the app via music.whirlyfan.com (NOT the *.onrender
+      # URL — a .whirlyfan.com cookie isn't sent there). See settings/prod.py.
+      - key: DJANGO_SESSION_COOKIE_DOMAIN
+        value: .whirlyfan.com
 
       # FRONTEND_ORIGIN is consumed by HEADLESS_FRONTEND_URLS so password-reset
       # / email-verification / invite links in transactional emails point at the
@@ -195,10 +219,13 @@ services:
           name: music-db
           property: connectionString
 
-      # ── Gunicorn ────────────────────────────────────────────────────────
-      # Free tier has 0.5 CPU; 2 workers fits without thrash.
+      # ── Gunicorn (ASGI / uvicorn worker) ─────────────────────────────────
+      # MUST stay 1 while CHANNEL_LAYERS is the in-memory backend — that layer
+      # can't fan jam broadcasts out across workers. One async worker handles
+      # many concurrent sockets/requests on its event loop, which suits the
+      # 0.5-CPU free tier fine. Raise only after moving to channels-redis.
       - key: WEB_CONCURRENCY
-        value: "2"
+        value: "1"
 
       # ── Email (Resend via Anymail) ──────────────────────────────────────
       # Paste your Resend API key into the dashboard — never into this file.
