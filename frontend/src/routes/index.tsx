@@ -26,7 +26,7 @@ function Index() {
           Search for a song, or paste a Spotify, Apple Music, or YouTube link.
         </p>
         <div className="mt-6">
-          <OmniBox autoFocus />
+          <OmniBox autoFocus submit />
         </div>
       </section>
     </div>

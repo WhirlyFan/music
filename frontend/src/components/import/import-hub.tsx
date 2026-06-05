@@ -28,20 +28,83 @@ function apiErrorMessage(error: unknown): string | null {
 }
 
 /**
+ * The Search/Import button label. Re-keying on `text` remounts the characters, so the
+ * letters cascade up (char-roll) when the word swaps as the input becomes a link.
+ *
+ * While `waving`, the letters do a looping "Mexican wave" (char-wave). Each pass is a
+ * single CSS iteration; when the last (most-delayed) letter finishes a pass we re-arm it
+ * by bumping `cycle` (remounts the inner spans → replays) — but only if still hovered. On
+ * mouse-leave we stop re-arming, so the in-flight pass runs to its rest state instead of
+ * cutting abruptly. Nested spans keep the two transforms from fighting (outer rolls, inner
+ * waves). Chars are decorative (`aria-hidden`); an `sr-only` copy names the control. Under
+ * reduced motion we never start the wave (the global guard would otherwise zero its
+ * duration and spin the re-arm loop); the swap roll is flattened to an instant swap.
+ */
+function RollingLabel({ text, waving }: { text: string; waving: boolean }) {
+  const [cycle, setCycle] = useState(0)
+  const [inFlight, setInFlight] = useState(false)
+  // Snapshot reduced-motion once: gate the wave off so the zeroed-duration animation
+  // (global guard) can't spin the re-arm loop. Initializer runs once, no impure render.
+  const [calm] = useState(
+    () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+  const lastIndex = text.length - 1
+  // Hovering OR mid-pass keeps the wave applied — so leaving mid-pass lets it finish.
+  const active = (waving || inFlight) && !calm
+
+  return (
+    <>
+      <span className="sr-only">{text}</span>
+      <span key={text} aria-hidden className="flex overflow-hidden py-2 leading-none">
+        {Array.from(text).map((ch, i) => (
+          <span key={i} className="char-roll" style={{ animationDelay: `${i * 28}ms` }}>
+            <span
+              key={cycle}
+              className={active ? 'char-wave is-waving' : 'char-wave'}
+              style={{ animationDelay: `${i * 70}ms` }}
+              onAnimationStart={(e) => {
+                if (e.animationName === 'char-wave' && i === 0) setInFlight(true)
+              }}
+              onAnimationEnd={(e) => {
+                if (e.animationName !== 'char-wave' || i !== lastIndex) return
+                // Pass complete (ends on the last letter): re-arm if still hovered, else rest.
+                if (waving) setCycle((c) => c + 1)
+                else setInFlight(false)
+              }}
+            >
+              {ch}
+            </span>
+          </span>
+        ))}
+      </span>
+    </>
+  )
+}
+
+/**
  * The shared search/import box. Type a song → navigate to `/search?q=`; paste a
  * Spotify / Apple Music / YouTube link → run the import (a mutation) then navigate
  * to `/import` to show the result. Used by the home, search, and import routes, so
  * you can search or import from any of them.
+ *
+ * `submit` shows the action button under the field (home hero): always visible, its
+ * label rolling between "Search" and "Import" as the input becomes a link. Results
+ * pages omit it — there the box is a compact re-search, submitted with Enter.
  */
 export function OmniBox({
   initial = '',
   autoFocus = false,
+  submit = false,
 }: {
   initial?: string
   autoFocus?: boolean
+  submit?: boolean
 }) {
   const navigate = useNavigate()
   const [text, setText] = useState(() => initial)
+  const [waving, setWaving] = useState(false) // pointer/focus over the action button
   const fieldRef = useRef<HTMLDivElement>(null)
 
   const trimmed = text.trim()
@@ -65,14 +128,10 @@ export function OmniBox({
   }
 
   return (
-    <form
-      onSubmit={onSubmit}
-      aria-label="Search or import"
-      className="flex w-full items-center gap-2"
-    >
+    <form onSubmit={onSubmit} aria-label="Search or import" className="w-full">
       <div
         ref={fieldRef}
-        className="relative flex-1"
+        className="relative"
         onAnimationEnd={(e) => e.currentTarget.classList.remove('animate-wiggle')}
       >
         <Search
@@ -89,13 +148,22 @@ export function OmniBox({
           className="h-12 rounded-full pr-4 pl-11 text-base shadow-sm"
         />
       </div>
-      {/* A button only for the explicit action — importing a pasted link. Searching
-          is just Enter (it's a search box; a "Search" button would be redundant). The
-          import itself runs on /import, which shows the loading state. */}
-      {isUrl && (
-        <RainbowButton type="submit" className="shrink-0">
-          Import
-        </RainbowButton>
+      {/* The action button sits under the field and is always present on the hero; its
+          label rolls between "Search" and "Import" as the input becomes a link. (Results
+          pages don't pass `submit` — there the box re-searches on Enter.) */}
+      {submit && (
+        <div className="mt-4 flex justify-center">
+          <RainbowButton
+            type="submit"
+            className="min-w-36"
+            onMouseEnter={() => setWaving(true)}
+            onMouseLeave={() => setWaving(false)}
+            onFocus={() => setWaving(true)}
+            onBlur={() => setWaving(false)}
+          >
+            <RollingLabel text={isUrl ? 'Import' : 'Search'} waving={waving} />
+          </RainbowButton>
+        </div>
       )}
     </form>
   )

@@ -391,6 +391,47 @@
   }
 }
 
+/* Per-character label effects for the Search/Import button. Two nested spans so the
+   transforms don't fight: the OUTER rolls the letter in on a word swap; the INNER bobs
+   on hover. Per-char delays come from inline style (the stagger).
+
+   char-roll — slides each letter up from below its clip box, staggered, replayed when
+   the word re-mounts (Search⇄Import). `both` holds the offscreen start during the delay.
+   char-wave — a "Mexican wave": each letter rises and falls in turn. It's a SINGLE pass
+   (iteration 1), gated by the JS-toggled `is-waving` class; the component re-arms it each
+   pass while hovered and stops re-arming on mouse-leave, so the wave finishes its current
+   cycle gracefully instead of being cut. The inline per-char delay phases it across. */
+@keyframes char-roll {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+@keyframes char-wave {
+  0%,
+  55%,
+  100% {
+    transform: translateY(0);
+  }
+  27% {
+    transform: translateY(-32%);
+  }
+}
+.char-roll {
+  display: inline-block;
+  animation: char-roll 0.42s var(--ease-out-quint) both;
+}
+.char-wave {
+  display: inline-block;
+}
+.char-wave.is-waving {
+  animation: char-wave 1.1s var(--ease-standard) 1;
+}
+
 /* Shimmer-wave heading — a soft highlight sweeps across the text (annnimate
    text-shimmer-wave). The global reduce-motion guard freezes it statically. */
 .shimmer-text {
