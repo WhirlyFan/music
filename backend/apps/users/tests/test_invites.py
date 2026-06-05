@@ -185,9 +185,24 @@ def test_redeem_stashes_verified_email_for_signup(member):
     create_invitation("stash@example.com", invited_by=member)
     token = _token_from_email()
     req = RequestFactory().post("/")
+    req.user = AnonymousUser()
     req.session = {}
     redeem_invitation(token, req)
     assert req.session.get("account_verified_email") == "stash@example.com"
+
+
+@pytest.mark.django_db
+def test_redeem_authed_peek_does_not_stash(member):
+    # An already-logged-in caller peeking at the invite (e.g. the signup page deciding
+    # whether to offer sign-out) gets the email back but must not pollute their session.
+    create_invitation("peek@example.com", invited_by=member)
+    token = _token_from_email()
+    req = RequestFactory().post("/")
+    req.user = member
+    req.session = {}
+    inv = redeem_invitation(token, req)
+    assert inv.email == "peek@example.com"
+    assert "account_verified_email" not in req.session
 
 
 # ── rate limiting (an invite emails someone → cap per member) ─────────────────

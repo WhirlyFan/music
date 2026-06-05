@@ -1,5 +1,7 @@
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
+import { createFileRoute, Link, redirect, useNavigate, useRouter } from '@tanstack/react-router'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -9,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api/client'
 import { auth } from '@/lib/auth/api'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { isEmailVerificationPending, isSessionAuthenticated } from '@/lib/auth/guards'
+import { isEmailVerificationPending, isSessionAuthenticated, sessionEmail } from '@/lib/auth/guards'
 import { sessionKeys } from '@/lib/hooks/keys'
 import { resetForSession, useSignup } from '@/lib/hooks/mutations/auth'
 
@@ -19,23 +21,19 @@ export const Route = createFileRoute('/signup')({
   // signup, so the new account is created already-verified with no confirmation mail.
   validateSearch: (search: Record<string, unknown>): { invite?: string } =>
     typeof search.invite === 'string' && search.invite ? { invite: search.invite } : {},
-  // Handle clicking signup/an invite while already logged in (otherwise allauth's
-  // signup rejects the active session with 409 Conflict). With an invite, sign out
-  // first so the invite is accepted as a fresh identity — and so the loader's redeem
-  // (next) stashes the verified email into the *new* anonymous session; logging out
-  // flushes the session, which would otherwise discard a stash done beforehand.
-  // Without an invite, a logged-in visitor is already a member → send them home.
-  beforeLoad: async ({ context, search }) => {
+  // Reaching signup while already logged in needs handling — allauth's signup rejects
+  // an active session with 409 Conflict. We surface the signed-in email so the page can
+  // confirm a sign-out before accepting an invite (rather than destroying the session
+  // silently). A logged-in visitor with no invite is already a member → send them home.
+  beforeLoad: async ({ context, search }): Promise<{ signedInAs: string | null }> => {
     const session = await context.queryClient.fetchQuery({
       queryKey: sessionKeys.all(),
       queryFn: () => auth.session(),
       staleTime: 5 * 60 * 1000,
     })
-    if (!isSessionAuthenticated(session)) return
+    if (!isSessionAuthenticated(session)) return { signedInAs: null }
     if (!search.invite) throw redirect({ to: '/' })
-    await auth.logout()
-    resetForSession(context.queryClient)
-    toast.info('Signed out to accept this invite.')
+    return { signedInAs: sessionEmail(session) }
   },
   loaderDeps: ({ search }) => ({ invite: search.invite }),
   loader: async ({ deps }): Promise<{ invitedEmail: string }> => {
@@ -76,10 +74,97 @@ const signupSchema = z
     path: ['confirm'],
   })
 
+/**
+ * Shown when an invite link is opened while signed in as someone else. Confirms the
+ * sign-out instead of doing it behind the user's back (per Microsoft/Clerk guidance for
+ * the active-session conflict). "Continue" logs out + re-enters the route as anonymous,
+ * where the normal redeem-and-stash path runs and the signup form renders.
+ */
+function ConfirmSignOut({
+  signedInAs,
+  invitedEmail,
+}: {
+  signedInAs: string
+  invitedEmail: string
+}) {
+  const qc = useQueryClient()
+  const router = useRouter()
+  const [busy, setBusy] = useState(false)
+
+  // Invalid/expired invite while signed in → nothing to accept, and no reason to sign
+  // the user out. Let them carry on as themselves.
+  if (!invitedEmail) {
+    return (
+      <div className="mx-auto max-w-sm space-y-4 text-center">
+        <h1 className="text-2xl font-semibold tracking-tight">Invite unavailable</h1>
+        <p className="text-muted-foreground text-sm">
+          This invite link is invalid or has expired. You’re still signed in as{' '}
+          <span className="font-medium">{signedInAs}</span>.
+        </p>
+        <Button asChild className="w-full">
+          <Link to="/">Go home</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  const onContinue = async () => {
+    setBusy(true)
+    try {
+      await auth.logout()
+      resetForSession(qc)
+      // Re-run beforeLoad/loader: now anonymous, so the loader redeems + stashes the
+      // verified email and this component is replaced by the signup form.
+      await router.invalidate()
+    } catch {
+      setBusy(false)
+      toast.error('Could not sign out. Please try again.')
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-sm space-y-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Accept this invite?</h1>
+      <p className="text-muted-foreground text-sm">
+        You’re signed in as <span className="font-medium">{signedInAs}</span>. This invite is for{' '}
+        <span className="font-medium">{invitedEmail}</span>. Continuing will sign you out so you can
+        create that account.
+      </p>
+      <div className="flex gap-3">
+        <Button variant="outline" className="flex-1" disabled={busy} asChild>
+          <Link to="/">Cancel</Link>
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={onContinue}
+          disabled={busy}
+          aria-busy={busy || undefined}
+        >
+          {busy ? 'Signing out…' : 'Sign out & continue'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function SignupPage() {
+  const { signedInAs } = Route.useRouteContext()
+  const { invitedEmail } = Route.useLoaderData()
+
+  // Already signed in (only reachable with an invite — beforeLoad sends invite-less
+  // members home). For a *signup* invite the address has no account, so the signed-in
+  // user is necessarily a different identity → confirm a sign-out before continuing.
+  // (Future: room/membership invites where signedInAs === invitedEmail would instead
+  // be accepted in-place, no sign-out — the loader's redeem already no-ops its stash
+  // for an authenticated caller, so that branch can hook in here.) Splitting the form
+  // into its own component keeps its hooks out of this conditional (rules-of-hooks).
+  if (signedInAs) return <ConfirmSignOut signedInAs={signedInAs} invitedEmail={invitedEmail} />
+  return <SignupForm invitedEmail={invitedEmail} />
+}
+
+function SignupForm({ invitedEmail }: { invitedEmail: string }) {
   const navigate = useNavigate()
   const signup = useSignup()
-  const { invitedEmail } = Route.useLoaderData()
 
   const form = useForm({
     defaultValues: { email: invitedEmail, username: '', password: '', confirm: '' },

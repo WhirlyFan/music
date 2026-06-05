@@ -54,6 +54,12 @@ export function isSessionAuthenticated(response: { meta?: unknown } | undefined)
   return Boolean(meta?.is_authenticated)
 }
 
+/** The signed-in user's email from a session response, or null. */
+export function sessionEmail(response: { data?: unknown } | undefined): string | null {
+  const user = (response?.data as { user?: { email?: string } } | undefined)?.user
+  return user?.email ?? null
+}
+
 /**
  * Whether the user has at least one verified email. Returns false when the
  * data is missing (unauthenticated or load error) — the gate is "block until

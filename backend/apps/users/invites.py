@@ -44,15 +44,21 @@ def create_invitation(email: str, *, invited_by) -> Invitation:
 
 
 def redeem_invitation(token: str, request) -> Invitation:
-    """Validate an invite token from the signup link and stash its email as *verified*
-    for the imminent signup (allauth's `unstash_verified_email` then creates the new
-    account's EmailAddress already-verified, skipping the confirmation mail). Redeeming
-    requires the token from the emailed link, which proves the signer controls the
-    address. Raises InviteError if the token is invalid / expired / already used."""
+    """Validate an invite token from the signup link and return the invitation. For an
+    *anonymous* redeemer (the normal pre-signup case) the email is stashed as *verified*
+    so allauth's `unstash_verified_email` creates the new account's EmailAddress
+    already-verified, skipping the confirmation mail. Redeeming requires the token from
+    the emailed link, which proves the signer controls the address.
+
+    Stash only when anonymous: it's consumed only by signup, which can't happen on an
+    authenticated session. So an already-logged-in caller (e.g. the signup page peeking
+    at who the invite is for before offering to sign out) gets the email back without
+    polluting their session. Raises InviteError if the token is invalid/expired/used."""
     inv = Invitation.pending_by_token(token)
     if inv is None:
         raise InviteError("This invite link is invalid or has expired.")
-    get_adapter(request).stash_verified_email(request, inv.email)
+    if not request.user.is_authenticated:
+        get_adapter(request).stash_verified_email(request, inv.email)
     return inv
 
 
