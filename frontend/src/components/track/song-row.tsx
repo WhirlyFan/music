@@ -3,7 +3,7 @@ import { ListPlus } from 'lucide-react'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { Skeleton, SkeletonText, useSkeletonZone } from '@/components/ui/skeleton'
-import type { Track } from '@/lib/query/catalog'
+import type { Track } from '@/lib/api/models'
 
 /**
  * One song result row: full-row play target + add-to-queue. Zone-driven skeleton

@@ -17,23 +17,24 @@ import { SeekBar } from '@/components/player/seek-bar'
 import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
-import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
-import { promptText } from '@/lib/overlay'
-import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
-import { useMatchTrack, useRefreshArtwork } from '@/lib/query/catalog'
-import { usePlayerUiStore } from '@/lib/stores/player-ui'
+import type { QueueItem } from '@/lib/api/models'
+import { isSessionAuthenticated } from '@/lib/auth/guards'
+import { useMatchTrack, useRefreshArtwork } from '@/lib/hooks/mutations/catalog'
 import {
   playIntent,
-  type QueueItem,
   useClearQueue,
   useJump,
   useNext,
   usePrevious,
   useRemoveItem,
-  useRoom,
   useSaveQueueAsPlaylist,
   useShuffle,
-} from '@/lib/query/rooms'
+} from '@/lib/hooks/mutations/rooms'
+import { useSession } from '@/lib/hooks/queries/auth'
+import { useRoom } from '@/lib/hooks/queries/rooms'
+import { promptText } from '@/lib/overlay'
+import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
+import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 
@@ -212,7 +213,7 @@ export function NowPlayingBar() {
           two open in true lockstep (max-height in px, not grid `fr`, matches the
           pill's px curve exactly). `inert` drops it from tab/a11y while collapsed. */}
       <div
-        className="absolute inset-x-0 bottom-full mb-2 overflow-hidden transition-[max-height] duration-[280ms] ease-out-quint motion-reduce:transition-none"
+        className="ease-out-quint absolute inset-x-0 bottom-full mb-2 overflow-hidden transition-[max-height] duration-[280ms] motion-reduce:transition-none"
         style={{ maxHeight: queueOpen ? queueHeight : 0 }}
       >
         <div

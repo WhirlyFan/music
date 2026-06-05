@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { uiKeys } from '@/lib/query/keys'
+import { uiKeys } from '@/lib/hooks/keys'
 
 // NOTE: player open-state (queue / now-playing) lives in the URL — see
 // lib/player-url-state.ts (TanStack Router search params). Measured player

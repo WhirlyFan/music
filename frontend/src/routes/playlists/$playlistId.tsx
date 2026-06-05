@@ -27,19 +27,18 @@ import { Input } from '@/components/ui/input'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
-import type { PlaylistDetail, PlaylistTrack } from '@/lib/query/catalog'
+import type { PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
 import {
   useDeletePlaylist,
-  useInfinitePlaylistTracks,
-  usePlaylist,
   useRefreshArtwork,
   useRefreshPlaylist,
   useRemoveTrackFromPlaylist,
   useReorderPlaylistTrack,
   useUpdatePlaylist,
-} from '@/lib/query/catalog'
-import { usePlayPlaylist, useQueueTracks } from '@/lib/query/rooms'
-import { useRouteSearch } from '@/lib/query/ui'
+} from '@/lib/hooks/mutations/catalog'
+import { usePlayPlaylist, useQueueTracks } from '@/lib/hooks/mutations/rooms'
+import { useInfinitePlaylistTracks, usePlaylist } from '@/lib/hooks/queries/catalog'
+import { useRouteSearch } from '@/lib/hooks/queries/ui'
 import { useDebounced } from '@/lib/use-debounced'
 
 /** A YouTube-thumbnail fallback cover — offer to re-resolve the real art. */

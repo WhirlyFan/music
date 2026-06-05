@@ -6,7 +6,7 @@ import { ReauthenticateStep, requiresReauth } from '@/components/auth/reauthenti
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { useGenerateRecoveryCodes, useRecoveryCodes } from '@/lib/auth/mfa'
-import { mfaKeys } from '@/lib/query/keys'
+import { mfaKeys } from '@/lib/hooks/keys'
 
 export const Route = createFileRoute('/account/mfa/recovery-codes')({
   component: RecoveryCodesPage,

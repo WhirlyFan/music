@@ -9,14 +9,8 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
-import {
-  isEmailVerificationPending,
-  isMfaChallenge,
-  isMfaTrustPending,
-  useLogin,
-  useMfaAuthenticate,
-  useMfaTrust,
-} from '@/lib/auth/hooks'
+import { isEmailVerificationPending, isMfaChallenge, isMfaTrustPending } from '@/lib/auth/guards'
+import { useLogin, useMfaAuthenticate, useMfaTrust } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/login')({
   component: LoginPage,

@@ -3,8 +3,9 @@ import { toast } from 'sonner'
 
 import { CoverWall } from '@/components/playlists/cover-wall'
 import { FormError } from '@/components/ui/form-error'
-import { useDeletePlaylist, useInfinitePlaylists } from '@/lib/query/catalog'
-import { useRouteSearch } from '@/lib/query/ui'
+import { useDeletePlaylist } from '@/lib/hooks/mutations/catalog'
+import { useInfinitePlaylists } from '@/lib/hooks/queries/catalog'
+import { useRouteSearch } from '@/lib/hooks/queries/ui'
 import { useDebounced } from '@/lib/use-debounced'
 
 export const Route = createFileRoute('/playlists/')({

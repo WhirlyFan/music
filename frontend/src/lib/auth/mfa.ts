@@ -19,7 +19,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { mfaKeys } from '@/lib/query/keys'
+import { mfaKeys } from '@/lib/hooks/keys'
 
 import { auth } from './api'
 

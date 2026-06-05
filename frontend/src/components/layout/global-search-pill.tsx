@@ -1,7 +1,7 @@
 import { useRouterState } from '@tanstack/react-router'
 
 import { FloatingSearchPill } from '@/components/ui/floating-search-pill'
-import { useRouteSearch } from '@/lib/query/ui'
+import { useRouteSearch } from '@/lib/hooks/queries/ui'
 
 const LIST_PATH = '/playlists'
 const DETAIL_RE = /^\/playlists\/[^/]+$/

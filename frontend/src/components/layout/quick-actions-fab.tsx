@@ -3,11 +3,13 @@ import { Import, Save, Shuffle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { routeHasFloatingSearch } from '@/components/layout/global-search-pill'
-import { GooeyMenu, type GooeyItem } from '@/components/ui/gooey-menu'
-import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
+import { type GooeyItem, GooeyMenu } from '@/components/ui/gooey-menu'
+import { isSessionAuthenticated } from '@/lib/auth/guards'
+import { useSaveQueueAsPlaylist, useShuffle } from '@/lib/hooks/mutations/rooms'
+import { useSession } from '@/lib/hooks/queries/auth'
+import { useRoom } from '@/lib/hooks/queries/rooms'
 import { promptText } from '@/lib/overlay'
 import { useQueueOpen } from '@/lib/player-url-state'
-import { useRoom, useSaveQueueAsPlaylist, useShuffle } from '@/lib/query/rooms'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 import { useMediaQuery } from '@/lib/use-media-query'
 
@@ -92,7 +94,7 @@ export function QuickActionsFab() {
   return (
     <GooeyMenu
       items={items}
-      className="fixed right-4 z-50 transition-[bottom] duration-[280ms] ease-out-quint motion-reduce:transition-none"
+      className="ease-out-quint fixed right-4 z-50 transition-[bottom] duration-[280ms] motion-reduce:transition-none"
       style={{ bottom }}
     />
   )

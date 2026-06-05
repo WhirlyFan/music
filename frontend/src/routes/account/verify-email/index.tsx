@@ -5,12 +5,9 @@ import { toast } from 'sonner'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import { bannerError } from '@/lib/auth/errors'
-import {
-  hasVerifiedPrimaryEmail,
-  useEmails,
-  useResendEmailVerification,
-  useSession,
-} from '@/lib/auth/hooks'
+import { hasVerifiedPrimaryEmail } from '@/lib/auth/guards'
+import { useResendEmailVerification } from '@/lib/hooks/mutations/auth'
+import { useEmails, useSession } from '@/lib/hooks/queries/auth'
 
 export const Route = createFileRoute('/account/verify-email/')({
   component: VerifyEmailWaitingPage,

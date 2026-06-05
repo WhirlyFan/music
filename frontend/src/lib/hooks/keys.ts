@@ -9,9 +9,6 @@
  *
  * Every entry is a function (even no-arg ones) for a uniform call shape
  * at the use site: `useQuery({ queryKey: playlistKeys.list() })`.
- *
- * Pattern mirrors the reference at
- * ~/usul-policy-research-app/frontend/lib/hooks/queries/query-keys.ts.
  */
 
 export const sessionKeys = {
@@ -43,25 +40,13 @@ export const playlistKeys = {
 /**
  * The caller's listening room (room-of-one): now-playing + persisted queue.
  * `me()` is the single source of truth — every queue/playback mutation
- * invalidates it so the player + queue panel re-render from the server.
+ * invalidates/seeds it so the player + queue panel re-render from the server.
  */
 export const roomKeys = {
   all: () => ['room'] as const,
   me: () => ['room', 'me'] as const,
 }
 
-/**
- * MFA surface: authenticator list + per-method enrollment data.
- *
- * The cascade is deliberate — `mfaKeys.all()` is the parent prefix used by
- * mutation `onSuccess` to invalidate the whole surface in one call. Individual
- * hooks read the specific entries below.
- */
-/**
- * Ephemeral player UI state shared across components (e.g. the queue panel being
- * open) — a client-only cache key used as a tiny store, no fetcher. Lets the
- * player and the playlists search pill read one source of truth. See lib/query/ui.ts.
- */
 export const searchKeys = {
   songs: (q: string) => ['search', 'songs', q] as const,
 }
@@ -72,12 +57,20 @@ export const importKeys = {
   result: (url: string) => ['import', url] as const,
 }
 
+/**
+ * Ephemeral client-only UI state shared across components, used as a tiny store
+ * (no fetcher). Today: per-route search text, so the persistent search pill and
+ * the page it serves read one value (each page keeps its own term). See lib/hooks/queries/ui.ts.
+ */
 export const uiKeys = {
-  // Search text per route path, so the persistent search pill and the page it
-  // serves share one value (and each page keeps its own term).
   search: (path: string) => ['ui', 'search', path] as const,
 }
 
+/**
+ * MFA surface: authenticator list + per-method enrollment data. `mfaKeys.all()`
+ * is the parent prefix used by mutation `onSuccess` to invalidate the whole
+ * surface in one call; individual hooks read the specific entries below.
+ */
 export const mfaKeys = {
   all: () => ['mfa'] as const,
   authenticators: () => ['mfa', 'authenticators'] as const,

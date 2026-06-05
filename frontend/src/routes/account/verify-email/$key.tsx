@@ -4,8 +4,8 @@ import { toast } from 'sonner'
 
 import { buttonVariants } from '@/components/ui/button'
 import { auth } from '@/lib/auth/api'
-import { hasVerifiedPrimaryEmail } from '@/lib/auth/hooks'
-import { emailKeys } from '@/lib/query/keys'
+import { hasVerifiedPrimaryEmail } from '@/lib/auth/guards'
+import { emailKeys } from '@/lib/hooks/keys'
 
 // Verify endpoint is single-use — Strict Mode double-mounts, double-clicks,
 // and pre-fetchers can all fire the POST more than once, so we read the

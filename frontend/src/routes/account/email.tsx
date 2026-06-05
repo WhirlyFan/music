@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { type EmailAddress, useChangeEmail, useEmails } from '@/lib/auth/hooks'
+import { type EmailAddress } from '@/lib/auth/guards'
+import { useChangeEmail } from '@/lib/hooks/mutations/auth'
+import { useEmails } from '@/lib/hooks/queries/auth'
 
 export const Route = createFileRoute('/account/email')({
   component: ChangeEmailPage,

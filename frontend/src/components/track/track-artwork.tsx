@@ -3,8 +3,8 @@ import { Music } from 'lucide-react'
 import { useState } from 'react'
 
 import { api } from '@/lib/api/client'
-import type { Track } from '@/lib/query/catalog'
-import { playlistKeys, roomKeys } from '@/lib/query/keys'
+import type { Track } from '@/lib/api/models'
+import { playlistKeys, roomKeys } from '@/lib/hooks/keys'
 import { cn } from '@/lib/utils'
 
 // Self-heal: external cover URLs (scdn.co / mzstatic / ytimg) can rot. When an

@@ -1,8 +1,8 @@
 import { Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
+import { useRoom } from '@/lib/hooks/queries/rooms'
 import { useQueueOpen } from '@/lib/player-url-state'
-import { useRoom } from '@/lib/query/rooms'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
 /**
@@ -37,7 +37,7 @@ export function FloatingSearchPill({
 
   return (
     <div
-      className="fixed left-1/2 z-30 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-[280ms] ease-out-quint motion-reduce:transition-none"
+      className="ease-out-quint fixed left-1/2 z-30 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-[280ms] motion-reduce:transition-none"
       style={{ bottom }}
     >
       <div className="relative">

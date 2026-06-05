@@ -11,10 +11,11 @@ import { Input } from '@/components/ui/input'
 import { RainbowButton } from '@/components/ui/rainbow-button'
 import { SkeletonZone } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api/client'
+import type { ImportResult } from '@/lib/api/models'
+import { useCreatePlaylist } from '@/lib/hooks/mutations/catalog'
+import { usePlay, usePlayNow, useQueueTracks } from '@/lib/hooks/mutations/rooms'
+import { useImport, useSongSearch } from '@/lib/hooks/queries/catalog'
 import { promptText } from '@/lib/overlay'
-import type { ImportResult } from '@/lib/query/catalog'
-import { useCreatePlaylist, useImport, useSongSearch } from '@/lib/query/catalog'
-import { usePlay, usePlayNow, useQueueTracks } from '@/lib/query/rooms'
 
 const urlSchema = z.string().url()
 

@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { isEmailVerificationPending, useSignup } from '@/lib/auth/hooks'
+import { isEmailVerificationPending } from '@/lib/auth/guards'
+import { useSignup } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/signup')({
   component: SignupPage,

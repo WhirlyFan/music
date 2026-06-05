@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { UserMenu } from '@/components/layout/user-menu'
-import { useSession } from '@/lib/auth/hooks'
+import { useSession } from '@/lib/hooks/queries/auth'
 
 type SessionUser = {
   email?: string

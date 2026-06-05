@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
-import { useLogout } from '@/lib/auth/hooks'
+import { useLogout } from '@/lib/hooks/mutations/auth'
 
 type Props = {
   username: string

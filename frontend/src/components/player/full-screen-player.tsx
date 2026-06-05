@@ -6,7 +6,7 @@ import { AudioVisualizer } from '@/components/player/audio-visualizer'
 import { SeekBar } from '@/components/player/seek-bar'
 import { ExplicitBadge } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
-import type { Track } from '@/lib/query/catalog'
+import type { Track } from '@/lib/api/models'
 
 /** Human label + so we can show the right "open on …" verb for the origin link. */
 function sourceLabel(url: string): string {

@@ -3,8 +3,8 @@ import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
 
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { buttonVariants } from '@/components/ui/button'
-import { useSession } from '@/lib/auth/hooks'
 import { useAuthenticators } from '@/lib/auth/mfa'
+import { useSession } from '@/lib/hooks/queries/auth'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,

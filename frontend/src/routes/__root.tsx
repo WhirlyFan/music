@@ -13,20 +13,15 @@ import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
-import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/hooks'
-import { emailKeys, sessionKeys } from '@/lib/query/keys'
+import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/guards'
+import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
 
 // Paths the verified-email guard MUST let through, even when the session is
 // authenticated-but-unverified. Mirrors the backend's
 // _VERIFIED_EMAIL_EXEMPT_PREFIXES in apps/core/middleware.py — keep them in
 // sync. Without these, a freshly-signed-up user would be redirect-looped
 // on the very page they need to reach to fix the situation.
-const VERIFY_EXEMPT_PREFIXES = [
-  '/account/verify-email',
-  '/account/logout',
-  '/login',
-  '/signup',
-]
+const VERIFY_EXEMPT_PREFIXES = ['/account/verify-email', '/account/logout', '/login', '/signup']
 
 // Routes a logged-OUT user is allowed to visit. Everything else redirects to
 // /login (with the attempted path as ?redirect). Includes the password-reset +
@@ -113,7 +108,11 @@ function RootLayout() {
       <AppHeader />
 
       {/* pb-28 keeps content clear of the fixed now-playing bar. */}
-      <main id="main-content" tabIndex={-1} className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8"
+      >
         <Outlet />
       </main>
 

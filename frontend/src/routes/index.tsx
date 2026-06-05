@@ -2,7 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { OmniBox } from '@/components/import/import-hub'
 import { buttonVariants } from '@/components/ui/button'
-import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
+import { isSessionAuthenticated } from '@/lib/auth/guards'
+import { useSession } from '@/lib/hooks/queries/auth'
 
 export const Route = createFileRoute('/')({
   component: Index,

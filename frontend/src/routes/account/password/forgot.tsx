@@ -8,7 +8,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
-import { useRequestPasswordReset } from '@/lib/auth/hooks'
+import { useRequestPasswordReset } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/account/password/forgot')({
   component: ForgotPasswordPage,

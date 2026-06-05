@@ -1,12 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
-import type { components } from '@/lib/api/types'
-import { playlistKeys, roomKeys } from '@/lib/query/keys'
-
-export type Room = components['schemas']['Room']
-export type QueueItem = components['schemas']['QueueItem']
-type Playlist = components['schemas']['Playlist']
+import type { Playlist, Room } from '@/lib/api/models'
+import { playlistKeys, roomKeys } from '@/lib/hooks/keys'
 
 /**
  * Set by the explicit play actions (play / play-now / play-playlist) so the
@@ -15,17 +11,6 @@ type Playlist = components['schemas']['Playlist']
  * consumes (clears) it. Module-scoped so it survives the player mounting.
  */
 export const playIntent = { value: false }
-
-/** The caller's room: now-playing + a single queue (history behind the cursor,
- *  up-next ahead). Source of truth for the player; rehydrates on load so
- *  playback survives navigation. */
-export function useRoom(enabled = true) {
-  return useQuery({
-    queryKey: roomKeys.me(),
-    queryFn: () => api<Room>('/rooms/me/'),
-    enabled,
-  })
-}
 
 // Every mutation returns the fresh Room — seed the cache directly (no refetch).
 // TArgs defaults to void so no-arg mutations (next/previous/…) keep `mutate()`.

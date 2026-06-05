@@ -8,7 +8,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
-import { useCompletePasswordReset } from '@/lib/auth/hooks'
+import { useCompletePasswordReset } from '@/lib/hooks/mutations/auth'
 
 // $key is captured from the URL by TanStack Router's file-based routing.
 // The reset email contains a link of the form
