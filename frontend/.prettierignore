@@ -1,5 +1,9 @@
 dist/
 node_modules/
+.pnpm-store/
 pnpm-lock.yaml
 src/routeTree.gen.ts
 src/lib/api/types.ts
+# Agent skill docs (tooling, often authored/synced externally) — not product
+# source, so don't gate CI on their formatting.
+.claude/
