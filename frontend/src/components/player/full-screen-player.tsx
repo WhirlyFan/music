@@ -70,7 +70,7 @@ export function FullScreenPlayer({
       aria-modal="true"
       aria-label={`Now playing: ${track.title}`}
       onClick={onClose}
-      className="motion-safe:animate-fade-in fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
+      className="motion-safe:animate-fade-in fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden [view-transition-name:full-screen-player]"
     >
       {/* Immersive backdrop: an always-opaque base, then the cover blurred on top,
           then a darkening scrim. The opaque base matters on track change — the new

@@ -579,9 +579,29 @@
   }
 }
 
+/*
+ * Full-screen player (a URL-toggled overlay, so it's a navigation → view
+ * transition). Its enter is the inner fade-in/slide-up (new = none avoids a
+ * double-animation); we add the missing CLOSE here so it doesn't snap shut.
+ */
+::view-transition-old(full-screen-player) {
+  animation: fsp-out 0.2s var(--ease-standard) both;
+}
+::view-transition-new(full-screen-player) {
+  animation: none;
+}
+@keyframes fsp-out {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(auth-card),
-  ::view-transition-new(auth-card) {
+  ::view-transition-new(auth-card),
+  ::view-transition-old(full-screen-player),
+  ::view-transition-new(full-screen-player) {
     animation: none !important;
   }
 }
