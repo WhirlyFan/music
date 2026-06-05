@@ -30,30 +30,33 @@ export type CoverItem = {
   track_count: number
 }
 
-const GAP = 20
 const FRICTION = 0.92
 const TAP_THRESHOLD = 6 // px of movement below which a press counts as a tap
-// Smaller covers on phones so a ~360px screen still shows a few per row.
-const cardFor = (width: number) => (width < 640 ? 120 : 160)
+// Golden angle — the sunflower/phyllotaxis spacing that fills a disc evenly with no
+// preferred axis, so the cluster looks organic rather than like rings or spokes.
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
+// Radius grows as STEP*sqrt(i): even areal density (sunflower). 0.62*card packs them
+// into a tight overlapping cluster at the centre that fans outward.
+const STEP_FACTOR = 0.62
+const cardFor = (width: number) => (width < 640 ? 116 : 148)
 
-const mod = (n: number, m: number) => ((n % m) + m) % m
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
- * Infinite, draggable wall of playlist covers. A fixed tile pool is laid out on
- * a torus and wrapped via modulo on a drag offset, so a handful of covers tile
- * endlessly in every direction (annnimate `infinite_draggable_grid` style).
- * Tiles are positioned purely with `transform: translate3d` mutated in a rAF
- * loop — they never re-render per frame.
+ * A finite, click-and-drag cluster of playlist covers laid out on a golden-angle
+ * spiral — one tile per playlist (no repeating/tiling). The covers bunch around the
+ * centre and fan outward; drag to pan with inertia, tap a cover to open it.
  *
- * The visual wall is `aria-hidden`; an `sr-only` list of real links is rendered
- * alongside so keyboard / screen-reader users still get every playlist.
+ * Positions are static (computed from the cover count + size); only a drag `offset` is
+ * mutated in a rAF loop and written to each tile's `transform: translate3d`, so tiles
+ * never re-render per frame. The visual cluster is `aria-hidden`; an `sr-only` list of
+ * real links is rendered alongside so keyboard / screen-reader users get every playlist.
  *
- * While `loading`, it renders a static grid of skeleton tiles via the same
- * (zone-aware) `CoverTile` — no separate skeleton component to keep in sync.
+ * While `loading`, renders a static grid of skeletons (the drag machinery no-ops without
+ * a container).
  */
-export function CoverWall({
+export function CoverSpiral({
   items,
   onOpen,
   onDelete,
@@ -66,8 +69,10 @@ export function CoverWall({
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const tileEls = useRef<(HTMLDivElement | null)[]>([])
-  const [grid, setGrid] = useState({ cols: 0, rows: 0, card: 160, pitch: 180 })
-  const gridRef = useRef(grid)
+  const [card, setCard] = useState(148)
+  // Precomputed spiral offsets (relative to centre) + the container centre, in a ref so
+  // the rAF draw reads them without re-rendering.
+  const layout = useRef({ cx: 0, cy: 0, pos: [] as { x: number; y: number }[] })
 
   const offset = useRef({ x: 0, y: 0 })
   const vel = useRef({ x: 0, y: 0 })
@@ -78,24 +83,52 @@ export function CoverWall({
   const raf = useRef<number | null>(null)
 
   const draw = useCallback(() => {
-    const { cols, rows, pitch } = gridRef.current
-    if (!cols || !rows) return
-    const worldW = cols * pitch
-    const worldH = rows * pitch
+    const { cx, cy, pos } = layout.current
     const { x: ox, y: oy } = offset.current
-    for (let i = 0; i < cols * rows; i++) {
+    for (let i = 0; i < pos.length; i++) {
       const el = tileEls.current[i]
       if (!el) continue
-      const c = i % cols
-      const r = Math.floor(i / cols)
-      const x = mod(c * pitch + ox, worldW) - pitch
-      const y = mod(r * pitch + oy, worldH) - pitch
-      el.style.transform = `translate3d(${x}px, ${y}px, 0)`
+      el.style.transform = `translate3d(${cx + pos[i].x + ox}px, ${cy + pos[i].y + oy}px, 0)`
     }
   }, [])
 
-  // Inertia loop. A hoisted function so it can schedule itself without a
-  // const TDZ self-reference; only reads refs, so a fresh closure is harmless.
+  // Recompute the spiral whenever the container size, card size, or item count changes.
+  const relayout = useCallback(() => {
+    const el = containerRef.current
+    if (!el) return
+    const c = cardFor(el.clientWidth)
+    const step = c * STEP_FACTOR
+    const pos = items.map((_, i) => {
+      const r = step * Math.sqrt(i)
+      const a = i * GOLDEN_ANGLE
+      return { x: r * Math.cos(a), y: r * Math.sin(a) }
+    })
+    layout.current = {
+      cx: (el.clientWidth - c) / 2,
+      cy: (el.clientHeight - c) / 2,
+      pos,
+    }
+    if (c !== card) setCard(c)
+    draw()
+  }, [items, card, draw])
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(relayout)
+    ro.observe(el)
+    return () => ro.disconnect()
+    // Re-run when `loading` flips (the interactive container only mounts once loaded)
+    // and when the layout inputs change.
+  }, [relayout, loading])
+
+  useEffect(() => {
+    return () => {
+      if (raf.current !== null) cancelAnimationFrame(raf.current)
+    }
+  }, [])
+
+  // Inertia loop — hoisted so it can self-schedule without a TDZ self-reference.
   function step() {
     const v = vel.current
     offset.current.x += v.x
@@ -109,41 +142,6 @@ export function CoverWall({
     }
     raf.current = requestAnimationFrame(step)
   }
-
-  // Size the tile pool to the container (+ a one-cell ring for wrapping).
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => {
-      const card = cardFor(el.clientWidth)
-      const pitch = card + GAP
-      const cols = Math.ceil(el.clientWidth / pitch) + 2
-      const rows = Math.ceil(el.clientHeight / pitch) + 2
-      setGrid((prev) =>
-        prev.cols === cols && prev.rows === rows && prev.card === card
-          ? prev
-          : { cols, rows, card, pitch },
-      )
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-    // Re-run when `loading` flips: while loading we render the skeleton grid (no
-    // container), so the observer must (re)attach once the interactive tree —
-    // and its containerRef — actually mounts. Without this, a cold load directly
-    // on /playlists never measures and the wall stays empty.
-  }, [loading])
-
-  // Redraw whenever the grid or the item pool changes.
-  useEffect(() => {
-    gridRef.current = grid
-    draw()
-  }, [grid, items, draw])
-
-  useEffect(() => {
-    return () => {
-      if (raf.current !== null) cancelAnimationFrame(raf.current)
-    }
-  }, [])
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -187,10 +185,7 @@ export function CoverWall({
     }
   }
 
-  const tileCount = grid.cols * grid.rows
-
-  // Loading: a static grid of skeleton tiles (same CoverTile, zone-driven) —
-  // no torus/drag machinery (the ResizeObserver effect no-ops without a container).
+  // Loading: a static grid of skeleton tiles (same CoverTile, zone-driven).
   if (loading) {
     return (
       <SkeletonZone>
@@ -198,7 +193,7 @@ export function CoverWall({
           role="status"
           aria-busy
           aria-label="Loading playlists"
-          className="grid size-full [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] gap-5 overflow-hidden p-4 sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]"
+          className="grid size-full [grid-template-columns:repeat(auto-fill,minmax(116px,1fr))] gap-5 overflow-hidden p-4 sm:[grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]"
         >
           {Array.from({ length: 18 }).map((_, i) => (
             <div key={i} className="aspect-square">
@@ -221,22 +216,20 @@ export function CoverWall({
         onPointerCancel={onPointerUp}
         className="size-full cursor-grab touch-none select-none active:cursor-grabbing"
       >
-        {Array.from({ length: tileCount }, (_, i) => {
-          const item = items[i % items.length]
-          return (
-            <div
-              key={i}
-              ref={(el) => {
-                tileEls.current[i] = el
-              }}
-              data-pid={item.id}
-              style={{ width: grid.card, height: grid.card, willChange: 'transform' }}
-              className="absolute top-0 left-0 hover:z-10"
-            >
-              <CoverTile item={item} onDelete={onDelete} />
-            </div>
-          )
-        })}
+        {/* Centre tiles render last so they sit on top of the outer ones they overlap. */}
+        {items.map((item, i) => (
+          <div
+            key={item.id}
+            ref={(el) => {
+              tileEls.current[i] = el
+            }}
+            data-pid={item.id}
+            style={{ width: card, height: card, zIndex: items.length - i, willChange: 'transform' }}
+            className="absolute top-0 left-0 hover:z-[999]"
+          >
+            <CoverTile item={item} onDelete={onDelete} />
+          </div>
+        ))}
       </div>
 
       {/* Accessible equivalent: every playlist once, as real links. */}
@@ -258,14 +251,13 @@ function CoverTile({ item, onDelete }: { item?: CoverItem; onDelete?: (id: strin
   const [confirmOpen, setConfirmOpen] = useState(false)
   const skeleton = useSkeletonZone()
 
-  // Zone-driven skeleton: the same square footprint as the real cover, so the
-  // placeholder can't drift. (No separate skeleton component.)
+  // Zone-driven (or item-less) skeleton: same square footprint as the real cover.
   if (skeleton || !item) return <Skeleton className="size-full rounded-md" />
 
   return (
     // Ripple host (transparent, same size); the whole TiltCard tilts as one card.
     <div className="group relative size-full" onPointerDown={ripple.onPointerDown}>
-      <TiltCard className="overflow-hidden rounded-md shadow-sm">
+      <TiltCard className="overflow-hidden rounded-md shadow-md">
         {item.artwork_url ? (
           <img src={item.artwork_url} alt="" draggable={false} className="size-full object-cover" />
         ) : (

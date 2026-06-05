@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { toast } from 'sonner'
 
-import { CoverWall } from '@/components/playlists/cover-wall'
+import { CoverSpiral } from '@/components/playlists/cover-spiral'
 import { FormError } from '@/components/ui/form-error'
 import { useDeletePlaylist } from '@/lib/hooks/mutations/catalog'
 import { useInfinitePlaylists } from '@/lib/hooks/queries/catalog'
@@ -22,12 +23,19 @@ function PlaylistsPage() {
   const playlists = useInfinitePlaylists(q)
   const del = useDeletePlaylist()
 
-  // The wall tiles a finite pool, so the first page is plenty — no scroll paging.
-  const pool = playlists.data?.pages[0]?.results ?? []
-  const empty = !playlists.isLoading && pool.length === 0
+  // The spiral lays out every playlist once, so we need the full set — eagerly page
+  // through to the end (typically one or two pages). A finite cluster shouldn't grow
+  // under the user's cursor as they drag, so we load all up front rather than on scroll.
+  const { hasNextPage, isFetchingNextPage, fetchNextPage, data } = playlists
+  useEffect(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage()
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, data])
 
-  // Full-bleed: a fixed layer below the header, escaping <main>'s max-width +
-  // padding so the wall is edge-to-edge and flush.
+  const items = data?.pages.flatMap((p) => p.results) ?? []
+  const empty = !playlists.isLoading && items.length === 0
+
+  // Full-bleed drag canvas: a fixed layer below the header, escaping <main>'s max-width
+  // + padding. overflow-hidden — you pan the cluster, the page doesn't scroll.
   return (
     <div className="fixed inset-x-0 top-14 bottom-0 overflow-hidden">
       <h1 className="bg-background/70 absolute top-3 left-4 z-10 rounded-lg px-3 py-1.5 text-lg font-semibold tracking-tight backdrop-blur">
@@ -45,9 +53,9 @@ function PlaylistsPage() {
             : 'No playlists yet — import one from the home page, then save it.'}
         </div>
       ) : (
-        <CoverWall
+        <CoverSpiral
           loading={playlists.isLoading}
-          items={pool}
+          items={items}
           onOpen={(id) => navigate({ to: '/playlists/$playlistId', params: { playlistId: id } })}
           onDelete={(id) => del.mutate(id, { onSuccess: () => toast.success('Playlist deleted.') })}
         />
