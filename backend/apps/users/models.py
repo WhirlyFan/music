@@ -177,3 +177,17 @@ class Invitation(models.Model):
             accepted_at__isnull=True,
             expires_at__gt=timezone.now(),
         ).first()
+
+    @classmethod
+    def permits_signup(cls, email: str) -> bool:
+        """Whether `email` is allowed to sign up under the invite-only gate: it has an
+        invitation that is either still pending (unaccepted + unexpired) *or* already
+        accepted. The "accepted" case matters because allauth re-validates the email
+        during post-signup setup (after `save_user` has marked the invite accepted) — a
+        stricter pending-only check would reject the email mid-signup and drop the
+        verified-email stash. An expired, never-accepted invite does not qualify."""
+        return (
+            cls.objects.filter(email__iexact=email.strip())
+            .filter(models.Q(accepted_at__isnull=False) | models.Q(expires_at__gt=timezone.now()))
+            .exists()
+        )

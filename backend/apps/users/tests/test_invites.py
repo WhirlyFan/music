@@ -9,7 +9,8 @@ from django.contrib.auth.models import AnonymousUser
 from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
+from django.utils import timezone
 from rest_framework.test import APIClient
 from waffle.testutils import override_switch
 
@@ -90,6 +91,17 @@ def test_adapter_allows_authed_email_change(member):
     # Authenticated user changing email → not a signup, so no invite required.
     with context.request_context(_authed_request(member)):
         assert AccountAdapter().clean_email("newaddr@example.com") == "newaddr@example.com"
+
+
+@override_switch("invite_only", active=True)
+@pytest.mark.django_db
+def test_adapter_allows_already_accepted_invite_during_signup_setup():
+    # allauth re-validates the email during post-signup setup, *after* save_user marked
+    # the invite accepted. The gate must still pass then, or it drops the verified-email
+    # stash (→ unverified account). A pending-only check would wrongly reject here.
+    Invitation.objects.create(email="accepted@example.com", accepted_at=timezone.now())
+    with context.request_context(_anon_request()):
+        assert AccountAdapter().clean_email("accepted@example.com") == "accepted@example.com"
 
 
 # ── service ──────────────────────────────────────────────────────────────────
@@ -203,6 +215,31 @@ def test_redeem_authed_peek_does_not_stash(member):
     inv = redeem_invitation(token, req)
     assert inv.email == "peek@example.com"
     assert "account_verified_email" not in req.session
+
+
+# ── end-to-end: invite redeem → signup yields a verified account, no extra email ─
+@override_switch("invite_only", active=True)
+@override_settings(AUTH_PASSWORD_VALIDATORS=[])  # offline + deterministic (skip pwned API)
+@pytest.mark.django_db
+def test_invite_signup_creates_verified_account_without_confirmation_email(member):
+    # Regression: the invite-only gate used to reject the email during allauth's
+    # post-signup email setup (save_user had already marked the invite accepted),
+    # dropping the verified-email stash → an unverified account + a confirmation mail +
+    # the /account/verify-email loop. Redeem then signup must yield a verified account.
+    create_invitation("fullflow@example.com", invited_by=member)
+    token = _token_from_email()
+    mail.outbox.clear()
+    c = APIClient()  # one client → redeem + signup share the session (and the stash)
+    assert c.post(REDEEM, {"token": token}, format="json").status_code == 200
+    r = c.post(
+        "/_allauth/browser/v1/auth/signup",
+        {"email": "fullflow@example.com", "username": "fullflow", "password": "x7K2mq9ZvLp4Tn8w"},
+        format="json",
+    )
+    assert r.status_code == 200, r.content  # 200 + authenticated == verified, not pending
+    ea = EmailAddress.objects.get(email="fullflow@example.com")
+    assert ea.verified is True and ea.primary is True
+    assert mail.outbox == []  # the invite was the verification — no confirmation mail
 
 
 # ── rate limiting (an invite emails someone → cap per member) ─────────────────
