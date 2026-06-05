@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Music, MoreVertical, Trash2 } from 'lucide-react'
+import { MoreVertical, Music, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import {
@@ -38,8 +38,7 @@ const cardFor = (width: number) => (width < 640 ? 120 : 160)
 
 const mod = (n: number, m: number) => ((n % m) + m) % m
 const reducedMotion = () =>
-  typeof window !== 'undefined' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
  * Infinite, draggable wall of playlist covers. A fixed tile pool is laid out on
@@ -199,7 +198,7 @@ export function CoverWall({
           role="status"
           aria-busy
           aria-label="Loading playlists"
-          className="grid size-full gap-5 overflow-hidden p-4 [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]"
+          className="grid size-full [grid-template-columns:repeat(auto-fill,minmax(120px,1fr))] gap-5 overflow-hidden p-4 sm:[grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]"
         >
           {Array.from({ length: 18 }).map((_, i) => (
             <div key={i} className="aspect-square">

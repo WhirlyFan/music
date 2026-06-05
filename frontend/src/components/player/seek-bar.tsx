@@ -53,7 +53,9 @@ export function SeekBar({
         aria-label="Seek"
         className="accent-primary h-1 flex-1 cursor-pointer"
       />
-      <span className="text-muted-foreground min-w-9 text-[11px] tabular-nums">{fmt(duration)}</span>
+      <span className="text-muted-foreground min-w-9 text-[11px] tabular-nums">
+        {fmt(duration)}
+      </span>
     </div>
   )
 }

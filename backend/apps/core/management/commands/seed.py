@@ -243,7 +243,9 @@ class Command(BaseCommand):
                 if err:
                     self.stdout.write(self.style.WARNING(f"Skipped playlist {title}: {err}"))
                 else:
-                    self.stdout.write(self.style.SUCCESS(f"Imported playlist “{title}” ({count} tracks)"))
+                    self.stdout.write(
+                        self.style.SUCCESS(f"Imported playlist “{title}” ({count} tracks)")
+                    )
 
         # Summary.
         self.stdout.write(

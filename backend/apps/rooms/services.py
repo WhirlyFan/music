@@ -69,8 +69,10 @@ def play(room: Room, tracks, *, start: int = 0, added_by=None, label: str = "") 
     playback, _ = PlaybackState.objects.get_or_create(room=room)
     _ctx(room).delete()
     rows = QueueItem.objects.bulk_create(
-        [QueueItem(room=room, track=t, kind=CONTEXT, position=i, added_by=added_by)
-         for i, t in enumerate(tracks)]
+        [
+            QueueItem(room=room, track=t, kind=CONTEXT, position=i, added_by=added_by)
+            for i, t in enumerate(tracks)
+        ]
     )
     _set_current(playback, rows[start], label=label)
 
@@ -94,7 +96,9 @@ def play_now(room: Room, track, *, added_by=None) -> QueueItem:
         playback.save(update_fields=["position_ms", "is_playing", "updated_at"])
         return cur
     _ctx(room).delete()
-    row = QueueItem.objects.create(room=room, track=track, kind=CONTEXT, position=0, added_by=added_by)
+    row = QueueItem.objects.create(
+        room=room, track=track, kind=CONTEXT, position=0, added_by=added_by
+    )
     _set_current(playback, row, label="")
     return row
 
@@ -111,7 +115,9 @@ def enqueue(room: Room, track, *, added_by=None, play_next: bool = False) -> Que
     else:
         hi = q.aggregate(m=Max("position"))["m"]
         position = hi + 1 if hi is not None else 0
-    item = QueueItem.objects.create(room=room, track=track, kind=QUEUE, position=position, added_by=added_by)
+    item = QueueItem.objects.create(
+        room=room, track=track, kind=QUEUE, position=position, added_by=added_by
+    )
     if playback.current_item_id is None:
         next_track(room)
     return item
@@ -163,13 +169,19 @@ def previous_track(room: Room):
     pos = playback.context_pos
     if cur.kind == QUEUE:
         # Back out of the queued track to the context track we were on.
-        ctx_here = _ctx(room).filter(position__lte=pos).order_by("-position").first() if pos is not None else None
+        ctx_here = (
+            _ctx(room).filter(position__lte=pos).order_by("-position").first()
+            if pos is not None
+            else None
+        )
         if ctx_here is not None:
             _set_current(playback, ctx_here)
             return ctx_here.track
         return None
     prev_ctx = (
-        _ctx(room).filter(position__lt=pos).order_by("-position").first() if pos is not None else None
+        _ctx(room).filter(position__lt=pos).order_by("-position").first()
+        if pos is not None
+        else None
     )
     if prev_ctx is not None:
         _set_current(playback, prev_ctx)

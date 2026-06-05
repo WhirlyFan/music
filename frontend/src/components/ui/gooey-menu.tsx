@@ -118,9 +118,7 @@ export function GooeyMenu({
               transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
               opacity: open ? 1 : 0,
               pointerEvents: open ? 'auto' : 'none',
-              transition: reducedMotion()
-                ? 'none'
-                : `${travel(i)}, opacity 0.2s ${i * STAGGER}ms`,
+              transition: reducedMotion() ? 'none' : `${travel(i)}, opacity 0.2s ${i * STAGGER}ms`,
             }}
           >
             {item.icon}
