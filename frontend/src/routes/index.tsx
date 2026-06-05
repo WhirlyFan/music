@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 
-import { ImportHub } from '@/components/import/import-hub'
+import { OmniBox } from '@/components/import/import-hub'
 import { buttonVariants } from '@/components/ui/button'
 import { isSessionAuthenticated, useSession } from '@/lib/auth/hooks'
 
@@ -11,9 +11,25 @@ export const Route = createFileRoute('/')({
 function Index() {
   const { data: session } = useSession()
 
-  // Signed-in: the home page IS the import hub. Signed-out: a brief welcome.
-  if (isSessionAuthenticated(session)) return <ImportHub />
-  return <Welcome />
+  // Signed-in: the clean search/import hero. Submitting the box routes to /search
+  // (song search) or /import (a pasted link) — so home stays the input, and back /
+  // the logo always return here. Signed-out: a brief welcome.
+  if (!isSessionAuthenticated(session)) return <Welcome />
+  return (
+    <div className="flex min-h-[60vh] flex-col justify-center gap-8">
+      <section className="mx-auto w-full max-w-xl text-center">
+        <h1 className="shimmer-text text-3xl font-semibold tracking-tight">
+          What do you want to hear?
+        </h1>
+        <p className="text-muted-foreground mt-2 text-sm">
+          Search for a song, or paste a Spotify, Apple Music, or YouTube link.
+        </p>
+        <div className="mt-6">
+          <OmniBox autoFocus />
+        </div>
+      </section>
+    </div>
+  )
 }
 
 function Welcome() {

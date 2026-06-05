@@ -66,6 +66,12 @@ export const searchKeys = {
   songs: (q: string) => ['search', 'songs', q] as const,
 }
 
+// Import result keyed by source URL — so /import?url=… is shareable + refresh-safe
+// (cached per URL; only a hard refresh / first visit re-runs the ingest).
+export const importKeys = {
+  result: (url: string) => ['import', url] as const,
+}
+
 export const uiKeys = {
   // Search text per route path, so the persistent search pill and the page it
   // serves share one value (and each page keeps its own term).

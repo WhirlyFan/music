@@ -8,7 +8,7 @@ import {
 
 import { api } from '@/lib/api/client'
 import type { components } from '@/lib/api/types'
-import { playlistKeys, roomKeys, searchKeys } from '@/lib/query/keys'
+import { importKeys, playlistKeys, roomKeys, searchKeys } from '@/lib/query/keys'
 
 export type Playlist = components['schemas']['Playlist']
 export type PlaylistDetail = components['schemas']['PlaylistDetail']
@@ -88,13 +88,19 @@ export function useInfinitePlaylistTracks(id: string, search = '') {
 }
 
 /**
- * Paste an Apple Music URL → loose catalog tracks (no playlist created).
- * The caller decides what to do with the result: play, queue, or save.
+ * Import a pasted Spotify / Apple Music / YouTube URL → loose catalog tracks (no
+ * playlist created). Modeled as a query keyed by the URL so `/import?url=…` is a real,
+ * shareable, refresh-safe navigation step — cached per URL, so only a hard refresh or
+ * first visit re-runs the ingest. The result feeds play / queue / save-as-playlist.
  */
-export function useIngest() {
-  return useMutation({
-    mutationFn: (url: string) =>
-      api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
+export function useImport(url: string) {
+  return useQuery({
+    queryKey: importKeys.result(url),
+    queryFn: () => api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
+    enabled: Boolean(url),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
   })
 }
 
