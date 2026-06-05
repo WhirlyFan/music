@@ -20,7 +20,13 @@ def _impersonate_target():
     """Browser-TLS impersonation via curl_cffi (helps dodge YouTube's bot
     detection). Auto-detected: use the first target the runtime actually offers,
     else None — curl_cffi's profiles aren't available on every arch, and forcing an
-    unavailable target errors. (None just means no impersonation, not broken.)"""
+    unavailable target errors. (None just means no impersonation, not broken.)
+
+    NOTE: curl_cffi is currently NOT installed — we dropped the yt-dlp[curl-cffi]
+    extra to clear CVE-2026-33752 (SSRF, fixed only in curl-cffi 0.15.0, which no
+    stable yt-dlp admits yet). So this returns None today and impersonation is inert;
+    playback relies on the ejs solver + PO tokens + the web_embedded client instead.
+    Re-add the extra (and this lights up automatically) once yt-dlp ships the fix."""
     try:
         with YoutubeDL({"quiet": True}) as ydl:
             targets = ydl._get_available_impersonate_targets()

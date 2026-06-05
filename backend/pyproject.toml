@@ -39,12 +39,18 @@ dependencies = [
     "gunicorn>=23.0",
     "pwned-passwords-django>=5.2.0",
     # Resolves a track to a YouTube video + extracts audio (needs ffmpeg + deno at
-    # runtime). The [default] extra bundles yt-dlp's recommended deps: the
-    # yt-dlp-ejs JS-challenge solver (so we don't fetch it at runtime) AND curl_cffi
-    # for browser-TLS impersonation (helps dodge YouTube's bot detection), plus
-    # pycryptodomex/requests/etc. Bump frequently — a stale yt-dlp breaks as YouTube
-    # changes, and yt-dlp-ejs must track yt-dlp.
-    "yt-dlp[default,curl-cffi]>=2025.1",
+    # runtime). The [default] extra bundles yt-dlp's recommended deps incl. the
+    # yt-dlp-ejs JS-challenge solver (so we don't fetch it at runtime), pycryptodomex,
+    # requests, etc. Bump frequently — a stale yt-dlp breaks as YouTube changes, and
+    # yt-dlp-ejs must track yt-dlp.
+    #
+    # We deliberately do NOT include the [curl-cffi] extra: it adds browser-TLS
+    # impersonation (a best-effort anti-bot-detection layer, see ingest/youtube.py),
+    # but curl-cffi <0.15.0 carries CVE-2026-33752 (CVSS 8.6 SSRF) and no stable
+    # yt-dlp admits the patched 0.15.0 yet. Playback doesn't depend on it (ejs solver
+    # + PO tokens + web_embedded client carry it). Re-add `,curl-cffi` once yt-dlp
+    # widens its pin to >=0.15.0.
+    "yt-dlp[default]>=2025.1",
     # yt-dlp plugin that fetches YouTube PO tokens from the bgutil-provider sidecar
     # (docker-compose). Keep the plugin + the sidecar image version in lockstep.
     "bgutil-ytdlp-pot-provider>=1.3,<2",
