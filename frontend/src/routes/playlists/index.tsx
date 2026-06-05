@@ -38,10 +38,6 @@ function PlaylistsPage() {
   // + padding. overflow-hidden — you pan the cluster, the page doesn't scroll.
   return (
     <div className="fixed inset-x-0 top-14 bottom-0 overflow-hidden">
-      <h1 className="bg-background/70 absolute top-3 left-4 z-10 rounded-lg px-3 py-1.5 text-lg font-semibold tracking-tight backdrop-blur">
-        My playlists
-      </h1>
-
       {playlists.isError ? (
         <div className="grid size-full place-items-center p-6">
           <FormError message="Failed to load playlists." />

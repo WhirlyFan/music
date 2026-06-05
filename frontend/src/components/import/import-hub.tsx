@@ -152,7 +152,7 @@ export function OmniBox({
           label rolls between "Search" and "Import" as the input becomes a link. (Results
           pages don't pass `submit` — there the box re-searches on Enter.) */}
       {submit && (
-        <div className="mt-4 flex justify-center">
+        <div className="mt-8 flex justify-center">
           <RainbowButton
             type="submit"
             className="min-w-36"
