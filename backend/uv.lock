@@ -102,7 +102,6 @@ dependencies = [
     { name = "django-waffle" },
     { name = "djangorestframework" },
     { name = "drf-spectacular" },
-    { name = "drf-spectacular-sidecar" },
     { name = "fido2" },
     { name = "gunicorn" },
     { name = "psycopg", extra = ["binary"] },
@@ -149,7 +148,6 @@ requires-dist = [
     { name = "django-waffle", specifier = ">=4.2" },
     { name = "djangorestframework", specifier = ">=3.16" },
     { name = "drf-spectacular", specifier = ">=0.28" },
-    { name = "drf-spectacular-sidecar", specifier = ">=2024.7.1" },
     { name = "fido2", specifier = ">=1.2" },
     { name = "gunicorn", specifier = ">=23.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
@@ -735,18 +733,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5e/0e/a4f50d83e76cbe797eda88fc0083c8ca970cfa362b5586359ef06ec6f70a/drf_spectacular-0.29.0.tar.gz", hash = "sha256:0a069339ea390ce7f14a75e8b5af4a0860a46e833fd4af027411a3e94fc1a0cc", size = 241722, upload-time = "2025-11-02T03:40:26.348Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/d9/502c56fc3ca960075d00956283f1c44e8cafe433dada03f9ed2821f3073b/drf_spectacular-0.29.0-py3-none-any.whl", hash = "sha256:d1ee7c9535d89848affb4427347f7c4a22c5d22530b8842ef133d7b72e19b41a", size = 105433, upload-time = "2025-11-02T03:40:24.823Z" },
-]
-
-[[package]]
-name = "drf-spectacular-sidecar"
-version = "2026.6.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/d8/735b129e7d55c4f6c682ecedfcc0438816e1d859e5e1837f914ac4544f6d/drf_spectacular_sidecar-2026.6.1.tar.gz", hash = "sha256:e159874fa85ccee39b801e260f2a3585fbe36a0c79bf811824eef9010ab98ea9", size = 2589761, upload-time = "2026-06-01T16:45:30.851Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4f/46/10bcaf965edcb70e7647e62b88b9e0de266f8bea7a7a3224e8f977f77eab/drf_spectacular_sidecar-2026.6.1-py3-none-any.whl", hash = "sha256:4560572773c7e5f636d36cd2903204e2c59560af0548da254e311f94458c51a2", size = 2613235, upload-time = "2026-06-01T16:45:29.031Z" },
 ]
 
 [[package]]

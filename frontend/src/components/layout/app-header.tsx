@@ -43,16 +43,6 @@ export function AppHeader() {
           </Link>
         )}
 
-        {isAuthed && (
-          <Link
-            to="/docs"
-            className="text-muted-foreground hover:text-foreground text-sm"
-            activeProps={{ className: 'text-foreground font-medium' }}
-          >
-            docs
-          </Link>
-        )}
-
         <div className="ml-auto flex items-center gap-2">
           {/* Theme toggle lives outside the auth-state branch so it's always
               reachable. Preferences aren't user-gated. */}

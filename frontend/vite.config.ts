@@ -59,14 +59,6 @@ export default defineConfig({
     // hostname Vite sees is "frontend". Disable the host check — we're behind
     // a reverse proxy in dev and not exposed publicly.
     allowedHosts: true,
-    // Allow reading `docs/` at the repo root (one level up from frontend/)
-    // so the in-app docs viewer can `import.meta.glob` the markdown files
-    // there. Vite's default fs.allow is the project root, which excludes
-    // anything above `frontend/`. Production builds inline the markdown
-    // (eager glob) so this setting only matters in dev.
-    fs: {
-      allow: ['..'],
-    },
     // Direct fallback proxy when running Vite without nginx in front.
     proxy: {
       '/api': { target: 'http://localhost:8000', changeOrigin: true },

@@ -17,7 +17,6 @@ dependencies = [
     "drf-spectacular>=0.28",
     # Serves Swagger UI's JS/CSS from our own /static/ instead of a CDN, so a
     # strict CSP (script-src 'self') doesn't have to allow an external origin.
-    "drf-spectacular-sidecar>=2024.7.1",
     "django-filter>=25.1",
     "django-anymail>=13.0",
     "django-extensions>=4.1",
