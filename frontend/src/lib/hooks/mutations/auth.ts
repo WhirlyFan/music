@@ -2,7 +2,7 @@ import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-q
 
 import { api } from '@/lib/api/client'
 import { auth } from '@/lib/auth/api'
-import { emailKeys, playlistKeys, roomKeys, sessionKeys } from '@/lib/hooks/keys'
+import { authKeys, emailKeys, playlistKeys, roomKeys, sessionKeys } from '@/lib/hooks/keys'
 
 /** Invite an email to the (invite-only) platform — any logged-in member can.
  *  The backend creates a pending invitation and emails the signup link. */
@@ -10,6 +10,27 @@ export function useInvite() {
   return useMutation({
     mutationFn: (email: string) =>
       api<{ email: string }>('/users/invite/', { method: 'POST', body: { email } }),
+  })
+}
+
+/** Change the signed-in user's handle. On success the session (which carries the
+ *  username) is refreshed so the UI reflects the new handle. 409 = taken. */
+export function useChangeUsername() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (username: string) =>
+      api<{ username: string }>('/users/username/', { method: 'POST', body: { username } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: sessionKeys.all() }),
+  })
+}
+
+/** Disconnect a connected social account (e.g. Google) from the current user. */
+export function useDisconnectProvider() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ provider, account }: { provider: string; account: string }) =>
+      auth.disconnectProvider(provider, account),
+    onSuccess: () => qc.invalidateQueries({ queryKey: authKeys.providers() }),
   })
 }
 

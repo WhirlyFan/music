@@ -3,7 +3,7 @@ import { providerRedirect } from '@/lib/auth/api'
 import { useSocialProviders } from '@/lib/hooks/queries/auth'
 
 /** Google's "G" mark (official 4-color), inline so we don't pull a brand-icon dep. */
-function GoogleIcon() {
+export function GoogleIcon() {
   return (
     <svg className="size-4" viewBox="0 0 24 24" aria-hidden="true">
       <path

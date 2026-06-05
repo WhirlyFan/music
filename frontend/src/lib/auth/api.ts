@@ -97,6 +97,11 @@ export const auth = {
   session: () => call('GET', '/auth/session'),
   /** Public allauth config — includes the list of configured social providers. */
   config: () => call('GET', '/config'),
+  /** Social accounts connected to the signed-in user. */
+  providerAccounts: () => call('GET', '/account/providers'),
+  /** Disconnect a connected social account (by provider id + account uid). */
+  disconnectProvider: (provider: string, account: string) =>
+    call('DELETE', '/account/providers', { provider, account }),
 
   /**
    * Login by EITHER email or username. We detect which by the '@' in the

@@ -22,6 +22,20 @@ export function useSocialProviders() {
   return { ...query, providers, hasGoogle: providers.some((p) => p.id === 'google') }
 }
 
+type ProviderAccount = { uid: string; provider: { id: string; name: string }; display: string }
+
+/** Social accounts connected to the signed-in user (for the settings page). */
+export function useProviderAccounts() {
+  const query = useQuery({
+    queryKey: authKeys.providers(),
+    queryFn: () => auth.providerAccounts(),
+    retry: false,
+    staleTime: 60 * 1000,
+  })
+  const accounts = (query.data?.data as ProviderAccount[] | undefined) ?? []
+  return { ...query, accounts, google: accounts.find((a) => a.provider.id === 'google') }
+}
+
 export function useSession() {
   return useQuery({
     queryKey: sessionKeys.all(),

@@ -18,6 +18,7 @@ export const sessionKeys = {
 /** allauth public config (configured social providers, etc.). */
 export const authKeys = {
   config: () => ['auth', 'config'] as const,
+  providers: () => ['auth', 'providers'] as const,
 }
 
 /**

@@ -1,10 +1,17 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { KeyRound, Mail, ShieldCheck } from 'lucide-react'
+import { AtSign, KeyRound, Loader2, Mail, ShieldCheck } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
 
+import { GoogleIcon } from '@/components/auth/google-button'
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
-import { buttonVariants } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ApiError } from '@/lib/api/client'
+import { providerRedirect } from '@/lib/auth/api'
 import { useAuthenticators } from '@/lib/auth/mfa'
-import { useSession } from '@/lib/hooks/queries/auth'
+import { useChangeUsername, useDisconnectProvider } from '@/lib/hooks/mutations/auth'
+import { useProviderAccounts, useSession, useSocialProviders } from '@/lib/hooks/queries/auth'
 
 export const Route = createFileRoute('/settings')({
   component: SettingsPage,
@@ -13,13 +20,18 @@ export const Route = createFileRoute('/settings')({
 
 type AuthenticatorEntry = { type?: string }
 
+// 3–30 chars, letters/digits/_/- — mirrors the backend rule (apps/users/views.py).
+const USERNAME_RE = /^[a-zA-Z0-9_-]{3,30}$/
+
 function SettingsPage() {
   const authenticators = useAuthenticators()
   const session = useSession()
+  const { hasGoogle } = useSocialProviders()
   const data = (authenticators.data?.data as AuthenticatorEntry[] | undefined) ?? []
   const types = new Set(data.map((a) => a.type))
   const mfaEnrolled = types.has('totp') || types.has('webauthn')
-  const email = (session.data?.data as { user?: { email?: string } } | undefined)?.user?.email
+  const user = (session.data?.data as { user?: { email?: string; username?: string } } | undefined)
+    ?.user
 
   return (
     // No breadcrumbs on the top-level settings page — a single-item trail
@@ -33,7 +45,7 @@ function SettingsPage() {
         <SettingsRow
           icon={<Mail className="h-5 w-5" aria-hidden="true" />}
           title="Email"
-          description={email ?? 'The address you sign in and receive mail at.'}
+          description={user?.email ?? 'The address you sign in and receive mail at.'}
           action={
             <Link
               to="/account/email"
@@ -43,6 +55,7 @@ function SettingsPage() {
             </Link>
           }
         />
+        <UsernameRow username={user?.username} />
         <SettingsRow
           icon={<KeyRound className="h-5 w-5" aria-hidden="true" />}
           title="Password"
@@ -57,6 +70,12 @@ function SettingsPage() {
           }
         />
       </Section>
+
+      {hasGoogle && (
+        <Section title="Connected accounts" description="Sign in faster with a linked account.">
+          <GoogleConnectionRow />
+        </Section>
+      )}
 
       <Section title="Security" description="How you sign in to your account.">
         <SettingsRow
@@ -82,6 +101,135 @@ function SettingsPage() {
         />
       </Section>
     </SettingsPageShell>
+  )
+}
+
+/** Inline-editable handle. Display shows the current username + Change; editing swaps
+ *  in an input with Save/Cancel. Validates the format client-side, lets the server have
+ *  the final say on uniqueness (409 → "taken"). */
+function UsernameRow({ username }: { username?: string }) {
+  const change = useChangeUsername()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+
+  function start() {
+    setValue(username ?? '')
+    setEditing(true)
+  }
+
+  function save() {
+    const next = value.trim()
+    if (next === username) return setEditing(false)
+    if (!USERNAME_RE.test(next)) {
+      toast.error('3–30 characters: letters, numbers, “_” or “-”.')
+      return
+    }
+    change.mutate(next.toLowerCase(), {
+      onSuccess: () => {
+        toast.success('Username updated.')
+        setEditing(false)
+      },
+      onError: (e) => {
+        const taken = e instanceof ApiError && e.status === 409
+        toast.error(taken ? 'That username is taken.' : 'Couldn’t update your username.')
+      },
+    })
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-4 p-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="text-muted-foreground shrink-0">
+          <AtSign className="h-5 w-5" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium">Username</p>
+          {editing ? (
+            <Input
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+              maxLength={30}
+              aria-label="New username"
+              className="h-8 w-48"
+            />
+          ) : (
+            <p className="text-muted-foreground truncate text-xs">
+              {username ? `@${username}` : 'Your public handle.'}
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="flex shrink-0 gap-2">
+        {editing ? (
+          <>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={save} disabled={change.isPending}>
+              {change.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : 'Save'}
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" variant="outline" onClick={start}>
+            Change
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Connect / disconnect Google for the signed-in user. Connect uses allauth's
+ *  process=connect redirect, returning to /settings; disconnect calls the headless
+ *  manage-providers endpoint (allauth refuses if it'd lock you out of every login). */
+function GoogleConnectionRow() {
+  const { google } = useProviderAccounts()
+  const disconnect = useDisconnectProvider()
+  const connected = Boolean(google)
+
+  return (
+    <SettingsRow
+      icon={<GoogleIcon />}
+      title="Google"
+      description={connected ? (google?.display ?? 'Connected.') : 'Link your Google account.'}
+      status={connected ? 'on' : 'off'}
+      action={
+        google ? (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disconnect.isPending}
+            onClick={() =>
+              disconnect.mutate(
+                { provider: 'google', account: google.uid },
+                {
+                  onSuccess: () => toast.success('Google disconnected.'),
+                  onError: () =>
+                    toast.error(
+                      'Couldn’t disconnect — set a password first so you can still log in.',
+                    ),
+                },
+              )
+            }
+          >
+            Disconnect
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() =>
+              void providerRedirect('google', {
+                process: 'connect',
+                callbackUrl: '/auth/callback?next=/settings',
+              })
+            }
+          >
+            Connect
+          </Button>
+        )
+      }
+    />
   )
 }
 

@@ -12,11 +12,13 @@ signup flow), which bootstraps the first/admin user.
 
 from __future__ import annotations
 
+import re
 import secrets
 
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.account.utils import user_username
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from waffle import switch_is_active
@@ -24,10 +26,20 @@ from waffle import switch_is_active
 from .models import Invitation
 
 
-def _random_handle() -> str:
-    """A random, changeable default username (e.g. "user_3f9a2c10"). Used for social
-    signups so the handle isn't derived from the email local-part (which would leak it)."""
-    return f"user_{secrets.token_hex(4)}"
+def _unique_handle(first_name: str) -> str:
+    """A changeable default username for social signups: the lowercase first name if
+    usable, else `user_<rand>`. On collision, append a short random suffix
+    (`alex_3f9a`). Not derived from the email (which would leak the local-part)."""
+    base = re.sub(r"[^a-z0-9]", "", (first_name or "").strip().lower())[:20]
+    user_model = get_user_model()
+    if base and not user_model.objects.filter(username__iexact=base).exists():
+        return base
+    prefix = base or "user"
+    for _ in range(6):
+        candidate = f"{prefix}_{secrets.token_hex(2)}"
+        if not user_model.objects.filter(username__iexact=candidate).exists():
+            return candidate
+    return f"user_{secrets.token_hex(6)}"
 
 
 def _accept_invite(email: str) -> None:
@@ -78,9 +90,9 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
     def populate_user(self, request, sociallogin, data):
         user = super().populate_user(request, sociallogin, data)
         # Google gives us no username; allauth would otherwise derive one from the
-        # email. Assign a random handle instead (changeable later). On the rare
-        # collision allauth's signup flow regenerates it.
-        user_username(user, _random_handle())
+        # email. Use the lowercase first name (else user_<rand>), changeable later.
+        first = user.first_name or data.get("first_name") or ""
+        user_username(user, _unique_handle(first))
         return user
 
     def save_user(self, request, sociallogin, form=None):
