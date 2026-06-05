@@ -24,10 +24,12 @@ Safety:
 from __future__ import annotations
 
 from allauth.mfa.models import Authenticator
-from rest_framework import permissions
+from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.request import Request
 from rest_framework.response import Response
+
+from .invites import InviteError, create_invitation
 
 
 @api_view(["GET"])
@@ -38,3 +40,22 @@ def passkey_credential_ids(request: Request) -> Response:
         type=Authenticator.Type.WEBAUTHN,
     )
     return Response({row.pk: (row.data or {}).get("credential", {}).get("id") for row in rows})
+
+
+class _InviteSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+@api_view(["POST"])
+@permission_classes([permissions.IsAuthenticated])
+def invite(request: Request) -> Response:
+    """Any logged-in member invites an email to the (invite-only) platform: creates a
+    pending invitation and emails the signup link. 400 if the email is already a member."""
+    s = _InviteSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+    email = s.validated_data["email"]
+    try:
+        create_invitation(email, invited_by=request.user)
+    except InviteError as e:
+        return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({"email": email.strip().lower()}, status=status.HTTP_201_CREATED)

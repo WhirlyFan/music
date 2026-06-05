@@ -1,6 +1,21 @@
+import secrets
+from datetime import timedelta
+
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.db import models
+from django.utils import timezone
+
+INVITE_TTL = timedelta(days=14)
+
+
+def _invite_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _invite_expiry():
+    return timezone.now() + INVITE_TTL
+
 
 # Letters, numbers, underscore, dash. 3-30 chars. Same pattern enforced by
 # the frontend Zod schema so client + server agree.
@@ -84,3 +99,48 @@ class User(AbstractUser):
         """Best human-readable label: 'First Last' if both set, else username."""
         full = f"{self.first_name} {self.last_name}".strip()
         return full or self.username
+
+
+class Invitation(models.Model):
+    """An invite to join the (invite-only) platform. Any logged-in member can create
+    one for an email; the custom AccountAdapter then lets *only* emails with a pending
+    (unaccepted, unexpired) invitation sign up. Marked accepted when that email signs
+    up. The first/admin user is bootstrapped via `createsuperuser`, which bypasses the
+    signup flow (and thus this gate)."""
+
+    email = models.EmailField(db_index=True)
+    # Unguessable token for the invite link (doesn't expose the email in the URL).
+    token = models.CharField(max_length=64, unique=True, default=_invite_token, editable=False)
+    invited_by = models.ForeignKey(
+        "users.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_invitations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(default=_invite_expiry)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"invite:{self.email}"
+
+    @property
+    def is_pending(self) -> bool:
+        return self.accepted_at is None and self.expires_at > timezone.now()
+
+    @classmethod
+    def pending_for(cls, email: str):
+        """The current pending invitation for `email` (case-insensitive), or None."""
+        return (
+            cls.objects.filter(
+                email__iexact=email.strip(),
+                accepted_at__isnull=True,
+                expires_at__gt=timezone.now(),
+            )
+            .order_by("-created_at")
+            .first()
+        )

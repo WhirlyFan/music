@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User
+from .models import Invitation, User
 
 
 @admin.register(User)
@@ -28,3 +28,11 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
     )
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    list_display = ("email", "invited_by", "is_pending", "created_at", "accepted_at", "expires_at")
+    search_fields = ("email",)
+    readonly_fields = ("token", "created_at")
+    # Delete an invite to revoke it: the adapter gate then blocks that email's signup.

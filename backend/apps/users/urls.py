@@ -10,4 +10,5 @@ urlpatterns = [
         views.passkey_credential_ids,
         name="passkey-credential-ids",
     ),
+    path("invite/", views.invite, name="invite"),
 ]

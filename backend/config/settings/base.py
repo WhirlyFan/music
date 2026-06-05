@@ -218,6 +218,9 @@ ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
 ACCOUNT_UNIQUE_EMAIL = True
 # Case-insensitive uniqueness for usernames: 'Foo' collides with 'foo'.
 ACCOUNT_PRESERVE_USERNAME_CASING = False
+# Invite-only platform: a custom adapter lets only emails with a pending invitation
+# sign up (see apps/users/adapter.py). `createsuperuser` bypasses it (bootstrap).
+ACCOUNT_ADAPTER = "apps.users.adapter.AccountAdapter"
 
 HEADLESS_ONLY = True
 
