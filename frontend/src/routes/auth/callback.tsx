@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 
+import { resolveLanding } from '@/lib/auth/landing'
 import { sessionKeys } from '@/lib/hooks/keys'
 
 /**
@@ -51,9 +52,13 @@ function SocialCallback() {
       return
     }
     // Success: the session cookie is set; drop the stale cache and continue on.
-    // A successful *connect* (from /settings) returns there; a login/signup goes home.
+    // A successful *connect* (from /settings) returns there; a login/signup lands
+    // on the playlists wall (or home if there are none yet).
     void queryClient.invalidateQueries({ queryKey: sessionKeys.all() })
-    void navigate({ to: from === '/settings' ? '/settings' : '/', replace: true })
+    void (async () => {
+      const dest = from === '/settings' ? '/settings' : await resolveLanding()
+      void navigate({ to: dest, replace: true })
+    })()
   }, [error, from, navigate, queryClient])
 
   return (
