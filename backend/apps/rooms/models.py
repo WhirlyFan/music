@@ -1,10 +1,11 @@
 """
 Listening sessions ("rooms") + the playback queue.
 
-Room-of-one: every user listens inside a Room (their private queue + now-playing).
-Phase B (the Jam) makes a Room *shareable* (members join via a code over
-WebSockets) — those fields (code, is_shared, allow_guest_control) + RoomMember
-land then. For now a Room is a single user's playback context.
+Room-of-one by default: every user listens inside a Room (their private queue +
+now-playing). A Room can be *shared* as a Jam — others join via a short code and
+follow the host's playback in sync over WebSockets. Sharing state lives on the
+Room (`code`, `is_shared`, `allow_guest_control`) plus `RoomMember`; the server
+is the clock authority (`PlaybackState.playing_since` + `position_ms`).
 
 See docs/design/queue-rooms.md.
 """
@@ -25,17 +26,58 @@ class Room(BaseModel):
     )
     is_active = models.BooleanField(default=True)
 
+    # --- Jam (sharing) ---
+    # When `is_shared`, others join with `code` and follow the host's playback.
+    # `code` is blank for a private room and unique among shared rooms (the
+    # partial constraint below). `allow_guest_control` opens transport/queue to
+    # guests; default is host-only (guests follow + suggest).
+    code = models.CharField(max_length=12, blank=True, db_index=True)
+    is_shared = models.BooleanField(default=False)
+    allow_guest_control = models.BooleanField(default=False)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["host"],
                 condition=models.Q(is_active=True),
                 name="one_active_room_per_host",
-            )
+            ),
+            # Join codes only need to be unique among the rooms that are actually
+            # shareable; a private room keeps `code` blank.
+            models.UniqueConstraint(
+                fields=["code"],
+                condition=models.Q(is_shared=True),
+                name="unique_active_jam_code",
+            ),
         ]
 
     def __str__(self) -> str:
         return f"Room({self.host_id})"
+
+
+class RoomMember(BaseModel):
+    """A participant in a shared room (Jam). The host gets a `host` row when they
+    share; everyone who joins by code gets a `guest` row. A user is a guest in at
+    most one jam at a time (joining a new one leaves the previous)."""
+
+    class Role(models.TextChoices):
+        HOST = "host", "Host"
+        GUEST = "guest", "Guest"
+
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="members")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="room_memberships"
+    )
+    role = models.CharField(max_length=8, choices=Role.choices, default=Role.GUEST)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["room", "user"], name="unique_room_member"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.role}:{self.user_id}@{self.room_id}"
 
 
 class QueueItem(BaseModel):
@@ -92,6 +134,13 @@ class PlaybackState(BaseModel):
     context_label = models.CharField(max_length=255, blank=True)
     position_ms = models.IntegerField(default=0)
     is_playing = models.BooleanField(default=False)
+    # Server clock authority for jam sync: `playing_since` is the server time the
+    # head started advancing from `position_ms` (None while paused/stopped), so
+    # any client computes the live position as `position_ms + (now - playing_since)`.
+    # `generation` is a per-room monotonic counter bumped on every broadcast; a
+    # client drops frames older than the latest generation it has seen.
+    playing_since = models.DateTimeField(null=True, blank=True)
+    generation = models.IntegerField(default=0)
 
     def __str__(self) -> str:
         return f"Playback({self.room_id}, item={self.current_item_id}, playing={self.is_playing})"

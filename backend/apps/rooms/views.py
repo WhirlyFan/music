@@ -1,4 +1,5 @@
 from django.db.models import Count, Prefetch
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, viewsets
@@ -11,6 +12,7 @@ from apps.catalog.serializers import PlaylistSerializer
 from . import services
 from .models import QueueItem, Room
 from .serializers import (
+    JoinRoomSerializer,
     PlayNowSerializer,
     PlayPlaylistSerializer,
     PlaySerializer,
@@ -33,8 +35,9 @@ class RoomViewSet(viewsets.ViewSet):
 
     permission_classes = [permissions.IsAuthenticated]
 
-    def _room_detail(self, user) -> Room:
-        services.get_active_room(user)  # ensure room + playback exist
+    def _load(self, room_id) -> Room:
+        """Fully-prefetched room by id — the exact shape RoomSerializer needs
+        (and, later, what the WebSocket broadcast re-serializes)."""
         return (
             Room.objects.select_related(
                 "playback", "playback__current_item", "playback__current_item__track"
@@ -46,17 +49,58 @@ class RoomViewSet(viewsets.ViewSet):
                 ),
                 "items__track__playback_sources",
                 "playback__current_item__track__playback_sources",
+                "members__user",
             )
-            .get(host=user, is_active=True)
+            .get(pk=room_id)
         )
+
+    def _room_detail(self, user) -> Room:
+        room = services.get_active_room(user)  # ensure room + playback exist
+        return self._load(room.id)
 
     def _respond(self, user):
         return Response(RoomSerializer(self._room_detail(user)).data)
+
+    def _respond_room(self, room):
+        return Response(RoomSerializer(self._load(room.id)).data)
 
     @extend_schema(responses=RoomSerializer)
     @action(detail=False, methods=["get"])
     def me(self, request):
         return self._respond(request.user)
+
+    @extend_schema(responses=RoomSerializer)
+    @action(detail=False, methods=["get"])
+    def current(self, request):
+        """The room the user is actively in — a Jam they've joined as a guest,
+        else their own room. This is what the player subscribes to."""
+        return self._respond_room(services.current_room(request.user))
+
+    @extend_schema(request=None, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def share(self, request):
+        """Turn the caller's room into a Jam (assigns a join code)."""
+        room = services.share_room(services.get_active_room(request.user))
+        return self._respond_room(room)
+
+    @extend_schema(request=None, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def unshare(self, request):
+        """End the Jam — drop guests, clear the code, go private again."""
+        room = services.unshare_room(services.get_active_room(request.user))
+        return self._respond_room(room)
+
+    @extend_schema(request=JoinRoomSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def join(self, request):
+        """Join a Jam by its code (as a guest)."""
+        s = JoinRoomSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        try:
+            room = services.join_by_code(request.user, s.validated_data["code"])
+        except services.RoomNotFound:
+            raise Http404("No open jam with that code.") from None
+        return self._respond_room(room)
 
     @extend_schema(request=PlaySerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

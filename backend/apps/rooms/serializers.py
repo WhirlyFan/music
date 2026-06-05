@@ -31,6 +31,17 @@ class RoomSerializer(serializers.ModelSerializer):
     queue = serializers.SerializerMethodField()
     context = serializers.SerializerMethodField()
 
+    # --- Jam (sharing) ---
+    host_id = serializers.UUIDField(read_only=True)
+    # Server clock authority for sync (see PlaybackState): the live position is
+    # `position_ms + (now - playing_since)` while playing; `generation` lets a
+    # client discard out-of-order frames.
+    playing_since = serializers.DateTimeField(
+        source="playback.playing_since", read_only=True, allow_null=True
+    )
+    generation = serializers.IntegerField(source="playback.generation", read_only=True)
+    members = serializers.SerializerMethodField()
+
     class Meta:
         model = Room
         fields = [
@@ -42,6 +53,13 @@ class RoomSerializer(serializers.ModelSerializer):
             "context_label",
             "queue",
             "context",
+            "host_id",
+            "code",
+            "is_shared",
+            "allow_guest_control",
+            "playing_since",
+            "generation",
+            "members",
         ]
 
     @extend_schema_field(TrackSerializer)
@@ -65,6 +83,20 @@ class RoomSerializer(serializers.ModelSerializer):
             key=lambda i: i.position,
         )
         return QueueItemSerializer(rows, many=True).data
+
+    @extend_schema_field(
+        serializers.ListSerializer(
+            child=serializers.DictField(child=serializers.CharField())
+        )
+    )
+    def get_members(self, room):
+        # Everyone in the Jam, host first then join order. Empty for a private room.
+        return [
+            {"user_id": str(m.user_id), "username": m.user.username, "role": m.role}
+            for m in sorted(
+                room.members.all(), key=lambda m: (m.role != "host", m.joined_at)
+            )
+        ]
 
 
 class PlaySerializer(serializers.Serializer):
@@ -103,3 +135,9 @@ class QueueItemRefSerializer(serializers.Serializer):
 
 class SaveAsPlaylistSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
+
+
+class JoinRoomSerializer(serializers.Serializer):
+    """Join a Jam by its code."""
+
+    code = serializers.CharField(max_length=12)

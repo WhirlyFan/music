@@ -15,14 +15,22 @@ Play order: user queue first, then the context resumes after `context_pos`.
 from __future__ import annotations
 
 import random
+import secrets
 
 from django.db import transaction
 from django.db.models import Max, Min
 
-from .models import PlaybackState, QueueItem, Room
+from .models import PlaybackState, QueueItem, Room, RoomMember
 
 CONTEXT = QueueItem.Kind.CONTEXT
 QUEUE = QueueItem.Kind.QUEUE
+
+# Unambiguous code alphabet — no 0/O/1/I/L/U to keep spoken/typed codes clean.
+_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789"
+
+
+class RoomNotFound(Exception):
+    """No open Jam matches the given code."""
 
 
 def get_active_room(user) -> Room:
@@ -30,6 +38,97 @@ def get_active_room(user) -> Room:
     room, _ = Room.objects.get_or_create(host=user, is_active=True)
     PlaybackState.objects.get_or_create(room=room)
     return room
+
+
+# --- Jam (sharing / membership) ---------------------------------------------
+
+
+def _generate_code(length: int = 6) -> str:
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(length))
+
+
+def _unique_code() -> str:
+    for _ in range(10):
+        code = _generate_code()
+        if not Room.objects.filter(code=code, is_shared=True).exists():
+            return code
+    raise RuntimeError("could not allocate a unique jam code")
+
+
+def is_member(room: Room, user) -> bool:
+    """True if `user` may follow `room` — its host, or a recorded member."""
+    if room.host_id == user.id:
+        return True
+    return RoomMember.objects.filter(room=room, user=user).exists()
+
+
+def member_role(room: Room, user) -> str | None:
+    m = RoomMember.objects.filter(room=room, user=user).first()
+    return m.role if m else None
+
+
+@transaction.atomic
+def share_room(room: Room) -> Room:
+    """Make `room` a Jam: assign a unique join code (if it has none) and record
+    the host as a member. Idempotent — re-sharing keeps the existing code."""
+    RoomMember.objects.get_or_create(
+        room=room, user_id=room.host_id, defaults={"role": RoomMember.Role.HOST}
+    )
+    if not room.is_shared or not room.code:
+        room.code = _unique_code()
+        room.is_shared = True
+        room.save(update_fields=["code", "is_shared", "updated_at"])
+    return room
+
+
+@transaction.atomic
+def unshare_room(room: Room) -> Room:
+    """End the Jam: drop all members and clear the code. The host keeps their own
+    playback (the room just becomes private again, with no member rows — same as
+    a room that was never shared)."""
+    room.members.all().delete()
+    if room.is_shared or room.code:
+        room.is_shared = False
+        room.code = ""
+        room.save(update_fields=["is_shared", "code", "updated_at"])
+    return room
+
+
+@transaction.atomic
+def join_by_code(user, code: str) -> Room:
+    """Join a Jam by its code as a guest. A user is a guest in at most one jam at
+    a time — joining leaves any previous guest membership. Raises RoomNotFound
+    for an unknown or closed code."""
+    room = Room.objects.filter(
+        code=code.strip().upper(), is_shared=True, is_active=True
+    ).first()
+    if room is None:
+        raise RoomNotFound(code)
+    if room.host_id == user.id:
+        return room  # the host trivially "joins" their own jam
+    # One jam at a time: leave other guest memberships before joining this one.
+    RoomMember.objects.filter(user=user, role=RoomMember.Role.GUEST).exclude(room=room).delete()
+    RoomMember.objects.get_or_create(
+        room=room, user=user, defaults={"role": RoomMember.Role.GUEST}
+    )
+    return room
+
+
+def current_room(user) -> Room:
+    """The room the user is actively in: the Jam they've joined as a guest (most
+    recent, if somehow more than one), else their own active room."""
+    guest = (
+        RoomMember.objects.filter(
+            user=user,
+            role=RoomMember.Role.GUEST,
+            room__is_active=True,
+            room__is_shared=True,
+        )
+        .select_related("room")
+        .order_by("-joined_at")
+        .first()
+    )
+    return guest.room if guest is not None else get_active_room(user)
 
 
 def _ctx(room: Room):
