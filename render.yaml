@@ -47,19 +47,19 @@ services:
       # Order matters — most specific first.
       - type: rewrite
         source: /api/*
-        destination: https://music-backend.onrender.com/api/*
+        destination: https://music-backend-ll7r.onrender.com/api/*
       - type: rewrite
         source: /_allauth/*
-        destination: https://music-backend.onrender.com/_allauth/*
+        destination: https://music-backend-ll7r.onrender.com/_allauth/*
       - type: rewrite
         source: /admin/*
-        destination: https://music-backend.onrender.com/admin/*
+        destination: https://music-backend-ll7r.onrender.com/admin/*
       - type: rewrite
         source: /static/*
-        destination: https://music-backend.onrender.com/static/*
+        destination: https://music-backend-ll7r.onrender.com/static/*
       - type: rewrite
         source: /health
-        destination: https://music-backend.onrender.com/health/
+        destination: https://music-backend-ll7r.onrender.com/health/
       # SPA fallback: anything else serves the React index so client-side
       # routing (TanStack Router) takes over.
       - type: rewrite
@@ -131,8 +131,11 @@ services:
       # same-origin Render rewrites, requests arrive at the backend with the
       # BACKEND's host (Render proxies set Host to the destination), so the
       # backend host is what must be allowed here.
+      # Render appended a random suffix because `music-backend` was taken, so the
+      # real host is music-backend-ll7r.onrender.com. prod.py ALSO auto-trusts
+      # RENDER_EXTERNAL_HOSTNAME, so this stays correct even if the suffix changes.
       - key: DJANGO_ALLOWED_HOSTS
-        value: music-backend.onrender.com
+        value: music-backend-ll7r.onrender.com
       # CSRF middleware checks the Origin/Referer of state-changing requests.
       # The browser sends the origin it actually loaded, so once the custom
       # domain is live that's https://music.whirlyfan.com. We trust BOTH it and
