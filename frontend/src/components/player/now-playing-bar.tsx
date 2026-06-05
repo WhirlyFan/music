@@ -219,7 +219,7 @@ export function NowPlayingBar() {
         <div
           ref={queuePanelRef}
           inert={!queueOpen}
-          className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
+          className="border-border bg-background/95 max-h-60 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
         >
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-medium">Queue</p>
@@ -369,22 +369,24 @@ export function NowPlayingBar() {
         </Button>
       </div>
 
-      {expanded && (
-        <FullScreenPlayer
-          track={track}
-          analyser={analyser}
-          playing={playing}
-          currentTime={currentTime}
-          duration={duration}
-          audioReady={!!audioSrc}
-          canNext={upcoming > 0}
-          onTogglePlay={togglePlay}
-          onPrevious={handlePrevious}
-          onNext={() => next.mutate()}
-          onSeek={seek}
-          onClose={() => setExpanded(false)}
-        />
-      )}
+      {/* Always mounted (when a track exists) so it can animate OPEN and CLOSE via
+          CSS — a conditional `&&` would unmount it instantly and snap shut. Hidden +
+          inert when closed; the analyser is detached then so the visualizer idles. */}
+      <FullScreenPlayer
+        open={expanded}
+        track={track}
+        analyser={expanded ? analyser : null}
+        playing={playing}
+        currentTime={currentTime}
+        duration={duration}
+        audioReady={!!audioSrc}
+        canNext={upcoming > 0}
+        onTogglePlay={togglePlay}
+        onPrevious={handlePrevious}
+        onNext={() => next.mutate()}
+        onSeek={seek}
+        onClose={() => setExpanded(false)}
+      />
 
       {audioSrc && (
         <audio
