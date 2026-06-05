@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 
-import { CoverSpiral } from '@/components/playlists/cover-spiral'
+import { CoverCluster } from '@/components/playlists/cover-cluster'
 import { FormError } from '@/components/ui/form-error'
 import { useDeletePlaylist } from '@/lib/hooks/mutations/catalog'
 import { useInfinitePlaylists } from '@/lib/hooks/queries/catalog'
@@ -53,7 +53,7 @@ function PlaylistsPage() {
             : 'No playlists yet — import one from the home page, then save it.'}
         </div>
       ) : (
-        <CoverSpiral
+        <CoverCluster
           loading={playlists.isLoading}
           items={items}
           onOpen={(id) => navigate({ to: '/playlists/$playlistId', params: { playlistId: id } })}
