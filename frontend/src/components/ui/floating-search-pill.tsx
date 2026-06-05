@@ -11,7 +11,7 @@ import { usePlayerUiStore } from '@/lib/stores/player-ui'
  * detail page searches that playlist's tracks). Fixed bottom-center so it lands in
  * the exact same spot everywhere. It sits just above the player (measured pill
  * height + the bottom-4/mb-2 offsets) and rises by the queue panel's measured
- * height when it opens — the queue is pre-measured and both use the same 280ms
+ * height when it opens — the queue is pre-measured and both use the same 320ms
  * ease-out-quint, so the pill and the queue open in lockstep.
  */
 export function FloatingSearchPill({
@@ -37,7 +37,7 @@ export function FloatingSearchPill({
 
   return (
     <div
-      className="ease-out-quint fixed left-1/2 z-30 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-[280ms] motion-reduce:transition-none"
+      className="ease-out-quint fixed left-1/2 z-30 w-[min(92%,28rem)] -translate-x-1/2 transition-[bottom] duration-[320ms] motion-reduce:transition-none"
       style={{ bottom }}
     >
       <div className="relative">
