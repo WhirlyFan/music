@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from . import match, streaming
 from .ingest.spotify import SpotifyError
-from .models import PlaybackSource, Playlist, PlaylistTrack, Track
+from .models import PlaybackSource, Playlist, PlaylistTrack, SourcePlaylist, Track
 from .serializers import (
     CreatePlaylistSerializer,
     ImportResultSerializer,
@@ -21,7 +21,12 @@ from .serializers import (
     PlaylistUpdateSerializer,
     TrackSerializer,
 )
-from .services import UnsupportedSourceError, create_playlist_from_tracks, search_songs
+from .services import (
+    UnsupportedSourceError,
+    create_playlist_from_tracks,
+    refresh_playlist,
+    search_songs,
+)
 from .services import ingest as ingest_source
 
 # Prefetch playlist items (ordered) + each track's playback sources in one go.
@@ -56,6 +61,16 @@ class IngestViewSet(viewsets.ViewSet):
                 {"detail": "Couldn't read that link — check it's a public playlist and try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        sp = result.get("source_playlist")
+        # If the caller already saved this same source playlist, surface that fork so
+        # the UI can offer open/refresh instead of a duplicate save.
+        already_saved = (
+            Playlist.objects.filter(created_by=request.user, origin=sp)
+            .values_list("id", flat=True)
+            .first()
+            if sp
+            else None
+        )
         data = {
             "id": result["import"].id,
             "title": result["title"],
@@ -63,6 +78,8 @@ class IngestViewSet(viewsets.ViewSet):
             "tracks": result["tracks"],
             "cover": result.get("cover") or "",
             "note": result.get("note"),
+            "source_playlist": sp.id if sp else None,
+            "already_saved": already_saved,
         }
         return Response(ImportResultSerializer(data).data, status=status.HTTP_201_CREATED)
 
@@ -106,14 +123,30 @@ class PlaylistViewSet(
     def create(self, request, *args, **kwargs):
         s = CreatePlaylistSerializer(data=request.data)
         s.is_valid(raise_exception=True)
+        sp_id = s.validated_data.get("source_playlist")
+        origin = SourcePlaylist.objects.filter(pk=sp_id).first() if sp_id else None
         playlist = create_playlist_from_tracks(
             user=request.user,
             title=s.validated_data["title"],
             track_ids=s.validated_data["track_ids"],
             artwork_url=s.validated_data.get("artwork_url", ""),
+            origin=origin,
         )
         playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
         return Response(PlaylistSerializer(playlist).data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=None, responses=PlaylistDetailSerializer)
+    @action(detail=True, methods=["post"])
+    def refresh(self, request, pk=None):
+        """Re-fetch this playlist from its source and mirror its tracks (sync from
+        source — discards manual edits). 400 if it has no source origin."""
+        playlist = self.get_object()
+        try:
+            refresh_playlist(playlist, user=request.user)
+        except (UnsupportedSourceError, SpotifyError) as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
+        return Response(PlaylistDetailSerializer(playlist).data)
 
     @extend_schema(responses=PlaylistTrackSerializer(many=True))
     @action(detail=True, methods=["get"])

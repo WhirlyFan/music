@@ -35,10 +35,13 @@ class UnsupportedSourceError(ValueError):
 
 
 @transaction.atomic
-def create_playlist_from_tracks(*, user, title: str, track_ids, artwork_url: str = "") -> Playlist:
+def create_playlist_from_tracks(
+    *, user, title: str, track_ids, artwork_url: str = "", origin: SourcePlaylist | None = None
+) -> Playlist:
     """Create an owned, named playlist from a list of track ids (in order).
     Unknown ids are skipped; duplicates collapse to first position. The playlist's
-    own cover is used if given, else the first track that has artwork."""
+    own cover is used if given, else the first track that has artwork. `origin` stamps
+    the SourcePlaylist it was forked from (+ its snapshot) so it can be refreshed."""
     by_id = {str(t.id): t for t in Track.objects.filter(pk__in=track_ids)}
     if not artwork_url:
         for tid in track_ids:
@@ -46,7 +49,13 @@ def create_playlist_from_tracks(*, user, title: str, track_ids, artwork_url: str
             if t and t.artwork_url:
                 artwork_url = t.artwork_url
                 break
-    playlist = Playlist.objects.create(title=title, created_by=user, artwork_url=artwork_url)
+    playlist = Playlist.objects.create(
+        title=title,
+        created_by=user,
+        artwork_url=artwork_url,
+        origin=origin,
+        origin_snapshot_id=origin.snapshot_id if origin else "",
+    )
     position = 0
     for tid in track_ids:
         track = by_id.get(str(tid))
@@ -157,6 +166,7 @@ def _cache_source_playlist(
         source=source,
         external_id=external_id,
         defaults={
+            "url": url,
             "title": parsed.get("title") or "",
             "owner_name": parsed.get("owner_name") or "",
             "owner_url": parsed.get("owner_url") or "",
@@ -278,6 +288,33 @@ def ingest(url: str, *, user=None) -> dict:
     if "youtube.com" in host or "youtu.be" in host:
         return ingest_youtube(url, user=user)
     raise UnsupportedSourceError("Paste an Apple Music, Spotify, or YouTube link.")
+
+
+@transaction.atomic
+def refresh_playlist(playlist: Playlist, *, user=None) -> int:
+    """Re-fetch the playlist's origin SourcePlaylist from the source and **mirror** the
+    fork's tracks to match it (rebuild membership in source order). An explicit "sync
+    from source" — it discards manual edits. Reuses cached Tracks + YouTube matches;
+    only the source listing is re-fetched. Returns the new track count."""
+    sp = playlist.origin
+    if sp is None or not sp.url:
+        raise UnsupportedSourceError(
+            "This playlist wasn't imported from a source, so there's nothing to refresh."
+        )
+    module = {Source.SPOTIFY: spotify, Source.APPLE_MUSIC: applemusic}.get(sp.source.code)
+    if module is None:
+        raise UnsupportedSourceError("Refreshing isn't supported for this source.")
+    sp = _cache_source_playlist(sp.source, sp.external_id, module.ingest_with_meta(sp.url), sp.url)
+    playlist.items.all().delete()  # mirror: rebuild membership from the source
+    for it in sp.items.select_related("track").order_by("position"):
+        PlaylistTrack.objects.create(
+            playlist=playlist, track=it.track, position=it.position, added_by=user
+        )
+    playlist.origin_snapshot_id = sp.snapshot_id
+    if sp.cover_url and not playlist.artwork_url:
+        playlist.artwork_url = sp.cover_url
+    playlist.save(update_fields=["origin_snapshot_id", "artwork_url", "updated_at"])
+    return sp.track_count
 
 
 def search_songs(query: str, *, limit: int = 20) -> list[Track]:

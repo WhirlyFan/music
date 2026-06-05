@@ -335,6 +335,7 @@ class SourcePlaylist(BaseModel):
 
     source = models.ForeignKey(Source, on_delete=models.PROTECT, related_name="source_playlists")
     external_id = models.CharField(max_length=255)
+    url = models.TextField(blank=True)  # canonical source URL — refresh re-fetches this
     title = models.CharField(max_length=512, blank=True)
     owner_name = models.CharField(max_length=512, blank=True)  # the external creator
     owner_url = models.URLField(max_length=1024, blank=True)

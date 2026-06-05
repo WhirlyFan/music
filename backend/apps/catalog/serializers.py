@@ -30,8 +30,16 @@ class TrackSerializer(serializers.ModelSerializer):
     class Meta:
         model = Track
         fields = [
-            "id", "title", "primary_artist", "duration_ms", "isrc",
-            "artwork_url", "album_name", "is_explicit", "preview_url", "source_url",
+            "id",
+            "title",
+            "primary_artist",
+            "duration_ms",
+            "isrc",
+            "artwork_url",
+            "album_name",
+            "is_explicit",
+            "preview_url",
+            "source_url",
             "active_source",
         ]
 
@@ -64,6 +72,9 @@ class CreatePlaylistSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
     track_ids = serializers.ListField(child=serializers.UUIDField(), allow_empty=False)
     artwork_url = serializers.URLField(required=False, allow_blank=True, default="")
+    # The SourcePlaylist this was imported from — stamps the playlist's origin so it
+    # can be refreshed from source later. Omitted for from-scratch playlists.
+    source_playlist = serializers.UUIDField(required=False, allow_null=True)
 
 
 class PlaylistUpdateSerializer(serializers.ModelSerializer):
@@ -78,12 +89,21 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
     # Metadata only — tracks are paginated via the playlist `tracks` action so a
     # long playlist isn't inlined here. `track_count` powers the header.
     track_count = serializers.IntegerField(read_only=True)
+    # The SourcePlaylist this was imported from (null for from-scratch playlists) —
+    # presence enables the "Refresh from source" action.
+    origin = serializers.UUIDField(source="origin_id", read_only=True, allow_null=True)
 
     class Meta:
         model = Playlist
         fields = [
-            "id", "title", "description", "artwork_url", "is_public",
-            "created_at", "track_count",
+            "id",
+            "title",
+            "description",
+            "artwork_url",
+            "is_public",
+            "created_at",
+            "track_count",
+            "origin",
         ]
 
 
@@ -98,6 +118,13 @@ class ImportResultSerializer(serializers.Serializer):
     title = serializers.CharField(read_only=True)
     track_count = serializers.IntegerField(read_only=True)
     tracks = TrackSerializer(many=True, read_only=True)
-    cover = serializers.CharField(read_only=True, allow_blank=True, required=False)  # collection art
+    cover = serializers.CharField(
+        read_only=True, allow_blank=True, required=False
+    )  # collection art
     # Optional advisory (e.g. "imported the first 50 — Spotify caps the preview").
     note = serializers.CharField(read_only=True, allow_null=True, required=False)
+    # The SourcePlaylist this came from (pass back on save to stamp the fork's origin),
+    # and — if the caller already saved this same source playlist — that playlist's id,
+    # so the UI can offer "open / refresh" instead of a duplicate save.
+    source_playlist = serializers.UUIDField(read_only=True, allow_null=True, required=False)
+    already_saved = serializers.UUIDField(read_only=True, allow_null=True, required=False)

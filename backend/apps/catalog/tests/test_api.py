@@ -200,6 +200,125 @@ def test_ingest_spotify_private_playlist_message(client, monkeypatch):
     assert "private" in r.data["detail"].lower()
 
 
+def _sp_fetch(tracks, snapshot="snap1", title="PL"):
+    """Build a spotify_web.fetch_playlist stub returning `tracks`."""
+
+    def fetch(sid):
+        return {
+            "title": title,
+            "external_id": sid,
+            "kind": "playlist",
+            "tracks": tracks,
+            "cover": "",
+            "owner_name": "Owner",
+            "owner_url": "",
+            "snapshot": snapshot,
+        }
+
+    return fetch
+
+
+@pytest.mark.django_db
+def test_reimport_playlist_hits_cache_no_refetch(client, monkeypatch):
+    # Second import of the same URL rides the SourcePlaylist cache — zero source API.
+    from apps.catalog.ingest import spotify_web
+
+    calls = {"n": 0}
+    rows = [
+        {"title": f"T{i}", "artist": "A", "duration": 200000, "isrc": "", "external_id": f"e{i}"}
+        for i in range(5)
+    ]
+
+    def fetch(sid):
+        calls["n"] += 1
+        return _sp_fetch(rows)(sid)
+
+    monkeypatch.setattr(spotify_web, "fetch_playlist", fetch)
+    url = "https://open.spotify.com/playlist/cachetest"
+    r1 = client.post(INGEST, {"url": url}, format="json")
+    r2 = client.post(INGEST, {"url": url}, format="json")
+    assert r1.status_code == 201 and r2.status_code == 201
+    assert r1.data["track_count"] == 5 and r2.data["track_count"] == 5
+    assert calls["n"] == 1  # the second import did NOT re-fetch
+    assert r1.data["source_playlist"]  # SourcePlaylist id exposed for save
+
+
+@pytest.mark.django_db
+def test_save_stamps_origin_then_reimport_flags_already_saved(client, monkeypatch):
+    from apps.catalog.ingest import spotify_web
+    from apps.catalog.models import Playlist
+
+    rows = [{"title": "X", "artist": "Y", "duration": 1000, "isrc": "", "external_id": "e1"}]
+    monkeypatch.setattr(spotify_web, "fetch_playlist", _sp_fetch(rows))
+    url = "https://open.spotify.com/playlist/savetest"
+
+    imp = client.post(INGEST, {"url": url}, format="json").data
+    assert imp["source_playlist"] and not imp["already_saved"]
+
+    saved = client.post(
+        "/api/v1/catalog/playlists/",
+        {
+            "title": "My Save",
+            "track_ids": [t["id"] for t in imp["tracks"]],
+            "source_playlist": imp["source_playlist"],
+        },
+        format="json",
+    ).data
+    assert str(Playlist.objects.get(pk=saved["id"]).origin_id) == str(imp["source_playlist"])
+
+    imp2 = client.post(INGEST, {"url": url}, format="json").data
+    assert str(imp2["already_saved"]) == str(saved["id"])  # known → offer open/refresh
+    detail = client.get(f"/api/v1/catalog/playlists/{saved['id']}/").data
+    assert str(detail["origin"]) == str(imp["source_playlist"])
+
+
+@pytest.mark.django_db
+def test_refresh_playlist_mirrors_source(client, monkeypatch):
+    from apps.catalog.ingest import spotify_web
+
+    state = {
+        "rows": [
+            {"title": "A", "artist": "x", "duration": 1000, "isrc": "", "external_id": "a"},
+            {"title": "B", "artist": "x", "duration": 2000, "isrc": "", "external_id": "b"},
+        ]
+    }
+    monkeypatch.setattr(spotify_web, "fetch_playlist", lambda sid: _sp_fetch(state["rows"])(sid))
+    url = "https://open.spotify.com/playlist/refreshtest"
+
+    imp = client.post(INGEST, {"url": url}, format="json").data
+    saved = client.post(
+        "/api/v1/catalog/playlists/",
+        {
+            "title": "Sync",
+            "track_ids": [t["id"] for t in imp["tracks"]],
+            "source_playlist": imp["source_playlist"],
+        },
+        format="json",
+    ).data
+
+    # Source changes: drop B, add C.
+    state["rows"] = [
+        {"title": "A", "artist": "x", "duration": 1000, "isrc": "", "external_id": "a"},
+        {"title": "C", "artist": "x", "duration": 3000, "isrc": "", "external_id": "c"},
+    ]
+    r = client.post(f"/api/v1/catalog/playlists/{saved['id']}/refresh/")
+    assert r.status_code == 200, r.content
+    assert r.data["track_count"] == 2
+    items = client.get(f"/api/v1/catalog/playlists/{saved['id']}/tracks/").data["results"]
+    assert [i["track"]["title"] for i in items] == ["A", "C"]  # fork mirrors source
+
+
+@pytest.mark.django_db
+def test_refresh_without_origin_is_400(client):
+    t = TrackFactory()
+    saved = client.post(
+        "/api/v1/catalog/playlists/", {"title": "Scratch", "track_ids": [str(t.id)]}, format="json"
+    ).data
+    r = client.post(f"/api/v1/catalog/playlists/{saved['id']}/refresh/")
+    assert r.status_code == 400
+    assert "source" in r.data["detail"].lower()
+
+
 @pytest.mark.django_db
 def test_ingest_spotify(client, monkeypatch):
     from apps.catalog.ingest import spotify
