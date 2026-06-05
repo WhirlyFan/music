@@ -7,12 +7,12 @@ public embed caps at ~100 tracks. So for playlists we read the same private Grap
 playlist, any length, with **no account**: an anonymous bearer token is minted from
 the web player's rotating TOTP scheme, then `fetchPlaylist` is paginated (343/page).
 
-This is unofficial and self-heals where it can (the TOTP secret is fetched live with
-a baked-in fallback; the access token auto-mints and caches to expiry). The two things
-that can still break it are a Spotify rotation of the **TOTP secret scheme** or the
-**persisted-query hash** below — when that happens pathfinder errors and `spotify.py`
-falls back to the keyless embed scrape (≤100 tracks) while the constant is bumped.
-No credentials, no cookie, no human step in the normal path."""
+This is unofficial but self-heals: the TOTP secret and the `fetchPlaylist` persisted-
+query hash are both fetched live from Spotify's own sources (with baked-in fallbacks),
+and the access token auto-mints to expiry — so Spotify's periodic rotations recover on
+their own, no redeploy. A hard break (the bundle/secret *format* changing) just drops
+`spotify.py` to the keyless embed scrape (≤100 tracks). No credentials, no cookie, no
+human step in the normal path."""
 
 from __future__ import annotations
 
@@ -20,6 +20,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import struct
 import time
 import urllib.error
@@ -46,9 +47,9 @@ _PATHFINDER = "https://api-partner.spotify.com/pathfinder/v1/query"
 _SECRETS_URL = (
     "https://code.thetadev.de/ThetaDev/spotify-secrets/raw/branch/main/secrets/secretDict.json"
 )
-# Persisted-query hash for the web player's `fetchPlaylist` operation. If Spotify
-# bumps it, pathfinder 400s and ingest falls back to the embed scrape — refresh this
-# constant from the web-player JS bundle to restore full reads.
+# Baked-in fallback for the web player's `fetchPlaylist` persisted-query hash. The
+# live value is scraped from the web-player JS bundle (see `_fetch_playlist_hash`);
+# this is only used if that extraction can't reach/parse the bundle.
 _FETCH_PLAYLIST_HASH = "a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4"
 # Fallback TOTP secret (web-player version) used only if the live secret list is
 # unreachable; the live list is preferred so rotations self-heal.
@@ -63,6 +64,51 @@ _PAGE = 343  # Spotify's max items per pathfinder playlist page
 def _http_json(req: urllib.request.Request, timeout: int = 15) -> dict:
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
+
+
+def _http_text(url: str, timeout: int = 15) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": _UA})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8", "ignore")
+
+
+_HASH_CACHE_KEY = "spotify:web:fetch_playlist_hash"
+_HASH_IN_BUNDLE_RE = re.compile(r'"fetchPlaylist","query","([a-f0-9]{64})"')
+
+
+def _extract_fetch_playlist_hash() -> str | None:
+    """Scrape the current `fetchPlaylist` persisted-query hash from the web-player JS
+    bundle (it sits there as `"fetchPlaylist","query","<hash>"`), so a Spotify rotation
+    self-heals with no redeploy. None if it can't be found/reached."""
+    try:
+        html = _http_text("https://open.spotify.com/")
+    except urllib.error.HTTPError, urllib.error.URLError:
+        return None
+    urls = re.findall(r"https://open\.spotifycdn\.com/[^\"'\s]+?\.js", html)
+    # The main `web-player.<hash>.js` bundle holds the persisted-query map — try it
+    # first, then fall back to the other web-player chunks.
+    urls.sort(key=lambda u: 0 if re.search(r"/web-player\.[\w~-]+\.js$", u) else 1)
+    for u in list(dict.fromkeys(urls))[:6]:  # de-dup, cap the fan-out
+        try:
+            m = _HASH_IN_BUNDLE_RE.search(_http_text(u))
+        except urllib.error.HTTPError, urllib.error.URLError:
+            continue
+        if m:
+            return m.group(1)
+    return None
+
+
+def _fetch_playlist_hash() -> str:
+    """Current persisted-query hash: cached → live-extracted from the web-player
+    bundle → the baked-in constant. Self-heals when Spotify rotates the hash."""
+    cached = cache.get(_HASH_CACHE_KEY)
+    if cached:
+        return cached
+    extracted = _extract_fetch_playlist_hash()
+    if extracted:
+        cache.set(_HASH_CACHE_KEY, extracted, 6 * 3600)
+        return extracted
+    return _FETCH_PLAYLIST_HASH
 
 
 def _totp_secret() -> tuple[int, bytes]:
@@ -198,10 +244,18 @@ def fetch_playlist(sid: str) -> dict:
                 "limit": _PAGE,
                 "enableWatchFeedEntrypoint": False,
             },
-            _FETCH_PLAYLIST_HASH,
+            _fetch_playlist_hash(),
         )
 
-    pl = (page(0).get("data") or {}).get("playlistV2") or {}
+    try:
+        first = page(0)
+    except SpotifyWebError:
+        # A stale persisted-query hash (Spotify rotated it) 400s here — drop the cached
+        # hash so the retry re-extracts the current one from the bundle, then try once
+        # more. Any other failure just propagates (→ caller's scrape fallback).
+        cache.delete(_HASH_CACHE_KEY)
+        first = page(0)
+    pl = (first.get("data") or {}).get("playlistV2") or {}
     if pl.get("__typename") == "NotFound" or "content" not in pl:
         raise PlaylistNotFound(sid)
     content = pl.get("content") or {}
