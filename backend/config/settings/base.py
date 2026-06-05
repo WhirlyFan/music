@@ -55,6 +55,7 @@ THIRD_PARTY_APPS = [
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     "allauth.headless",
     "allauth.mfa",
     "django_rls",
@@ -221,6 +222,42 @@ ACCOUNT_PRESERVE_USERNAME_CASING = False
 # Invite-only platform: a custom adapter lets only emails with a pending invitation
 # sign up (see apps/users/adapter.py). `createsuperuser` bypasses it (bootstrap).
 ACCOUNT_ADAPTER = "apps.users.adapter.AccountAdapter"
+
+# --- Social login (Google) ---
+# Credentials come from env (set in Render dashboard / Doppler; never the repo).
+# The `APPS` list configures the provider entirely from settings, so there's no
+# need to create a SocialApp row in the admin. Empty creds = the Google button
+# simply won't work until they're set; nothing else breaks.
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {
+        "APPS": [
+            {
+                "client_id": env("GOOGLE_OAUTH_CLIENT_ID", default=""),
+                "secret": env("GOOGLE_OAUTH_CLIENT_SECRET", default=""),
+                "key": "",
+            }
+        ],
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"access_type": "online"},
+        "OAUTH_PKCE_ENABLED": True,
+    }
+}
+# Gate social *signup* behind the same invite_only switch as email signup, and
+# accept the invite on signup (see apps/users/adapter.SocialAccountAdapter).
+SOCIALACCOUNT_ADAPTER = "apps.users.adapter.SocialAccountAdapter"
+# Connect a Google login to an existing local account with the SAME verified
+# email instead of erroring on the unique-email constraint or creating a
+# duplicate. Safe because Google asserts the email as verified — no
+# unverified-email account-takeover vector. So an existing email/password user
+# can also "Continue with Google" and land on their same account.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+# Trust Google's verified-email assertion → the new account's email is marked
+# verified, so social users skip the RequireVerifiedEmailMiddleware gate.
+SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+# We don't need an extra "confirm your details" signup step for social — take
+# the provider's email/name straight through.
+SOCIALACCOUNT_AUTO_SIGNUP = True
 
 HEADLESS_ONLY = True
 

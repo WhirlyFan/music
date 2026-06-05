@@ -15,6 +15,11 @@ export const sessionKeys = {
   all: () => ['session'] as const,
 }
 
+/** allauth public config (configured social providers, etc.). */
+export const authKeys = {
+  config: () => ['auth', 'config'] as const,
+}
+
 /**
  * User's email addresses (verified flag + primary flag). Source of truth
  * for the verified-email gate — allauth's session endpoint doesn't expose

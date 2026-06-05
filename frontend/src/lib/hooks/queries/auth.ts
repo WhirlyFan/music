@@ -1,7 +1,26 @@
 import { useQuery } from '@tanstack/react-query'
 
 import { auth } from '@/lib/auth/api'
-import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
+import { authKeys, emailKeys, sessionKeys } from '@/lib/hooks/keys'
+
+type AllAuthConfig = { socialaccount?: { providers?: { id: string; name: string }[] } }
+
+/**
+ * Public allauth config (never changes within a session). We use it to learn
+ * which social providers are configured, so the "Continue with Google" button
+ * only renders when Google credentials are actually set on the backend.
+ */
+export function useSocialProviders() {
+  const query = useQuery({
+    queryKey: authKeys.config(),
+    queryFn: () => auth.config(),
+    staleTime: Infinity,
+    retry: false,
+  })
+  const config = query.data?.data as AllAuthConfig | undefined
+  const providers = config?.socialaccount?.providers ?? []
+  return { ...query, providers, hasGoogle: providers.some((p) => p.id === 'google') }
+}
 
 export function useSession() {
   return useQuery({

@@ -17,6 +17,7 @@ import { Route as ImportRouteImport } from './routes/import'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists/index'
 import { Route as PlaylistsPlaylistIdRouteImport } from './routes/playlists/$playlistId'
+import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
 import { Route as AccountMfaRouteImport } from './routes/account/mfa'
 import { Route as AccountEmailRouteImport } from './routes/account/email'
@@ -68,6 +69,11 @@ const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
 const PlaylistsPlaylistIdRoute = PlaylistsPlaylistIdRouteImport.update({
   id: '/playlists/$playlistId',
   path: '/playlists/$playlistId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountVerifyEmailRoute = AccountVerifyEmailRouteImport.update({
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/account/email': typeof AccountEmailRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
+  '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/account/email': typeof AccountEmailRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/playlists': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/account/email': typeof AccountEmailRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
+  '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
@@ -209,6 +218,7 @@ export interface FileRouteTypes {
     | '/account/email'
     | '/account/mfa'
     | '/account/verify-email'
+    | '/auth/callback'
     | '/playlists/$playlistId'
     | '/playlists/'
     | '/account/mfa/recovery-codes'
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/signup'
     | '/account/email'
+    | '/auth/callback'
     | '/playlists/$playlistId'
     | '/playlists'
     | '/account/mfa/recovery-codes'
@@ -251,6 +262,7 @@ export interface FileRouteTypes {
     | '/account/email'
     | '/account/mfa'
     | '/account/verify-email'
+    | '/auth/callback'
     | '/playlists/$playlistId'
     | '/playlists/'
     | '/account/mfa/recovery-codes'
@@ -274,6 +286,7 @@ export interface RootRouteChildren {
   AccountEmailRoute: typeof AccountEmailRoute
   AccountMfaRoute: typeof AccountMfaRouteWithChildren
   AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
+  AuthCallbackRoute: typeof AuthCallbackRoute
   PlaylistsPlaylistIdRoute: typeof PlaylistsPlaylistIdRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
   AccountPasswordChangeRoute: typeof AccountPasswordChangeRoute
@@ -337,6 +350,13 @@ declare module '@tanstack/react-router' {
       path: '/playlists/$playlistId'
       fullPath: '/playlists/$playlistId'
       preLoaderRoute: typeof PlaylistsPlaylistIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account/verify-email': {
@@ -467,6 +487,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountEmailRoute: AccountEmailRoute,
   AccountMfaRoute: AccountMfaRouteWithChildren,
   AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,
+  AuthCallbackRoute: AuthCallbackRoute,
   PlaylistsPlaylistIdRoute: PlaylistsPlaylistIdRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
   AccountPasswordChangeRoute: AccountPasswordChangeRoute,

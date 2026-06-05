@@ -64,6 +64,15 @@ api_v1 = [
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("_allauth/", include("allauth.headless.urls")),
+    # OAuth provider callback endpoints (e.g. /accounts/google/login/callback/).
+    # The headless browser redirect flow bootstraps the handshake, but the
+    # provider still redirects back to allauth's provider views — and headless
+    # ONLY mounts /_allauth/. Under HEADLESS_ONLY, allauth.urls reduces to just
+    # the provider urlpatterns (build_provider_urlpatterns) — no regular
+    # login/signup views — so this gives only the callbacks we need. The browser
+    # reaches them same-origin via the frontend's /accounts/* rewrite, so the
+    # session cookie is set on the public origin.
+    path("accounts/", include("allauth.urls")),
     path("api/schema/", _docs_gate(SpectacularAPIView.as_view()), name="schema"),
     path("health/", AppHealthCheckView.as_view(), name="health-check"),
     path("api/v1/", include((api_v1, "v1"))),
