@@ -24,4 +24,11 @@ else
   echo "[entrypoint] WARNING: DATABASE_URL_ADMIN not set, skipping migrations"
 fi
 
+# Bootstrap a superuser on shell-less hosts (Render free tier): no-ops unless
+# BOOTSTRAP_ADMIN_* env vars are set. Runs as the admin role to bypass RLS for
+# the user/email writes. Non-fatal — a failure here must never block serving.
+echo "[entrypoint] ensuring bootstrap admin (if BOOTSTRAP_ADMIN_* set)…"
+DATABASE_URL="${DATABASE_URL_ADMIN:-$DATABASE_URL}" python manage.py ensure_admin \
+  || echo "[entrypoint] ensure_admin failed (non-fatal)"
+
 exec "$@"

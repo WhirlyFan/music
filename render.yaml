@@ -126,6 +126,20 @@ services:
       - key: MFA_FIELD_ENCRYPTION_KEY
         sync: false
 
+      # ── Bootstrap superuser (shell-less hosts) ──────────────────────────
+      # Render's free tier has no Shell, so we can't run `createsuperuser`
+      # interactively. Set these in the dashboard and the entrypoint's
+      # `ensure_admin` command creates/promotes the superuser on the next
+      # deploy (idempotent; also marks the email verified so email login
+      # works). Password set only on first create — a later in-app change
+      # isn't clobbered. Safe to DELETE these three after the admin exists.
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_USERNAME
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+
       # ── Host / origin allow-lists ───────────────────────────────────────
       # Django checks the Host header against ALLOWED_HOSTS. With our
       # same-origin Render rewrites, requests arrive at the backend with the
