@@ -82,6 +82,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    # Staff/superusers must have an MFA factor enrolled before reaching /admin/.
+    # After auth (needs request.user); redirects to enrollment if missing.
+    "apps.core.middleware.RequireMfaForStaffMiddleware",
     # Authenticated users must verify their email before reaching /api/*. After
     # auth (needs request.user), before RLS (a 403 short-circuits the per-request
     # DB session-var setup).
@@ -282,10 +285,13 @@ HEADLESS_FRONTEND_URLS = {
 }
 
 # --- allauth MFA ---
-# 2FA is fully optional (MFA_REQUIRED = False) for everyone, including staff —
-# users enroll voluntarily from Settings. There is no staff /admin/ gate. When
-# SAML/SSO lands later, the customer's IdP enforces their org's MFA policy and
-# the app trusts the assertion — re-prompting in-app is the SSO anti-pattern.
+# 2FA is opt-in for regular users (MFA_REQUIRED = False) — they enroll
+# voluntarily from Settings. It is MANDATORY for staff/superusers, enforced at
+# the /admin/ surface by apps.core.middleware.RequireMfaForStaffMiddleware
+# (which redirects to enrollment if no factor exists). We keep it opt-in
+# *globally* because when SAML/SSO lands later, the customer's IdP enforces
+# their org's MFA policy and the app trusts the assertion — re-prompting every
+# user in-app is the SSO anti-pattern; the staff /admin/ gate is the exception.
 # Key for transparently encrypting sensitive MFA fields at rest.
 # `apps.core.mfa_encryption` uses this to encrypt Authenticator.data["secret"]
 # (TOTP secrets, etc.) before persisting to Postgres. Generate with:
