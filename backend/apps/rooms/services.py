@@ -18,7 +18,8 @@ import random
 import secrets
 
 from django.db import transaction
-from django.db.models import F, Max, Min
+from django.db.models import Max, Min
+from django.utils import timezone
 
 from .models import PlaybackState, QueueItem, Room, RoomMember
 
@@ -29,10 +30,6 @@ QUEUE = QueueItem.Kind.QUEUE
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789"
 
 
-class RoomNotFound(Exception):
-    """No open Jam matches the given code."""
-
-
 def get_active_room(user) -> Room:
     """The user's single active room (created on first use), with playback state."""
     room, _ = Room.objects.get_or_create(host=user, is_active=True)
@@ -40,10 +37,18 @@ def get_active_room(user) -> Room:
     return room
 
 
-def bump_generation(room: Room) -> None:
-    """Advance the room's monotonic generation counter. Called once per broadcast
-    so connected clients can drop frames older than the latest they've applied."""
-    PlaybackState.objects.filter(room=room).update(generation=F("generation") + 1)
+@transaction.atomic
+def set_position(room: Room, position_ms: int, is_playing: bool) -> None:
+    """Re-anchor the server clock to the host's actual playhead (periodic host
+    heartbeat, or after a seek/play/pause). `playing_since` resets to now so every
+    guest recomputes the live position from the fresh anchor; None while paused so
+    the position holds. This is the server staying honest about where the music
+    really is, rather than trusting arithmetic from the last transition forever."""
+    PlaybackState.objects.filter(room=room).update(
+        position_ms=max(0, position_ms),
+        is_playing=is_playing,
+        playing_since=timezone.now() if is_playing else None,
+    )
 
 
 # --- Jam (sharing / membership) ---------------------------------------------
@@ -100,24 +105,23 @@ def unshare_room(room: Room) -> Room:
     return room
 
 
-@transaction.atomic
-def join_by_code(user, code: str) -> Room:
-    """Join a Jam by its code as a guest. A user is a guest in at most one jam at
-    a time — joining leaves any previous guest membership. Raises RoomNotFound
-    for an unknown or closed code."""
-    room = Room.objects.filter(
+def find_open_jam(code: str) -> Room | None:
+    """The active shared room for a join code (case-insensitive), or None."""
+    return Room.objects.filter(
         code=code.strip().upper(), is_shared=True, is_active=True
     ).first()
-    if room is None:
-        raise RoomNotFound(code)
+
+
+@transaction.atomic
+def join_guest(room: Room, user) -> None:
+    """Add `user` to `room` as a guest (no-op for the host). A user is a guest in
+    at most one jam at a time — joining leaves any previous guest membership."""
     if room.host_id == user.id:
-        return room  # the host trivially "joins" their own jam
-    # One jam at a time: leave other guest memberships before joining this one.
+        return  # the host trivially "joins" their own jam
     RoomMember.objects.filter(user=user, role=RoomMember.Role.GUEST).exclude(room=room).delete()
     RoomMember.objects.get_or_create(
         room=room, user=user, defaults={"role": RoomMember.Role.GUEST}
     )
-    return room
 
 
 def current_room(user) -> Room:

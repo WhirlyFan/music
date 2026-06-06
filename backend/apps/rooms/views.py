@@ -1,4 +1,5 @@
-from django.db.models import Count, Prefetch
+from django.db import transaction
+from django.db.models import Count, F, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
@@ -10,7 +11,7 @@ from apps.catalog.models import Playlist, Track
 from apps.catalog.serializers import PlaylistSerializer
 
 from . import broadcast, services
-from .models import QueueItem, Room
+from .models import PlaybackState, QueueItem, Room
 from .serializers import (
     JoinRoomSerializer,
     PlayNowSerializer,
@@ -20,6 +21,7 @@ from .serializers import (
     QueueSerializer,
     RoomSerializer,
     SaveAsPlaylistSerializer,
+    SyncPositionSerializer,
 )
 
 
@@ -62,13 +64,21 @@ class RoomViewSet(viewsets.ViewSet):
         """Plain read — no generation bump, no broadcast."""
         return Response(self._data(room))
 
-    def _mutated(self, room):
-        """A state change: bump the generation, serialize, broadcast to the room's
-        group so every connected member converges, and return the same payload to
-        the caller. Broadcast runs after the service's transaction has committed
-        (we're past the service call here), so listeners never see pre-commit state."""
-        services.bump_generation(room)
-        data = self._data(room)  # re-load picks up the new generation
+    def _apply(self, room, mutate):
+        """Run a state change with strong ordering, then broadcast it.
+
+        `mutate` is a 0-arg callable performing the change. We hold a row lock on
+        the room's PlaybackState for the whole mutation AND bump the generation in
+        the SAME transaction, so concurrent writers to one room serialize and a
+        higher generation always carries state at least as new (no torn
+        gen/state). The broadcast runs after commit, so subscribers never observe
+        pre-commit state; a channel-layer failure can't roll back the write."""
+        with transaction.atomic():
+            PlaybackState.objects.get_or_create(room=room)
+            PlaybackState.objects.select_for_update().get(room=room)  # serialize per room
+            mutate()
+            PlaybackState.objects.filter(room=room).update(generation=F("generation") + 1)
+        data = self._data(room)  # re-load picks up the committed state + new generation
         broadcast.publish(room.id, data)
         return Response(data)
 
@@ -88,15 +98,15 @@ class RoomViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["post"])
     def share(self, request):
         """Turn the caller's room into a Jam (assigns a join code)."""
-        room = services.share_room(services.get_active_room(request.user))
-        return self._mutated(room)
+        room = services.get_active_room(request.user)
+        return self._apply(room, lambda: services.share_room(room))
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def unshare(self, request):
         """End the Jam — drop guests, clear the code, go private again."""
-        room = services.unshare_room(services.get_active_room(request.user))
-        return self._mutated(room)
+        room = services.get_active_room(request.user)
+        return self._apply(room, lambda: services.unshare_room(room))
 
     @extend_schema(request=JoinRoomSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -104,11 +114,27 @@ class RoomViewSet(viewsets.ViewSet):
         """Join a Jam by its code (as a guest)."""
         s = JoinRoomSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        try:
-            room = services.join_by_code(request.user, s.validated_data["code"])
-        except services.RoomNotFound:
-            raise Http404("No open jam with that code.") from None
-        return self._mutated(room)
+        room = services.find_open_jam(s.validated_data["code"])
+        if room is None:
+            raise Http404("No open jam with that code.")
+        return self._apply(room, lambda: services.join_guest(room, request.user))
+
+    @extend_schema(request=SyncPositionSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def sync(self, request):
+        """Host re-anchors the server clock to its real playhead (periodic
+        heartbeat, or after a seek/play/pause). Operates on the caller's OWN room,
+        so only a host re-anchors their jam — a guest's call just touches their own
+        private room harmlessly."""
+        s = SyncPositionSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        room = services.get_active_room(request.user)
+        return self._apply(
+            room,
+            lambda: services.set_position(
+                room, s.validated_data["position_ms"], s.validated_data["is_playing"]
+            ),
+        )
 
     @extend_schema(request=PlaySerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -119,14 +145,16 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         tracks = _ordered_tracks(s.validated_data["track_ids"])
         room = services.get_active_room(request.user)
-        services.play(
+        return self._apply(
             room,
-            tracks,
-            start=s.validated_data["start_index"],
-            added_by=request.user,
-            label=s.validated_data["label"],
+            lambda: services.play(
+                room,
+                tracks,
+                start=s.validated_data["start_index"],
+                added_by=request.user,
+                label=s.validated_data["label"],
+            ),
         )
-        return self._mutated(room)
 
     @extend_schema(request=PlayNowSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"], url_path="play-now")
@@ -137,8 +165,7 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         track = get_object_or_404(Track, pk=s.validated_data["track_id"])
         room = services.get_active_room(request.user)
-        services.play_now(room, track, added_by=request.user)
-        return self._mutated(room)
+        return self._apply(room, lambda: services.play_now(room, track, added_by=request.user))
 
     @extend_schema(request=PlayPlaylistSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"], url_path="play-playlist")
@@ -147,13 +174,15 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         playlist = get_object_or_404(Playlist, pk=s.validated_data["playlist_id"])
         room = services.get_active_room(request.user)
-        services.play_playlist(
+        return self._apply(
             room,
-            playlist,
-            start_track_id=s.validated_data.get("start_track_id"),
-            added_by=request.user,
+            lambda: services.play_playlist(
+                room,
+                playlist,
+                start_track_id=s.validated_data.get("start_track_id"),
+                added_by=request.user,
+            ),
         )
-        return self._mutated(room)
 
     @extend_schema(request=QueueSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -163,26 +192,27 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         tracks = _ordered_tracks(s.validated_data["track_ids"])
         room = services.get_active_room(request.user)
-        if s.validated_data["play_next"]:
-            for track in reversed(tracks):  # keep requested order right after current
-                services.enqueue(room, track, added_by=request.user, play_next=True)
-        else:
-            services.enqueue_many(room, tracks, added_by=request.user)
-        return self._mutated(room)
+
+        def _enqueue():
+            if s.validated_data["play_next"]:
+                for track in reversed(tracks):  # keep requested order right after current
+                    services.enqueue(room, track, added_by=request.user, play_next=True)
+            else:
+                services.enqueue_many(room, tracks, added_by=request.user)
+
+        return self._apply(room, _enqueue)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def next(self, request):
         room = services.get_active_room(request.user)
-        services.next_track(room)
-        return self._mutated(room)
+        return self._apply(room, lambda: services.next_track(room))
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def previous(self, request):
         room = services.get_active_room(request.user)
-        services.previous_track(room)
-        return self._mutated(room)
+        return self._apply(room, lambda: services.previous_track(room))
 
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -191,8 +221,7 @@ class RoomViewSet(viewsets.ViewSet):
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         room = services.get_active_room(request.user)
-        services.jump(room, s.validated_data["item_id"])
-        return self._mutated(room)
+        return self._apply(room, lambda: services.jump(room, s.validated_data["item_id"]))
 
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
@@ -201,23 +230,20 @@ class RoomViewSet(viewsets.ViewSet):
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         room = services.get_active_room(request.user)
-        services.remove(room, s.validated_data["item_id"])
-        return self._mutated(room)
+        return self._apply(room, lambda: services.remove(room, s.validated_data["item_id"]))
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def shuffle(self, request):
         """Reshuffle the up-next items."""
         room = services.get_active_room(request.user)
-        services.shuffle(room)
-        return self._mutated(room)
+        return self._apply(room, lambda: services.shuffle(room))
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def clear(self, request):
         room = services.get_active_room(request.user)
-        services.clear(room)
-        return self._mutated(room)
+        return self._apply(room, lambda: services.clear(room))
 
     @extend_schema(request=SaveAsPlaylistSerializer, responses=PlaylistSerializer)
     @action(detail=False, methods=["post"], url_path="save-as-playlist")

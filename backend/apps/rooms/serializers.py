@@ -141,3 +141,10 @@ class JoinRoomSerializer(serializers.Serializer):
     """Join a Jam by its code."""
 
     code = serializers.CharField(max_length=12)
+
+
+class SyncPositionSerializer(serializers.Serializer):
+    """Host re-anchor: the real playhead (ms) + whether audio is actually playing."""
+
+    position_ms = serializers.IntegerField(min_value=0)
+    is_playing = serializers.BooleanField()

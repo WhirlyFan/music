@@ -60,3 +60,35 @@ def test_read_endpoints_do_not_bump_generation():
     g1 = api.get("/api/v1/rooms/me/").json()["generation"]
     g2 = api.get("/api/v1/rooms/me/").json()["generation"]
     assert g1 == g2  # plain reads have no side effects
+
+
+@pytest.mark.django_db
+def test_sync_reanchors_position_and_broadcasts():
+    api, user = authed()
+    room = services.get_active_room(user)
+    layer = get_channel_layer()
+    chan = async_to_sync(layer.new_channel)()
+    async_to_sync(layer.group_add)(broadcast.group_name(room.id), chan)
+
+    res = api.post(
+        "/api/v1/rooms/sync/", {"position_ms": 42000, "is_playing": True}, format="json"
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["position_ms"] == 42000
+    assert body["is_playing"] is True
+    assert body["playing_since"] is not None  # anchor set so guests recompute
+
+    msg = _recv(layer, chan)
+    assert msg["room"]["position_ms"] == 42000
+
+
+@pytest.mark.django_db
+def test_sync_paused_clears_anchor():
+    api, _ = authed()
+    body = api.post(
+        "/api/v1/rooms/sync/", {"position_ms": 1000, "is_playing": False}, format="json"
+    ).json()
+    assert body["is_playing"] is False
+    assert body["position_ms"] == 1000
+    assert body["playing_since"] is None  # paused → position holds, no clock running
