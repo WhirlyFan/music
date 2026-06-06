@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings, UserPlus } from 'lucide-react'
+import { LogOut, Radio, Settings, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -13,6 +13,7 @@ import {
 import { ApiError } from '@/lib/api/client'
 import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { useInvite, useLogout } from '@/lib/hooks/mutations/auth'
+import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import { promptText } from '@/lib/overlay'
 
 /** Pull the backend's specific message (e.g. "already has an account") off a 400. */
@@ -39,6 +40,21 @@ export function UserMenu({ username, firstName, lastName }: Props) {
   const navigate = useNavigate()
   const logout = useLogout()
   const invite = useInvite()
+  const joinRoom = useJoinRoom()
+
+  const handleJoinJam = async () => {
+    const code = (
+      await promptText({
+        title: 'Join a jam',
+        label: 'Jam code',
+        confirmLabel: 'Join',
+      })
+    )?.trim()
+    if (!code) return
+    joinRoom.mutate(code, {
+      onError: () => toast.error('That jam code didn’t work — it may have ended.'),
+    })
+  }
 
   const handleInvite = async () => {
     const email = (
@@ -91,6 +107,11 @@ export function UserMenu({ username, firstName, lastName }: Props) {
         <DropdownMenuItem onSelect={handleInvite}>
           <UserPlus className="mr-2 h-4 w-4" />
           Invite a friend
+        </DropdownMenuItem>
+
+        <DropdownMenuItem onSelect={handleJoinJam}>
+          <Radio className="mr-2 h-4 w-4" />
+          Join a jam
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

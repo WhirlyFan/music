@@ -3,6 +3,7 @@ import {
   Loader2,
   Pause,
   Play,
+  Radio,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -13,12 +14,13 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { FullScreenPlayer } from '@/components/player/full-screen-player'
+import { JamDialog } from '@/components/player/jam-dialog'
 import { SeekBar } from '@/components/player/seek-bar'
 import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import type { QueueItem, Room } from '@/lib/api/models'
-import { isSessionAuthenticated } from '@/lib/auth/guards'
+import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/hooks/mutations/catalog'
 import {
   useClearQueue,
@@ -52,10 +54,11 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
 export function NowPlayingBar() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
+  const myUserId = sessionUserId(session)
   const { data: room } = useRoom(authed)
   // Live updates: feed broadcast frames into the same room cache useRoom reads,
   // so a jam stays in sync without polling. No-op until we have a room id.
-  useRoomSocket(room?.id, authed)
+  useRoomSocket(room?.id, authed, myUserId)
   const refreshArtwork = useRefreshArtwork()
 
   const matchTrack = useMatchTrack()
@@ -84,6 +87,7 @@ export function NowPlayingBar() {
   // Zustand client store (shared with the playlists search pill + FAB).
   const [expanded, setExpanded] = useNowPlayingOpen()
   const [queueOpen, setQueueOpen] = useQueueOpen()
+  const [jamOpen, setJamOpen] = useState(false)
   const queueHeight = usePlayerUiStore((s) => s.queueHeight)
   const setQueueHeight = usePlayerUiStore((s) => s.setQueueHeight)
   const setPlayerHeight = usePlayerUiStore((s) => s.setPlayerHeight)
@@ -190,6 +194,11 @@ export function NowPlayingBar() {
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const context = room?.context ?? [] // the FULL playlist/album (stable list)
   const contextLabel = room?.context_label ?? ''
+  // In a jam, only the host drives playback; guests follow (their <audio>
+  // reconciles to the host automatically). Your own (unshared) room: always.
+  const isShared = room?.is_shared ?? false
+  const canControl = !isShared || room?.host_id === myUserId
+  const memberCount = room?.members?.length ?? 0
   // The list includes already-played tracks, so "upcoming" is only what's after
   // the current position (plus the user queue, which plays first).
   const ctxIdx = context.findIndex((i) => i.id === itemId)
@@ -197,6 +206,7 @@ export function NowPlayingBar() {
   const upcoming = queue.length + contextAhead
 
   function togglePlay() {
+    if (!canControl) return // guests follow the host
     const el = audioRef.current
     if (!el) return
     const willPlay = el.paused
@@ -209,6 +219,7 @@ export function NowPlayingBar() {
   }
 
   function handlePrevious() {
+    if (!canControl) return // guests follow the host
     // Standard behavior: >3s in, restart the track; otherwise go to the previous.
     const el = audioRef.current
     if (el && el.currentTime > 3) {
@@ -219,6 +230,7 @@ export function NowPlayingBar() {
   }
 
   function seek(seconds: number) {
+    if (!canControl) return // guests follow the host's playhead
     const el = audioRef.current
     if (!el) return
     el.currentTime = seconds
@@ -263,8 +275,8 @@ export function NowPlayingBar() {
                 size="sm"
                 variant="ghost"
                 onClick={() => shuffle.mutate()}
-                aria-disabled={context.length < 2 || undefined}
-                disabled={context.length < 2}
+                aria-disabled={context.length < 2 || !canControl || undefined}
+                disabled={context.length < 2 || !canControl}
               >
                 <Shuffle className="mr-1 size-4" /> Shuffle
               </Button>
@@ -289,6 +301,7 @@ export function NowPlayingBar() {
               <Button
                 size="sm"
                 variant="ghost"
+                disabled={!canControl}
                 onClick={() => {
                   setQueueOpen(false)
                   clear.mutate()
@@ -308,6 +321,7 @@ export function NowPlayingBar() {
                 items={queue}
                 onPlay={(id) => jump.mutate(id)}
                 onRemove={(id) => removeItem.mutate(id)}
+                readOnly={!canControl}
               />
             )}
             <QueueSection
@@ -317,6 +331,7 @@ export function NowPlayingBar() {
               onPlay={(id) => jump.mutate(id)}
               onRemove={(id) => removeItem.mutate(id)}
               emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
+              readOnly={!canControl}
             />
           </div>
         </div>
@@ -324,7 +339,13 @@ export function NowPlayingBar() {
 
       <div className="flex items-center gap-2 px-3 py-2 sm:gap-3">
         <div className="flex items-center gap-1">
-          <Button size="icon" variant="ghost" onClick={handlePrevious} aria-label="Previous">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={handlePrevious}
+            aria-label="Previous"
+            disabled={!canControl}
+          >
             <SkipBack className="size-5" />
           </Button>
           <Button
@@ -333,7 +354,7 @@ export function NowPlayingBar() {
             onClick={togglePlay}
             aria-label={loading ? 'Loading' : playing ? 'Pause' : 'Play'}
             aria-busy={loading || undefined}
-            disabled={!audioSrc || loading}
+            disabled={!audioSrc || loading || !canControl}
           >
             {loading ? (
               <Loader2 className="size-5 animate-spin" />
@@ -348,8 +369,8 @@ export function NowPlayingBar() {
             variant="ghost"
             onClick={() => next.mutate()}
             aria-label="Next"
-            aria-disabled={upcoming === 0 || undefined}
-            disabled={upcoming === 0}
+            aria-disabled={upcoming === 0 || !canControl || undefined}
+            disabled={upcoming === 0 || !canControl}
           >
             <SkipForward className="size-5" />
           </Button>
@@ -401,6 +422,20 @@ export function NowPlayingBar() {
         <Button
           size="icon"
           variant="ghost"
+          onClick={() => setJamOpen(true)}
+          aria-label="Jam"
+          className="relative"
+        >
+          <Radio className={`size-4 ${isShared ? 'text-primary' : ''}`} />
+          {isShared && memberCount > 0 && (
+            <span className="bg-primary text-primary-foreground absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-semibold">
+              {memberCount}
+            </span>
+          )}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
           onClick={() => setQueueOpen((o) => !o)}
           aria-label="Toggle queue"
         >
@@ -416,13 +451,17 @@ export function NowPlayingBar() {
           currentTime={currentTime}
           duration={duration}
           audioReady={!!audioSrc}
-          canNext={upcoming > 0}
+          canNext={upcoming > 0 && canControl}
           onTogglePlay={togglePlay}
           onPrevious={handlePrevious}
-          onNext={() => next.mutate()}
+          onNext={() => canControl && next.mutate()}
           onSeek={seek}
           onClose={() => setExpanded(false)}
         />
+      )}
+
+      {room && (
+        <JamDialog room={room} myUserId={myUserId} open={jamOpen} onOpenChange={setJamOpen} />
       )}
 
       {audioSrc && (
@@ -486,6 +525,7 @@ function QueueSection({
   onRemove,
   currentId = null,
   emptyHint,
+  readOnly = false,
 }: {
   label: string
   items: QueueItem[]
@@ -493,6 +533,7 @@ function QueueSection({
   onRemove: (itemId: string) => void
   currentId?: string | null
   emptyHint?: string
+  readOnly?: boolean
 }) {
   const curIdx = currentId ? items.findIndex((i) => i.id === currentId) : -1
   return (
@@ -516,11 +557,12 @@ function QueueSection({
             >
               <button
                 type="button"
-                onClick={() => onPlay(item.id)}
+                onClick={() => !readOnly && onPlay(item.id)}
+                disabled={readOnly}
                 className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm ${
                   played ? 'opacity-50' : ''
-                } ${isCurrent ? 'font-medium' : ''}`}
-                title={`Play ${item.track.title}`}
+                } ${isCurrent ? 'font-medium' : ''} ${readOnly ? 'cursor-default' : ''}`}
+                title={readOnly ? item.track.title : `Play ${item.track.title}`}
               >
                 {isCurrent ? (
                   <Play className="text-primary size-3 shrink-0" />
@@ -534,14 +576,16 @@ function QueueSection({
                   {item.track.primary_artist}
                 </span>
               </button>
-              <button
-                type="button"
-                onClick={() => onRemove(item.id)}
-                aria-label={`Remove ${item.track.title}`}
-                className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-              >
-                <X className="size-4" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(item.id)}
+                  aria-label={`Remove ${item.track.title}`}
+                  className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </li>
           )
         })}

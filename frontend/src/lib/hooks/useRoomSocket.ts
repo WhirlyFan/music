@@ -24,7 +24,11 @@ const WS_ORIGIN =
  * Reconnects with capped backoff: the free-tier backend sleeps when idle, and
  * the first reconnect attempt is what wakes it.
  */
-export function useRoomSocket(roomId: string | undefined, enabled = true) {
+export function useRoomSocket(
+  roomId: string | undefined,
+  enabled = true,
+  myUserId: string | null = null,
+) {
   const qc = useQueryClient()
   const lastGen = useRef(0)
 
@@ -56,6 +60,12 @@ export function useRoomSocket(roomId: string | undefined, enabled = true) {
         if (gen < lastGen.current) return // older than what we've already applied
         lastGen.current = gen
         qc.setQueryData(roomKeys.me(), msg.room)
+        // The jam I'm a guest in just ended (host unshared). Fall back to my own
+        // room: refetch /rooms/current/, which now resolves there, and the socket
+        // re-subscribes to the new room id.
+        if (myUserId && msg.room.host_id !== myUserId && !msg.room.is_shared) {
+          void qc.invalidateQueries({ queryKey: roomKeys.me() })
+        }
       }
       ws.onclose = () => {
         if (closed) return
@@ -71,5 +81,5 @@ export function useRoomSocket(roomId: string | undefined, enabled = true) {
       if (retry) clearTimeout(retry)
       ws?.close()
     }
-  }, [roomId, enabled, qc])
+  }, [roomId, enabled, qc, myUserId])
 }

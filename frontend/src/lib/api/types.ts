@@ -369,6 +369,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/leave/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Leave a jam (guest). Responds with the caller's own room; the jam its
+         *     remaining members see is updated separately.
+         */
+        post: operations["v1_rooms_leave_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/me/": {
         parameters: {
             query?: never;
@@ -729,6 +749,13 @@ export interface components {
             /** Format: uri */
             url: string;
         };
+        /** @description A participant in a shared room — for the member list. */
+        JamMember: {
+            /** Format: uuid */
+            user_id: string;
+            username: string;
+            role: string;
+        };
         /** @description Join a Jam by its code. */
         JoinRoom: {
             code: string;
@@ -918,9 +945,7 @@ export interface components {
             readonly generation: number;
             /** Format: date-time */
             readonly server_time: string;
-            readonly members: {
-                [key: string]: string;
-            }[];
+            readonly members: components["schemas"]["JamMember"][];
         };
         SaveAsPlaylist: {
             title: string;
@@ -1408,6 +1433,25 @@ export interface operations {
                 "multipart/form-data": components["schemas"]["QueueItemRef"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_leave_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

@@ -60,6 +60,13 @@ export function sessionEmail(response: { data?: unknown } | undefined): string |
   return user?.email ?? null
 }
 
+/** The signed-in user's id (uuid7) from a session response, or null. Used to
+ *  tell host from guest in a jam (compare to room.host_id / members[].user_id). */
+export function sessionUserId(response: { data?: unknown } | undefined): string | null {
+  const user = (response?.data as { user?: { id?: string } } | undefined)?.user
+  return user?.id ?? null
+}
+
 /**
  * Whether the user has at least one verified email. Returns false when the
  * data is missing (unauthenticated or load error) — the gate is "block until

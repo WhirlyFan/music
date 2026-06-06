@@ -110,6 +110,28 @@ export function useSyncPlayback() {
   )
 }
 
+/** Start a jam: make my room shareable (assigns a join code). */
+export function useShareRoom() {
+  return useRoomMutation(() => api<Room>('/rooms/share/', { method: 'POST' }))
+}
+
+/** End the jam I host (drops guests, clears the code). */
+export function useUnshareRoom() {
+  return useRoomMutation(() => api<Room>('/rooms/unshare/', { method: 'POST' }))
+}
+
+/** Join a jam by its code (become a guest). Resolves to the host's room. */
+export function useJoinRoom() {
+  return useRoomMutation((code: string) =>
+    api<Room>('/rooms/join/', { method: 'POST', body: { code } }),
+  )
+}
+
+/** Leave the jam I'm in (guest). Resolves back to my own room. */
+export function useLeaveRoom() {
+  return useRoomMutation(() => api<Room>('/rooms/leave/', { method: 'POST' }))
+}
+
 /** Save the whole queue as an owned playlist. */
 export function useSaveQueueAsPlaylist() {
   const qc = useQueryClient()

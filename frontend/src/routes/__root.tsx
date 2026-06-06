@@ -4,8 +4,11 @@ import {
   Outlet,
   redirect,
   retainSearchParams,
+  useNavigate,
 } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
+import { useEffect, useRef } from 'react'
+import { toast } from 'sonner'
 
 import { GlobalSearchPill } from '@/components/layout/global-search-pill'
 import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
@@ -16,6 +19,7 @@ import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
 import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/guards'
+import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
 import { useSession } from '@/lib/hooks/queries/auth'
 
@@ -62,9 +66,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   // the flags here makes them type-safe + lets the router own them; retaining them
   // keeps the now-playing/queue views open across navigation (child routes still
   // own their own params, e.g. /login's ?redirect).
-  validateSearch: (search: Record<string, unknown>): { nowPlaying?: boolean; queue?: boolean } => ({
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { nowPlaying?: boolean; queue?: boolean; jam?: string } => ({
     nowPlaying: search.nowPlaying === true || search.nowPlaying === 'true' ? true : undefined,
     queue: search.queue === true || search.queue === 'true' ? true : undefined,
+    // Shareable jam link (/?jam=CODE) — consumed + cleared by RootLayout.
+    jam: typeof search.jam === 'string' && search.jam ? search.jam : undefined,
   }),
   search: { middlewares: [retainSearchParams(['nowPlaying', 'queue'])] },
   // Verified-email gate. Runs before every navigation; checks the session
@@ -109,6 +117,21 @@ function RootLayout() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const user = (session?.data as SessionData | undefined)?.user
+
+  // Shareable jam link (/?jam=CODE): once authed, join that jam then strip the
+  // param. join is idempotent, and the ref guards against re-firing on re-render.
+  const { jam } = Route.useSearch()
+  const navigate = useNavigate()
+  const joinRoom = useJoinRoom()
+  const joinedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!authed || !jam || joinedFor.current === jam) return
+    joinedFor.current = jam
+    joinRoom.mutate(jam, {
+      onError: () => toast.error('That jam code didn’t work — it may have ended.'),
+    })
+    void navigate({ to: '.', search: (prev) => ({ ...prev, jam: undefined }), replace: true })
+  }, [authed, jam, joinRoom, navigate])
 
   return (
     <div className="bg-background text-foreground min-h-screen">
