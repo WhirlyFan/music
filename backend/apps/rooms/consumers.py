@@ -83,6 +83,16 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         )
 
     async def _heartbeat_loop(self):
+        # Re-sends the FULL snapshot each tick. Strictly this only needs to re-anchor
+        # the clock (position/playing_since/server_time/generation) — track/queue/
+        # window change only via a room.update broadcast — so a lean `room.sync` frame
+        # would be ~150 bytes vs a few KB. That trim was attempted (2026-06) but
+        # *reproducibly* timed out the WS consumer tests (test_consumer.py) — even
+        # tests it can't logically touch (anonymous/non-member reject) — which points
+        # to a timing/teardown fragility we couldn't root-cause, not a logic bug. The
+        # snapshot is already small (post context-windowing), so this is low priority;
+        # revisit the trim in CI / with the dev backend stopped, or by raising the
+        # WebsocketCommunicator receive timeout. See memory: ws-heartbeat-trim.
         try:
             while True:
                 await asyncio.sleep(HEARTBEAT_SECONDS)
