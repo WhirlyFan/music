@@ -99,14 +99,14 @@ export function useDeletePlaylist() {
   })
 }
 
-/** Remove one track from a playlist (the track itself stays in the catalog). */
-export function useRemoveTrackFromPlaylist(playlistId: string) {
+/** Remove one OR many tracks from a playlist (the tracks stay in the catalog). */
+export function useRemoveTracksFromPlaylist(playlistId: string) {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (trackId: string) =>
-      api(`/catalog/playlists/${playlistId}/remove-track/`, {
+    mutationFn: (trackIds: string[]) =>
+      api(`/catalog/playlists/${playlistId}/remove-tracks/`, {
         method: 'POST',
-        body: { track_id: trackId },
+        body: { track_ids: trackIds },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: playlistKeys.tracks(playlistId) })

@@ -781,3 +781,29 @@ def test_public_playlist_is_readable_by_others_private_is_not():
     owner_api = APIClient()
     owner_api.force_authenticate(owner)
     assert owner_api.get(f"/api/v1/catalog/playlists/{pub.id}/").data["is_owner"] is True
+
+
+@pytest.mark.django_db
+def test_remove_tracks_batch_removes_and_repacks(client):
+    from apps.catalog.tests.factories import PlaylistTrackFactory
+
+    user = UserFactory()
+    EmailAddress.objects.update_or_create(
+        user=user, email=user.email, defaults={"verified": True, "primary": True}
+    )
+    api = APIClient()
+    api.force_authenticate(user)
+    pl = PlaylistFactory(created_by=user)
+    tracks = [TrackFactory() for _ in range(5)]
+    for i, t in enumerate(tracks):
+        PlaylistTrackFactory(playlist=pl, track=t, position=i)
+
+    r = api.post(
+        f"/api/v1/catalog/playlists/{pl.id}/remove-tracks/",
+        {"track_ids": [str(tracks[1].id), str(tracks[3].id)]},
+        format="json",
+    )
+    assert r.status_code == 204
+    remaining = list(pl.items.order_by("position").values_list("position", flat=True))
+    assert remaining == [0, 1, 2]  # 5 → 3, positions re-packed contiguously
+    assert pl.items.count() == 3

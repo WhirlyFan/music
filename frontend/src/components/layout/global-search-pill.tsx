@@ -33,7 +33,7 @@ export function GlobalSearchPill() {
     <FloatingSearchPill
       value={value}
       onChange={setValue}
-      placeholder={mode === 'list' ? 'Search playlists' : 'Search this playlist'}
+      placeholder={mode === 'list' ? 'search playlists' : 'search this playlist'}
       ariaLabel={mode === 'list' ? 'Search your playlists' : 'Search this playlist'}
     />
   )

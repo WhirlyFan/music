@@ -190,6 +190,19 @@ class PlaylistViewSet(
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["post"], url_path="remove-tracks")
+    def remove_tracks(self, request, pk=None):
+        """Remove one OR many tracks (batch) and re-pack once. Idempotent — ids not
+        in the playlist are simply ignored."""
+        playlist = self.get_object()
+        ids = request.data.get("track_ids") or []
+        with transaction.atomic():
+            deleted, _ = playlist.items.filter(track_id__in=ids).delete()
+            if deleted:
+                _repack(playlist)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=None, responses=None)
     @action(detail=True, methods=["post"])
     def reorder(self, request, pk=None):
         """Move one track to an absolute position; renumber the rest 0..n-1."""

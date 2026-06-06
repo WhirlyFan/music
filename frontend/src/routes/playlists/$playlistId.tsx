@@ -1,17 +1,17 @@
+import { useForm } from '@tanstack/react-form'
 import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
+  Check,
   Globe,
   GripVertical,
   ListPlus,
-  MoreVertical,
   Pencil,
   RefreshCw,
   SearchX,
   Trash2,
   TriangleAlert,
-  X,
 } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -27,24 +27,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
-import { SwitchRow } from '@/components/ui/switch'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
+import { SwitchRow } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import type { PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
 import {
   useDeletePlaylist,
   useRefreshArtwork,
   useRefreshPlaylist,
-  useRemoveTrackFromPlaylist,
+  useRemoveTracksFromPlaylist,
   useReorderPlaylistTrack,
   useUpdatePlaylist,
 } from '@/lib/hooks/mutations/catalog'
@@ -75,7 +69,7 @@ function PlaylistDetailPage() {
   const playPlaylist = usePlayPlaylist()
   const queueTracks = useQueueTracks()
   const refreshArtwork = useRefreshArtwork()
-  const removeTrack = useRemoveTrackFromPlaylist(playlistId)
+  const removeTracks = useRemoveTracksFromPlaylist(playlistId)
   const reorder = useReorderPlaylistTrack(playlistId)
   const del = useDeletePlaylist()
   const refresh = useRefreshPlaylist()
@@ -83,17 +77,14 @@ function PlaylistDetailPage() {
   const [editing, setEditing] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [refreshOpen, setRefreshOpen] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false)
+  // Track ids selected (in edit mode) for batch removal.
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
   const dragId = useRef<string | null>(null)
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = tracks
-  // Auto-load the next page when the sentinel nears the viewport. A *callback ref* —
-  // not useEffect + useRef — is the right tool here: it binds the IntersectionObserver
-  // the instant the sentinel mounts (and React re-invokes it, running the cleanup,
-  // whenever the deps below change), so the observer always sees fresh hasNextPage/
-  // isFetchingNextPage straight from the closure. No effect mirroring state into a ref.
-  // (A deps-keyed useEffect missed the binding entirely when the tracks query resolved
-  // before the playlist metadata: hasNextPage was already true by the time the sentinel
-  // mounted, so the effect never re-ran — that was the "stuck on page 1" stall.)
+  // Auto-load the next page when the sentinel nears the viewport (callback ref so the
+  // observer always reads fresh hasNextPage/isFetchingNextPage from the closure).
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (!node || !hasNextPage) return
@@ -104,10 +95,17 @@ function PlaylistDetailPage() {
         { rootMargin: '600px 0px' },
       )
       io.observe(node)
-      return () => io.disconnect() // React runs this when the node unmounts or deps change
+      return () => io.disconnect()
     },
     [hasNextPage, isFetchingNextPage, fetchNextPage],
   )
+
+  // Leaving edit mode clears any selection (render-phase reset — no effect).
+  const [wasEditing, setWasEditing] = useState(editing)
+  if (editing !== wasEditing) {
+    setWasEditing(editing)
+    if (!editing && selected.size) setSelected(new Set())
+  }
 
   if (error)
     return (
@@ -126,7 +124,7 @@ function PlaylistDetailPage() {
       <SkeletonZone>
         <div className="space-y-6">
           <PageHeader
-            breadcrumbs={[{ label: 'Playlists', to: '/playlists' }]}
+            breadcrumbs={[{ label: 'playlists', to: '/playlists' }]}
             title={<SkeletonText className="max-w-[16rem]" />}
             description={<SkeletonText className="max-w-[6rem]" />}
           />
@@ -141,11 +139,32 @@ function PlaylistDetailPage() {
   }
 
   const items = tracks.data?.pages.flatMap((p) => p.results) ?? []
+  const isOwner = playlist.is_owner
+  const allSelected = items.length > 0 && items.every((i) => selected.has(i.track.id))
+
+  const toggleSelect = (trackId: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(trackId)) next.delete(trackId)
+      else next.add(trackId)
+      return next
+    })
+
+  const confirmRemove = () => {
+    const ids = [...selected]
+    removeTracks.mutate(ids, {
+      onSuccess: () => {
+        toast.success(`Removed ${ids.length} song${ids.length === 1 ? '' : 's'}.`)
+        setSelected(new Set())
+        setRemoveOpen(false)
+      },
+    })
+  }
 
   return (
     <div className="space-y-6 pb-36">
       <PageHeader
-        breadcrumbs={[{ label: 'Playlists', to: '/playlists' }, { label: playlist.title }]}
+        breadcrumbs={[{ label: 'playlists', to: '/playlists' }, { label: playlist.title }]}
         title={playlist.title}
         description={
           <span className="flex items-center gap-2">
@@ -165,51 +184,86 @@ function PlaylistDetailPage() {
             >
               Play
             </Button>
-            {playlist.is_owner && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Playlist actions">
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setEditing((v) => !v)}>
-                    <Pencil className="mr-2 size-4" />
-                    {editing ? 'Done editing' : 'Edit'}
-                  </DropdownMenuItem>
-                  {playlist.origin && (
-                    <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
-                      <RefreshCw className="mr-2 size-4" />
-                      Refresh from source
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 className="mr-2 size-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+            {isOwner && (
+              <>
+                <Button
+                  variant={editing ? 'default' : 'outline'}
+                  onClick={() => setEditing((v) => !v)}
+                >
+                  <Pencil className="mr-2 size-4" />
+                  {editing ? 'Done' : 'Edit'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Delete playlist"
+                  title="Delete playlist"
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </>
             )}
           </div>
         }
       />
 
-      {playlist.description && (
+      {!editing && playlist.description && (
         <p className="text-muted-foreground max-w-2xl text-sm whitespace-pre-wrap">
           {playlist.description}
         </p>
       )}
 
+      {/* Edit details — grows out from below the header and collapses on close
+          (grid-rows 0fr→1fr is the cheap, reversible "motion" here). */}
+      {isOwner && (
+        <div
+          className="ease-out-quint grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none"
+          style={{ gridTemplateRows: editing ? '1fr' : '0fr' }}
+        >
+          <div className="overflow-hidden">
+            <EditPanel
+              key={playlistId}
+              playlist={playlist}
+              playlistId={playlistId}
+              open={editing}
+              onDone={() => setEditing(false)}
+              onRefresh={playlist.origin ? () => setRefreshOpen(true) : undefined}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Batch-select toolbar (edit mode). */}
       {editing && (
-        <EditPanel
-          key={playlistId}
-          playlist={playlist}
-          playlistId={playlistId}
-          onDone={() => setEditing(false)}
-        />
+        <div className="bg-card/95 border-border/60 sticky top-16 z-10 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 shadow-sm backdrop-blur">
+          <button
+            type="button"
+            onClick={() =>
+              setSelected(allSelected ? new Set() : new Set(items.map((i) => i.track.id)))
+            }
+            className="text-sm font-medium"
+            disabled={items.length === 0}
+          >
+            {allSelected ? 'Deselect all' : 'Select all'}
+          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {selected.size} selected
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive disabled:text-muted-foreground"
+              disabled={selected.size === 0}
+              onClick={() => setRemoveOpen(true)}
+            >
+              <Trash2 className="mr-2 size-4" />
+              Remove
+            </Button>
+          </div>
+        </div>
       )}
 
       {tracks.isError && (
@@ -227,7 +281,9 @@ function PlaylistDetailPage() {
             key={item.track.id}
             item={item}
             editing={editing}
+            selected={selected.has(item.track.id)}
             refreshing={refreshArtwork.isPending}
+            onToggleSelect={() => toggleSelect(item.track.id)}
             onPlayFrom={(trackId) => playPlaylist.mutate({ playlistId, startTrackId: trackId })}
             onQueue={(trackId) =>
               queueTracks.mutate(
@@ -235,7 +291,6 @@ function PlaylistDetailPage() {
                 { onSuccess: () => toast.success('Added to queue.') },
               )
             }
-            onRemove={(trackId) => removeTrack.mutate(trackId)}
             onRefreshArt={(trackId) => refreshArtwork.mutate(trackId)}
             onDragStartItem={(trackId) => (dragId.current = trackId)}
             onDropOnItem={(position) => {
@@ -292,6 +347,25 @@ function PlaylistDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Remove {selected.size} song{selected.size === 1 ? '' : 's'}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              They’re removed from this playlist. The songs stay in your catalog.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={removeTracks.isPending} onClick={confirmRemove}>
+              {removeTracks.isPending ? 'Removing…' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -322,99 +396,153 @@ function PlaylistDetailPage() {
   )
 }
 
-/** Inline metadata editor (rename / describe / visibility). */
+/** Inline metadata editor (rename / describe / visibility) as a TanStack form — the
+ *  public toggle is part of the draft, applied on Save and discarded on Cancel. */
 function EditPanel({
   playlist,
   playlistId,
+  open,
   onDone,
+  onRefresh,
 }: {
   playlist: PlaylistDetail
   playlistId: string
+  open: boolean
   onDone: () => void
+  onRefresh?: () => void
 }) {
   const update = useUpdatePlaylist()
-  // Intentional draft state: these are an editable copy you can cancel. The
-  // parent keys this component by playlistId, so switching playlists remounts
-  // it and re-seeds the draft — no prop→state syncing effect needed.
-  const [title, setTitle] = useState(playlist.title)
-  const [description, setDescription] = useState(playlist.description ?? '')
-  const [isPublic, setIsPublic] = useState(playlist.is_public ?? false)
+  const form = useForm({
+    defaultValues: {
+      title: playlist.title,
+      description: playlist.description ?? '',
+      isPublic: playlist.is_public ?? false,
+    },
+    onSubmit: async ({ value }) => {
+      if (!value.title.trim()) return
+      await update.mutateAsync({
+        id: playlistId,
+        title: value.title.trim(),
+        description: value.description,
+        isPublic: value.isPublic,
+      })
+      toast.success('Saved.')
+      onDone()
+    },
+  })
+
+  // Re-seed the draft each time the panel opens (discards a cancelled edit). The
+  // `seeded` guard keeps a background playlist refetch from resetting a live edit.
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (open && !seeded.current) {
+      seeded.current = true
+      form.reset({
+        title: playlist.title,
+        description: playlist.description ?? '',
+        isPublic: playlist.is_public ?? false,
+      })
+    } else if (!open) {
+      seeded.current = false
+    }
+  }, [open, form, playlist])
 
   return (
-    <section className="bg-card border-border/60 space-y-3 rounded-2xl border p-4 shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
-          <Pencil className="size-4" aria-hidden />
-        </span>
-        <div>
-          <p className="text-sm font-medium">Edit details</p>
-          <p className="text-muted-foreground text-xs">Rename, describe, or change visibility.</p>
+    <section className="bg-card border-border/60 mb-1 space-y-3 rounded-2xl border p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
+            <Pencil className="size-4" aria-hidden />
+          </span>
+          <div>
+            <p className="text-sm font-medium">Edit details</p>
+            <p className="text-muted-foreground text-xs">Rename, describe, or change visibility.</p>
+          </div>
         </div>
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="pl-title" className="text-sm font-medium">
-          Title
-        </label>
-        <Input id="pl-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="pl-desc" className="text-sm font-medium">
-          Description
-        </label>
-        <Textarea
-          id="pl-desc"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Optional"
-          maxLength={1000}
-        />
-        <p className="text-muted-foreground text-right text-xs tabular-nums">
-          {description.length}/1000
-        </p>
+        {onRefresh && (
+          <Button variant="ghost" size="sm" onClick={onRefresh}>
+            <RefreshCw className="mr-2 size-4" />
+            Refresh from source
+          </Button>
+        )}
       </div>
 
-      {/* Visibility saves on its own the instant you toggle it (with a toast), so
-          it's clearly live — separate from the batched title/description Save. */}
-      <SwitchRow
-        label="Public"
-        description="Anyone with the link can view"
-        checked={isPublic}
-        disabled={update.isPending}
-        onCheckedChange={(v) => {
-          setIsPublic(v)
-          update.mutate(
-            { id: playlistId, isPublic: v },
-            {
-              onSuccess: () =>
-                toast.success(v ? 'Playlist is now public.' : 'Playlist is private.'),
-              onError: () => setIsPublic(!v), // revert the toggle if it didn't stick
-            },
-          )
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          form.handleSubmit()
         }}
-      />
+        className="space-y-3"
+      >
+        <form.Field name="title">
+          {(field) => (
+            <div className="space-y-1">
+              <label htmlFor="pl-title" className="text-sm font-medium">
+                Title
+              </label>
+              <Input
+                id="pl-title"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                onBlur={field.handleBlur}
+                maxLength={255}
+              />
+            </div>
+          )}
+        </form.Field>
 
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          disabled={update.isPending || !title.trim()}
-          onClick={() =>
-            update.mutate(
-              { id: playlistId, title: title.trim(), description },
-              {
-                onSuccess: () => {
-                  toast.success('Saved.')
-                  onDone()
-                },
-              },
-            )
-          }
-        >
-          Save
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDone}>
-          Cancel
-        </Button>
-      </div>
+        <form.Field name="description">
+          {(field) => (
+            <div className="space-y-1">
+              <label htmlFor="pl-desc" className="text-sm font-medium">
+                Description
+              </label>
+              <Textarea
+                id="pl-desc"
+                value={field.state.value}
+                onChange={(e) => field.handleChange(e.target.value)}
+                placeholder="Optional"
+                maxLength={1000}
+              />
+              <p className="text-muted-foreground text-right text-xs tabular-nums">
+                {field.state.value.length}/1000
+              </p>
+            </div>
+          )}
+        </form.Field>
+
+        <form.Field name="isPublic">
+          {(field) => (
+            <SwitchRow
+              label="Public"
+              description="Anyone with the link can view"
+              checked={field.state.value}
+              onCheckedChange={(v) => field.handleChange(v)}
+            />
+          )}
+        </form.Field>
+
+        <div className="flex gap-2">
+          <form.Subscribe selector={(s) => [s.values.title, s.isSubmitting] as const}>
+            {([title, submitting]) => (
+              <Button type="submit" size="sm" disabled={submitting || !title.trim()}>
+                {submitting ? 'Saving…' : 'Save'}
+              </Button>
+            )}
+          </form.Subscribe>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              form.reset()
+              onDone()
+            }}
+          >
+            Cancel
+          </Button>
+        </div>
+      </form>
     </section>
   )
 }
@@ -422,20 +550,22 @@ function EditPanel({
 function TrackRow({
   item,
   editing = false,
+  selected = false,
   refreshing = false,
+  onToggleSelect,
   onPlayFrom,
   onQueue,
-  onRemove,
   onRefreshArt,
   onDragStartItem,
   onDropOnItem,
 }: {
   item?: PlaylistTrack
   editing?: boolean
+  selected?: boolean
   refreshing?: boolean
+  onToggleSelect?: () => void
   onPlayFrom?: (trackId: string) => void
   onQueue?: (trackId: string) => void
-  onRemove?: (trackId: string) => void
   onRefreshArt?: (trackId: string) => void
   onDragStartItem?: (trackId: string) => void
   onDropOnItem?: (position: number) => void
@@ -443,8 +573,7 @@ function TrackRow({
   const ripple = useRipple()
   const skeleton = useSkeletonZone()
 
-  // Zone-driven skeleton: same <li> shell as the real row (artwork + two text
-  // lines), so it inherits the row's dimensions. No separate skeleton component.
+  // Zone-driven skeleton: same <li> shell as the real row (artwork + two text lines).
   if (skeleton || !item) {
     return (
       <li aria-hidden className="border-border/60 flex items-center gap-3 rounded-xl border p-3">
@@ -459,36 +588,65 @@ function TrackRow({
 
   const { track } = item
 
+  // Edit mode: the row is a drag-to-reorder + tap-to-select target (checkbox on the
+  // left, grip handle); no inline play/queue/remove. Selection drives batch removal.
+  if (editing) {
+    return (
+      <li
+        draggable
+        onDragStart={() => onDragStartItem?.(track.id)}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={() => onDropOnItem?.(item.position)}
+        onClick={() => onToggleSelect?.()}
+        className={`border-border/60 flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${
+          selected ? 'border-primary/50 bg-primary/5' : 'hover:bg-accent/40'
+        }`}
+      >
+        <span
+          aria-hidden
+          className={`grid size-5 shrink-0 place-items-center rounded-md border transition-colors ${
+            selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+          }`}
+        >
+          {selected && <Check className="size-3.5" />}
+        </span>
+        <GripVertical className="text-muted-foreground size-4 shrink-0" aria-hidden />
+        <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
+          {item.position + 1}
+        </span>
+        <TrackArtwork track={track} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            {track.is_explicit && <ExplicitBadge />}
+            <p className="truncate font-medium">{track.title}</p>
+          </div>
+          <p className="text-muted-foreground truncate text-sm">
+            {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
+          </p>
+        </div>
+      </li>
+    )
+  }
+
+  // View mode: full-row play target + cover (also plays) + add-to-queue.
   return (
     <li
-      draggable={editing}
-      onDragStart={editing ? () => onDragStartItem?.(track.id) : undefined}
-      onDragOver={editing ? (e) => e.preventDefault() : undefined}
-      onDrop={editing ? () => onDropOnItem?.(item.position) : undefined}
-      onPointerDown={editing ? undefined : ripple.onPointerDown}
-      className={`border-border/60 relative flex items-center gap-3 overflow-hidden rounded-xl border p-3 ${
-        editing ? 'cursor-grab' : 'hover:bg-accent/40'
-      }`}
+      onPointerDown={ripple.onPointerDown}
+      className="border-border/60 hover:bg-accent/40 relative flex items-center gap-3 overflow-hidden rounded-xl border p-3"
     >
-      {/* Full-row play target (only when not editing). */}
-      {!editing && (
-        <button
-          type="button"
-          aria-label={`Play ${track.title}`}
-          onClick={() => onPlayFrom?.(track.id)}
-          className="absolute inset-0 rounded-lg"
-        />
-      )}
-      {editing && <GripVertical className="text-muted-foreground size-4 shrink-0" aria-hidden />}
+      <button
+        type="button"
+        aria-label={`Play ${track.title}`}
+        onClick={() => onPlayFrom?.(track.id)}
+        className="absolute inset-0 rounded-xl"
+      />
       <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
         {item.position + 1}
       </span>
-      {/* Clicking the cover plays the song too (the full-row button sits behind
-          it). When editing, the cover is just a drag handle, not a play target. */}
       <div
-        className={`relative shrink-0 ${editing ? '' : 'cursor-pointer'}`}
+        className="relative shrink-0 cursor-pointer"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={editing ? undefined : () => onPlayFrom?.(track.id)}
+        onClick={() => onPlayFrom?.(track.id)}
       >
         <TrackArtwork track={track} />
         {isYouTubeArt(track.artwork_url) && (
@@ -498,7 +656,7 @@ function TrackRow({
             title="Cover is from YouTube — retry the original"
             disabled={refreshing}
             onClick={(e) => {
-              e.stopPropagation() // don't also trigger the cover's play
+              e.stopPropagation()
               onRefreshArt?.(track.id)
             }}
             className="bg-background/80 text-foreground hover:bg-background absolute -top-1 -right-1 z-10 grid size-5 place-items-center rounded-full border shadow-sm disabled:opacity-50"
@@ -517,29 +675,17 @@ function TrackRow({
         </p>
       </div>
       <div className="relative z-10 flex items-center" onPointerDown={(e) => e.stopPropagation()}>
-        {editing ? (
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={`Remove ${track.title} from playlist`}
-            title="Remove from playlist"
-            onClick={() => onRemove?.(track.id)}
-          >
-            <X className="size-4" />
-          </Button>
-        ) : (
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label={`Add ${track.title} to queue`}
-            title="Add to queue"
-            onClick={() => onQueue?.(track.id)}
-          >
-            <ListPlus className="size-4" />
-          </Button>
-        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          aria-label={`Add ${track.title} to queue`}
+          title="Add to queue"
+          onClick={() => onQueue?.(track.id)}
+        >
+          <ListPlus className="size-4" />
+        </Button>
       </div>
-      {!editing && <Ripples ripples={ripple.ripples} onDone={ripple.remove} />}
+      <Ripples ripples={ripple.ripples} onDone={ripple.remove} />
     </li>
   )
 }
