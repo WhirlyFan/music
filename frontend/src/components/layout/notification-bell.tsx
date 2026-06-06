@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Bell } from 'lucide-react'
+import { Bell, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { ApiError } from '@/lib/api/client'
@@ -45,6 +45,11 @@ const title = (n: AppNotification) =>
   typeof n.payload.title === 'string' ? n.payload.title : 'a playlist'
 const summary = (n: AppNotification) =>
   typeof n.payload.summary === 'string' ? n.payload.summary : ''
+
+// Notifications that require a response (inline Accept/Decline). Everything else is
+// informational — independently dismissable and cleared by "mark all read".
+const ACTION_KINDS = new Set(['friend_request', 'playlist_invite'])
+const isActionable = (n: AppNotification) => ACTION_KINDS.has(n.kind)
 
 /** Playlist notifications deep-link to the playlist; others don't link. */
 function playlistId(n: AppNotification): string | null {
@@ -159,18 +164,16 @@ export function NotificationBell() {
   const { data: unread } = useUnreadCount()
   const notifications = useNotifications()
   const markRead = useMarkNotificationsRead()
+  const dismiss = useDismissNotification()
   const [open, setOpen] = useState(false)
   const count = unread?.count ?? 0
   const items = notifications.data?.results ?? []
+  // Opening no longer marks anything read — informational ones are cleared explicitly
+  // (per-row ✕ or "mark all read"); actionable ones resolve via Accept/Decline.
+  const clearableUnread = items.filter((n) => !n.read_at && !isActionable(n)).map((n) => n.id)
 
   return (
-    <DropdownMenu
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (next && count > 0) markRead.mutate(undefined)
-      }}
-    >
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       {/* Wrapper provides the positioning context so the count badge sits OUTSIDE the
           Button (whose overflow-hidden — for the ripple — would otherwise clip it).
           Same pattern as the jam count badge in the player. */}
@@ -187,8 +190,17 @@ export function NotificationBell() {
         )}
       </span>
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="border-border/60 border-b px-3 py-2">
+        <div className="border-border/60 flex items-center justify-between gap-2 border-b px-3 py-2">
           <p className="text-sm font-medium">Notifications</p>
+          {clearableUnread.length > 0 && (
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground text-xs"
+              onClick={() => markRead.mutate(clearableUnread)}
+            >
+              Mark all read
+            </button>
+          )}
         </div>
         <div className="max-h-80 [scrollbar-width:thin] overflow-y-auto">
           {notifications.isLoading ? (
@@ -220,12 +232,12 @@ export function NotificationBell() {
                           to="/playlists/$playlistId"
                           params={{ playlistId: pid }}
                           onClick={() => setOpen(false)}
-                          className="block hover:underline"
+                          className="line-clamp-2 hover:underline"
                         >
                           {describe(n)}
                         </Link>
                       ) : (
-                        <span className="block">{describe(n)}</span>
+                        <span className="line-clamp-2">{describe(n)}</span>
                       )}
                       <span className="text-muted-foreground text-xs">{timeAgo(n.created_at)}</span>
                       {n.kind === 'friend_request' &&
@@ -239,6 +251,19 @@ export function NotificationBell() {
                         <PlaylistInviteActions playlistId={pid} notificationId={n.id} />
                       )}
                     </span>
+                    {/* Informational notifications can be dismissed independently;
+                        actionable ones leave via Accept/Decline. */}
+                    {!isActionable(n) && (
+                      <button
+                        type="button"
+                        aria-label="Dismiss notification"
+                        title="Dismiss"
+                        className="text-muted-foreground hover:text-foreground -mr-1 shrink-0 rounded p-0.5"
+                        onClick={() => dismiss.mutate(n.id)}
+                      >
+                        <X className="size-3.5" aria-hidden />
+                      </button>
+                    )}
                   </li>
                 )
               })}

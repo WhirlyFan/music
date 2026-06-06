@@ -11,7 +11,7 @@ sockets after commit. Authorization (who may edit) is enforced in the viewset
 from django.db import transaction
 from django.utils import timezone
 
-from apps.notifications.events import emit, emit_many
+from apps.notifications.events import emit
 from apps.notifications.models import Notification
 
 from . import realtime
@@ -20,15 +20,6 @@ from .models import PlaylistActivity, PlaylistCollaborator
 
 class CollaboratorError(Exception):
     """A collaboration action that can't proceed (e.g. inviting the owner)."""
-
-
-def accepted_collaborator_ids(playlist) -> set:
-    """User ids of every accepted collaborator on a playlist."""
-    return set(
-        playlist.collaborators.filter(
-            status=PlaylistCollaborator.Status.ACCEPTED
-        ).values_list("user_id", flat=True)
-    )
 
 
 def can_edit(playlist, user) -> bool:
@@ -42,19 +33,6 @@ def can_edit(playlist, user) -> bool:
     ).exists()
 
 
-def _audience(playlist, *, exclude_id):
-    """Everyone who should hear about an edit: the owner + accepted collaborators,
-    minus the actor. `emit` also self-skips, but excluding here avoids a useless row."""
-    from django.contrib.auth import get_user_model
-
-    user_model = get_user_model()
-    ids = accepted_collaborator_ids(playlist)
-    if playlist.created_by_id:
-        ids.add(playlist.created_by_id)
-    ids.discard(exclude_id)
-    return user_model.objects.filter(pk__in=ids)
-
-
 def log(playlist, actor, action, **detail) -> PlaylistActivity:
     """Append one audit-log row (in the caller's transaction)."""
     return PlaylistActivity.objects.create(
@@ -63,19 +41,10 @@ def log(playlist, actor, action, **detail) -> PlaylistActivity:
 
 
 def record_track_edit(playlist, actor, action, *, summary, **detail) -> None:
-    """Log a track edit AND notify the rest of the playlist's audience. Called inside
-    the edit's transaction so the activity row + notifications commit atomically with
-    the change (and never fire if it rolls back)."""
-    log(playlist, actor, action, **detail)
-    emit_many(
-        Notification.Kind.PLAYLIST_TRACKS,
-        recipients=_audience(playlist, exclude_id=actor.id),
-        actor=actor,
-        playlist_id=str(playlist.id),
-        title=playlist.title,
-        summary=summary,
-    )
-    # Live-update anyone currently viewing this playlist (open-ended set, ephemeral).
+    """Record a track edit: append to the audit log + live-update anyone viewing the
+    playlist. Track edits are deliberately NOT notifications (only invites are) — they
+    surface in the activity log and sync live to current viewers."""
+    log(playlist, actor, action, summary=summary, **detail)
     realtime.broadcast_playlist_changed(playlist.id)
 
 

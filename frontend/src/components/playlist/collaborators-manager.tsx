@@ -2,10 +2,9 @@ import { UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   useCollaborators,
   useInviteCollaborator,
@@ -64,12 +63,7 @@ export function CollaboratorsManager({
                 className="bg-muted/60 flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 text-xs"
                 title={c.status === 'pending' ? 'Invite pending' : undefined}
               >
-                <Avatar className="size-5">
-                  <AvatarImage src={dicebearAvatarUrl(c.user.username)} alt="" />
-                  <AvatarFallback className="text-[9px]">
-                    {avatarInitials(c.user.username)}
-                  </AvatarFallback>
-                </Avatar>
+                <UserAvatar username={c.user.username} size="size-5" icon="size-3" />
                 <span className={c.status === 'pending' ? 'opacity-60' : ''}>
                   @{c.user.username}
                   {isMe && ' (you)'}

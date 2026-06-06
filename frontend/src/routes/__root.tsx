@@ -168,11 +168,7 @@ function RootLayout() {
         {user?.username && user.email ? (
           <>
             <NotificationBell />
-            <UserMenu
-              username={user.username}
-              firstName={user.first_name}
-              lastName={user.last_name}
-            />
+            <UserMenu username={user.username} />
           </>
         ) : (
           // Logged out: theme stays globally reachable here (authed users get it

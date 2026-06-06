@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/page-header'
 import { CollaboratorsManager } from '@/components/playlist/collaborators-manager'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +35,6 @@ import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { SwitchRow } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
 import type { PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
 import {
   useDeletePlaylist,
@@ -480,7 +479,7 @@ function EditPanel({
   }, [open, form, playlist])
 
   return (
-    <section className="bg-card border-border/60 mb-1 space-y-3 rounded-2xl border p-4 shadow-sm">
+    <section className="bg-card border-border/60 space-y-3 rounded-2xl border p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
@@ -721,13 +720,12 @@ function TrackRow({
         </p>
       </div>
       {adderUsername && (
-        <Avatar
-          className="ring-border relative z-10 size-6 shrink-0 ring-1"
-          title={`Added by @${adderUsername}`}
-        >
-          <AvatarImage src={dicebearAvatarUrl(adderUsername)} alt={`Added by @${adderUsername}`} />
-          <AvatarFallback className="text-[9px]">{avatarInitials(adderUsername)}</AvatarFallback>
-        </Avatar>
+        <UserAvatar
+          username={adderUsername}
+          size="size-6"
+          icon="size-3"
+          className="ring-border relative z-10 ring-1"
+        />
       )}
       <div className="relative z-10 flex items-center" onPointerDown={(e) => e.stopPropagation()}>
         <Button

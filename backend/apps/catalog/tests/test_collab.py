@@ -84,11 +84,10 @@ def test_accept_grants_access_and_notifies_owner():
 
 
 @pytest.mark.django_db
-def test_collaborator_can_add_tracks_and_edit_fans_out_to_others_not_actor():
-    owner, editor, other = UserFactory(), UserFactory(), UserFactory()
+def test_collaborator_can_add_tracks_logged_but_not_notified():
+    owner, editor = UserFactory(), UserFactory()
     pl = PlaylistFactory(created_by=owner, is_public=False)
     _join(owner, editor, pl)
-    _join(owner, other, pl)
     t1, t2 = TrackFactory(), TrackFactory()
 
     r = _authed(editor).post(
@@ -99,12 +98,8 @@ def test_collaborator_can_add_tracks_and_edit_fans_out_to_others_not_actor():
     assert r.status_code == 200 and r.data["added"] == 2
     assert pl.items.count() == 2
 
-    # Fan-out: owner + the other collaborator are notified; the actor is not.
-    kind = Notification.Kind.PLAYLIST_TRACKS
-    assert Notification.objects.filter(recipient=owner, kind=kind).count() == 1
-    assert Notification.objects.filter(recipient=other, kind=kind).count() == 1
-    assert not Notification.objects.filter(recipient=editor, kind=kind).exists()
-    # Audit log records who did what.
+    # Track edits are NOT notifications — they're logged + synced live to viewers only.
+    assert not Notification.objects.filter(kind=Notification.Kind.PLAYLIST_TRACKS).exists()
     assert PlaylistActivity.objects.filter(
         playlist=pl, actor=editor, action=PlaylistActivity.Action.TRACKS_ADDED
     ).exists()

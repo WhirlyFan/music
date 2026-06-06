@@ -1,7 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings, UserRound } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,20 +8,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { useLogout } from '@/lib/hooks/mutations/auth'
 
 type Props = {
   username: string
-  firstName?: string
-  lastName?: string
 }
 
 /**
  * Account menu — avatar (+ username on wider screens) opens a labeled dropdown
  * of account actions (Settings, Log out). Jam + Invite live in the FAB now.
  */
-export function UserMenu({ username, firstName, lastName }: Props) {
+export function UserMenu({ username }: Props) {
   const navigate = useNavigate()
   const logout = useLogout()
 
@@ -30,9 +27,6 @@ export function UserMenu({ username, firstName, lastName }: Props) {
     await logout.mutateAsync()
     navigate({ to: '/login' })
   }
-
-  const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim()
-  const initials = avatarInitials(fullName || username)
 
   return (
     <DropdownMenu>
@@ -43,22 +37,14 @@ export function UserMenu({ username, firstName, lastName }: Props) {
         className="ring-offset-background focus-visible:ring-ring bg-background/70 border-border/60 flex min-h-11 items-center gap-2 rounded-full border py-1 pr-3 pl-1 shadow-sm backdrop-blur transition-shadow focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         aria-label="Open account menu"
       >
-        <Avatar className="h-9 w-9">
-          {/* DiceBear avatar seeded by username (stable across email changes). */}
-          <AvatarImage src={dicebearAvatarUrl(username)} alt="" />
-          <AvatarFallback>{initials}</AvatarFallback>
-        </Avatar>
+        {/* Person-on-glass avatar, seeded by username (stable across email changes). */}
+        <UserAvatar username={username} size="size-9" icon="size-4" />
         {/* Username next to the avatar on medium+ widths so the corner stays
             compact on mobile. */}
         <span className="hidden text-sm font-medium sm:inline">{username}</span>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onSelect={() => navigate({ to: '/profile' })}>
-          <UserRound className="mr-2 h-4 w-4" />
-          Profile
-        </DropdownMenuItem>
-
         <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
           <Settings className="mr-2 h-4 w-4" />
           Settings

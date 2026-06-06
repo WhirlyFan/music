@@ -2,11 +2,10 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Check, Settings, UserPlus, Users, UserX, X } from 'lucide-react'
 import { useState } from 'react'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { useSession } from '@/lib/hooks/queries/auth'
 import {
   type FriendUser,
@@ -109,14 +108,14 @@ function ProfileHero({
         className="from-primary/25 via-accent/10 pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-gradient-to-br to-transparent blur-3xl"
       />
       <div className="relative flex flex-col items-center gap-4 px-6 py-8 text-center sm:flex-row sm:gap-5 sm:text-left">
-        {/* Gradient ring around the avatar. */}
+        {/* Gradient ring around the person-on-glass avatar. */}
         <span className="from-primary to-accent shadow-primary/30 inline-flex shrink-0 rounded-full bg-gradient-to-br p-[3px] shadow-lg">
-          <Avatar className="border-background size-20 border-2">
-            <AvatarImage src={dicebearAvatarUrl(username)} alt="" />
-            <AvatarFallback className="text-xl">
-              {avatarInitials(fullName || username || '?')}
-            </AvatarFallback>
-          </Avatar>
+          <UserAvatar
+            username={username}
+            size="size-20"
+            icon="size-9"
+            className="border-background border-2"
+          />
         </span>
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold tracking-tight">{fullName || username}</h1>
@@ -278,10 +277,7 @@ function UserRow({ user, action }: { user: FriendUser; action: React.ReactNode }
   return (
     <div className="hover:bg-muted/40 flex items-center justify-between gap-4 px-5 py-3 transition-colors">
       <div className="flex min-w-0 items-center gap-3">
-        <Avatar className="ring-border size-10 ring-1">
-          <AvatarImage src={dicebearAvatarUrl(user.username)} alt="" />
-          <AvatarFallback>{avatarInitials(user.display_name || user.username)}</AvatarFallback>
-        </Avatar>
+        <UserAvatar username={user.username} size="size-10" icon="size-5" />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{user.display_name || user.username}</p>
           <p className="text-muted-foreground truncate text-xs">@{user.username}</p>
