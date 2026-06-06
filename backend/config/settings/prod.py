@@ -107,7 +107,7 @@ CONTENT_SECURITY_POLICY = {
         "style-src": [SELF, "'unsafe-inline'"],  # admin inline styles
         "img-src": [SELF, "data:"],
         "font-src": [SELF],
-        "connect-src": [SELF],
+        "connect-src": [SELF, "wss://api.whirlyfan.com"],  # jam WebSocket (cross-origin)
         "object-src": [NONE],
         "base-uri": [SELF],
         "frame-ancestors": [NONE],  # defense-in-depth alongside X-Frame-Options
