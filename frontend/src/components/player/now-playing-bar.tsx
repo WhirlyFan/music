@@ -223,8 +223,10 @@ export function NowPlayingBar() {
     if (!el) return
     el.currentTime = seconds
     setCurrentTime(seconds) // optimistic so the thumb doesn't snap back while buffering
-    // A seek moves the shared playhead for everyone in the jam.
-    syncPlayback.mutate({ positionMs: Math.round(seconds * 1000), isPlaying: !el.paused })
+    // Scrubbing to a spot means "play from here" — start playback locally and
+    // move the shared playhead (is_playing: true) so the whole jam follows.
+    void el.play().catch(() => {})
+    syncPlayback.mutate({ positionMs: Math.round(seconds * 1000), isPlaying: true })
   }
 
   return (
