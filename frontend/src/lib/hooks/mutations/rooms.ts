@@ -132,12 +132,39 @@ export function useClearQueue() {
  * server stamps playing_since and broadcasts, every client reconciles.
  */
 export function useSyncPlayback() {
-  return useRoomMutation((args: { positionMs: number; isPlaying: boolean }) =>
-    api<Room>('/rooms/sync/', {
-      method: 'POST',
-      body: { position_ms: args.positionMs, is_playing: args.isPlaying },
-    }),
-  )
+  const qc = useQueryClient()
+  return useMutation<Room, Error, { positionMs: number; isPlaying: boolean }, { prev?: Room }>({
+    mutationFn: (args) =>
+      api<Room>('/rooms/sync/', {
+        method: 'POST',
+        body: { position_ms: args.positionMs, is_playing: args.isPlaying },
+      }),
+    // Reflect the new play/pause + position in the cache immediately. Without this,
+    // `is_playing`/`position_ms` lag a network round-trip behind the user's tap:
+    // the player flashes "Tap to play" on a deliberate pause (server still reads
+    // playing while the element is already paused), and the seek bar snaps back to
+    // the stale server position before the echo lands. We stamp client-now for both
+    // playing_since + server_time so they stay self-consistent (intendedSeconds adds
+    // zero elapsed); onSuccess overwrites with the server's authoritative values.
+    onMutate: (args) => {
+      const prev = qc.getQueryData<Room>(roomKeys.me())
+      if (prev) {
+        const nowIso = new Date().toISOString()
+        qc.setQueryData<Room>(roomKeys.me(), {
+          ...prev,
+          is_playing: args.isPlaying,
+          position_ms: args.positionMs,
+          playing_since: args.isPlaying ? nowIso : null,
+          server_time: nowIso,
+        })
+      }
+      return { prev }
+    },
+    onSuccess: (room) => qc.setQueryData(roomKeys.me(), room),
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(roomKeys.me(), ctx.prev)
+    },
+  })
 }
 
 /** Start a jam: make my room shareable (assigns a join code). */

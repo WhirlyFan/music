@@ -21,10 +21,14 @@ export function SeekBar({
   currentTime,
   duration,
   onSeek,
+  disabled = false,
 }: {
   currentTime: number
   duration: number
   onSeek: (seconds: number) => void
+  // Read-only progress (no scrubbing): a passive jam guest follows the host's
+  // playhead and can't seek. The bar still shows the live position.
+  disabled?: boolean
 }) {
   const [scrub, setScrub] = useState<number | null>(null)
   const value = scrub ?? Math.min(currentTime, duration || 0)
@@ -47,11 +51,12 @@ export function SeekBar({
         max={duration || 0}
         step="any"
         value={value}
+        disabled={disabled}
         onChange={(e) => setScrub(Number(e.target.value))}
         onPointerUp={commit}
         onKeyUp={commit}
         aria-label="Seek"
-        className="accent-primary h-1 flex-1 cursor-pointer"
+        className={`accent-primary h-1 flex-1 ${disabled ? 'cursor-default opacity-70' : 'cursor-pointer'}`}
       />
       <span className="text-muted-foreground min-w-9 text-[11px] tabular-nums">
         {fmt(duration)}

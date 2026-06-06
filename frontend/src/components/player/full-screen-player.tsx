@@ -1,4 +1,13 @@
-import { ChevronDown, ExternalLink, Pause, Play, SkipBack, SkipForward } from 'lucide-react'
+import {
+  ChevronDown,
+  ExternalLink,
+  Pause,
+  Play,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
 import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -30,6 +39,7 @@ export function FullScreenPlayer({
   duration,
   audioReady,
   canNext,
+  canDrive,
   volume,
   onTogglePlay,
   onPrevious,
@@ -45,6 +55,9 @@ export function FullScreenPlayer({
   duration: number
   audioReady: boolean
   canNext: boolean
+  // A passive jam guest can't drive the shared playhead: prev/next/seek are
+  // disabled and the play button becomes a local mute toggle (mirrors the bar).
+  canDrive: boolean
   volume: number
   onTogglePlay: () => void
   onPrevious: () => void
@@ -133,18 +146,34 @@ export function FullScreenPlayer({
         {/* Transport + seek (required — the bar is covered by this overlay). */}
         <div className="flex w-full flex-col gap-2">
           <div className="flex items-center justify-center gap-4">
-            <Button size="icon" variant="ghost" onClick={onPrevious} aria-label="Previous">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={onPrevious}
+              aria-label="Previous"
+              disabled={!canDrive}
+            >
               <SkipBack className="size-6" />
             </Button>
             <Button
               size="icon"
               variant="shadow"
               onClick={onTogglePlay}
-              aria-label={playing ? 'Pause' : 'Play'}
+              aria-label={!canDrive ? (playing ? 'Mute' : 'Unmute') : playing ? 'Pause' : 'Play'}
               disabled={!audioReady}
               className="size-14 rounded-full"
             >
-              {playing ? <Pause className="size-6" /> : <Play className="size-6" />}
+              {!canDrive ? (
+                playing ? (
+                  <Volume2 className="size-6" />
+                ) : (
+                  <VolumeX className="size-6" />
+                )
+              ) : playing ? (
+                <Pause className="size-6" />
+              ) : (
+                <Play className="size-6" />
+              )}
             </Button>
             <Button
               size="icon"
@@ -157,7 +186,12 @@ export function FullScreenPlayer({
             </Button>
           </div>
           {audioReady ? (
-            <SeekBar currentTime={currentTime} duration={duration} onSeek={onSeek} />
+            <SeekBar
+              currentTime={currentTime}
+              duration={duration}
+              onSeek={onSeek}
+              disabled={!canDrive}
+            />
           ) : (
             <p className="text-muted-foreground text-center text-xs">Finding audio…</p>
           )}

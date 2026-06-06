@@ -8,6 +8,8 @@ import {
   SkipBack,
   SkipForward,
   Trash2,
+  Volume2,
+  VolumeX,
   X,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -69,6 +71,14 @@ export function NowPlayingBar() {
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
+  const playPauseRef = useRef<HTMLButtonElement>(null)
+  // A passive jam guest's local listen intent. Their Play/Pause doesn't move the
+  // shared jam, so we can't read it back off `room`; we track it here so a host
+  // pause/resume (or track change) respects it — a muted guest stays muted, an
+  // opted-in one keeps following. Default true: joining a jam means "let me hear
+  // it." Irrelevant for a driver (they follow the server's is_playing directly).
+  // State (not a ref) because the render-time `audioBlocked` hint reads it.
+  const [wantsAudio, setWantsAudio] = useState(true)
   const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -82,7 +92,12 @@ export function NowPlayingBar() {
   // Output volume (0–1), persisted across sessions. Applied to the <audio> element
   // below; a fresh element (per-track remount) re-reads it.
   const [volume, setVolume] = useState(() => {
-    const v = Number(localStorage.getItem('player:volume'))
+    // getItem returns null when unset, and Number(null) === 0 — which passes the
+    // range check below and would silently default a fresh client (every guest,
+    // every new/incognito session) to MUTED. Treat absent/blank as "no saved
+    // preference" → full volume; only a real stored 0–1 wins.
+    const raw = localStorage.getItem('player:volume')
+    const v = raw === null || raw === '' ? NaN : Number(raw)
     return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 1
   })
   const queuePanelRef = useRef<HTMLDivElement>(null)
@@ -110,11 +125,15 @@ export function NowPlayingBar() {
   const isShared = room?.is_shared ?? false
   const isHost = room?.host_id === myUserId
   const canDrive = !isShared || isHost || (room?.allow_guest_control ?? false)
-  // The play/pause the UI shows and the toggle acts on. In a jam this is the
-  // server's authoritative is_playing (so every client agrees and a tap always
-  // means the same thing); solo, it's this element's own state (most responsive).
   const serverPlaying = room?.is_playing ?? false
-  const playing = isShared ? serverPlaying : localPlaying
+  // The transport reflects what THIS client is actually playing (`localPlaying`),
+  // not the room's intent. In a healthy jam a driver's element tracks the server,
+  // so the two match during normal play. They diverge in exactly one case: the
+  // browser blocked gesture-less audio (after a refresh), leaving us silent while
+  // the jam plays. Then the button honestly shows Play — a "tap to start" signal —
+  // and a tap STARTS this client's audio (togglePlay's willPlay = !playing) rather
+  // than pausing the whole jam, which a server-driven Pause button would do.
+  const playing = localPlaying
   const canEditQueue = !isShared || isHost
   const memberCount = room?.members_count ?? 0
 
@@ -178,9 +197,40 @@ export function NowPlayingBar() {
       el.currentTime = target
     }
     // Follow play/pause. play() may reject until this client has a user gesture.
-    if (serverPlaying && el.paused) void el.play().catch(() => {})
-    else if (!serverPlaying && !el.paused) el.pause()
-  }, [itemId, audioSrc, room])
+    // Resume only if this client wants audio (`wantsAudio`). This is deliberately
+    // NOT gated on `canDrive`: gaining control is a permission, not consent to
+    // sound — when the host enables guest control, a muted guest's canDrive flips
+    // true, and keying resume off it would force-unmute them. `wantsAudio` is true
+    // by default and for any driver, so host/solo still follow the server normally.
+    // A host PAUSE still stops everyone — pausing the jam silences the room.
+    if (serverPlaying && el.paused) {
+      if (wantsAudio) void el.play().catch(() => {})
+    } else if (!serverPlaying && !el.paused) {
+      el.pause()
+    }
+  }, [itemId, audioSrc, room, wantsAudio])
+
+  // Jam playhead: interpolate the progress bar from the server clock, NOT this
+  // client's <audio> element. A refresh (or autoplay block, or buffering) can leave
+  // our element paused/silent while the session is logically playing — if the bar
+  // only followed onTimeUpdate it would freeze even though the jam is advancing, the
+  // exact "shows playing but the seeker is stuck" symptom. So while the jam plays,
+  // anchor to intendedSeconds(room) at the frame we received and advance by wall
+  // clock; each new frame (heartbeat or a host action) re-anchors. Solo playback
+  // stays driven by the element's own onTimeUpdate (below).
+  useEffect(() => {
+    if (!isShared || !serverPlaying) return
+    const base = intendedSeconds(room)
+    if (!Number.isFinite(base)) return
+    const startWall = performance.now()
+    const tick = () => setCurrentTime(base + (performance.now() - startWall) / 1000)
+    const first = setTimeout(tick, 0) // jump to live at once on rejoin, before the interval
+    const id = setInterval(tick, 250)
+    return () => {
+      clearTimeout(first)
+      clearInterval(id)
+    }
+  }, [isShared, serverPlaying, room])
 
   // Apply + persist output volume. Re-runs on itemId/audioSrc too, since a new
   // track remounts the <audio> element (which resets to full volume).
@@ -197,10 +247,20 @@ export function NowPlayingBar() {
   // but we're paused, seek to the live position and resume. Self-disables once
   // playing; never fires while the server is paused (so it won't fight a pause).
   useEffect(() => {
-    const resume = () => {
+    const resume = (e: Event) => {
       const el = audioRef.current
       const r = roomRef.current
       if (!el || !el.paused || !r?.is_playing || !r.current_item_id) return
+      // A passive guest who muted themselves stays muted — don't let an unrelated
+      // tap resume them. (Drivers never clear this, so it's a no-op for them.)
+      if (!wantsAudio) return
+      // Skip only the play/pause button. Its pointerdown fires (this handler)
+      // BEFORE its onClick (togglePlay): resuming here would race the click's own
+      // pause() on the same element and the first tap would do nothing. Every
+      // other gesture — including the rest of the player bar (queue, jam, artwork)
+      // — is fair game, which matters on iOS where play() only works synchronously
+      // inside a gesture, so a guest who only taps the bar still gets audio.
+      if (playPauseRef.current?.contains(e.target as Node)) return
       const t = intendedSeconds(r)
       if (Number.isFinite(t)) el.currentTime = t
       void el.play().catch(() => {})
@@ -211,7 +271,7 @@ export function NowPlayingBar() {
       window.removeEventListener('pointerdown', resume)
       window.removeEventListener('keydown', resume)
     }
-  }, [])
+  }, [wantsAudio])
 
   // Stuck-at-end watchdog: if we're parked at the end while the server still thinks
   // we're playing (the track ended while disconnected/backgrounded, so `onEnded`
@@ -266,6 +326,13 @@ export function NowPlayingBar() {
   // for the server cache to warm so everyone starts together (pending_start).
   // Derived, so no effect calls setState. Covers the gap with no mis-click.
   const loading = matchTrack.isPending || buffering || (room?.pending_start ?? false)
+  // The jam is logically playing but this client is silent — the browser blocked
+  // gesture-less audio (a refresh, or a swallowed autoplay reject). The seek bar
+  // still advances off the server clock, so without a cue it looks like it's
+  // playing while nothing comes out. Surface a "Tap to play" affordance. Excluded:
+  // a passive guest who muted on purpose (wantsAudio), and the still-loading gap.
+  const audioBlocked =
+    isShared && serverPlaying && !localPlaying && !loading && !!audioSrc && wantsAudio
 
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const contextLabel = room?.context_label ?? ''
@@ -280,9 +347,29 @@ export function NowPlayingBar() {
   const upcoming = queue.length + (room?.context_ahead ?? 0)
 
   function togglePlay() {
-    if (!canDrive) return // guests follow the host
     const el = audioRef.current
     if (!el) return
+    if (!canDrive) {
+      // Passive jam guest: the button controls only THIS client's audio — it never
+      // moves the shared jam, just whether you hear it. Record the intent so a
+      // later host pause/resume honors it (see the reconcile effect). Tapping on
+      // snaps to the live playhead so you rejoin in sync (and this click lifts the
+      // autoplay block); tapping off silences you locally. If the jam is paused
+      // there's nothing to play yet — just record the opt-in and the reconcile
+      // effect starts you the moment the host resumes.
+      if (el.paused) {
+        setWantsAudio(true)
+        if (serverPlaying) {
+          const t = intendedSeconds(room)
+          if (Number.isFinite(t)) el.currentTime = t
+          void el.play().catch(() => {})
+        }
+      } else {
+        setWantsAudio(false)
+        el.pause()
+      }
+      return
+    }
     // Intent comes from the shared `playing` (server truth in a jam), NOT the
     // local element — so every client toggles the same direction even if its own
     // <audio> drifted out of sync (e.g. an autoplay reject left it paused).
@@ -290,8 +377,13 @@ export function NowPlayingBar() {
     // Optimistic local response, then report to the server so the whole jam
     // follows — the broadcast echo reconciles everyone (including us). play()
     // rejects if the source failed to load; the <audio> onError surfaces it.
-    if (willPlay) void el.play().catch(() => {})
-    else el.pause()
+    if (willPlay) {
+      // Tapping play is consent to audio. Matters for a guest who muted, then was
+      // granted control: without this their wantsAudio would stay false and the
+      // reconcile effect would re-mute them on the next jam-play.
+      setWantsAudio(true)
+      void el.play().catch(() => {})
+    } else el.pause()
     syncPlayback.mutate({ positionMs: Math.round(el.currentTime * 1000), isPlaying: willPlay })
   }
 
@@ -420,15 +512,42 @@ export function NowPlayingBar() {
             <SkipBack className="size-5" />
           </Button>
           <Button
+            ref={playPauseRef}
             size="icon"
             variant="shadow"
             onClick={togglePlay}
-            aria-label={loading ? 'Loading' : playing ? 'Pause' : 'Play'}
+            aria-label={
+              loading
+                ? 'Loading'
+                : !canDrive
+                  ? playing
+                    ? 'Mute'
+                    : 'Unmute'
+                  : audioBlocked
+                    ? 'Play sound'
+                    : playing
+                      ? 'Pause'
+                      : 'Play'
+            }
             aria-busy={loading || undefined}
-            disabled={!audioSrc || loading || !canDrive}
+            // A passive jam guest can't move the shared playhead, so for them this
+            // is a MUTE toggle (speaker icon) over their own audio — togglePlay
+            // branches on canDrive. A driver gets Play/Pause. Only source/loading
+            // disables it. Pulse when the browser blocked our audio, to point the
+            // user at the one tap that starts it.
+            disabled={!audioSrc || loading}
+            className={
+              audioBlocked ? 'ring-primary/60 ring-2 motion-safe:animate-pulse' : undefined
+            }
           >
             {loading ? (
               <Loader2 className="size-5 animate-spin" />
+            ) : !canDrive ? (
+              playing ? (
+                <Volume2 className="size-5" />
+              ) : (
+                <VolumeX className="size-5" />
+              )
             ) : playing ? (
               <Pause className="size-5" />
             ) : (
@@ -480,15 +599,32 @@ export function NowPlayingBar() {
             </div>
           </button>
           {/* The seek bar is too cramped in the compact pill on phones — hide it
-              there and let the full-screen view handle seeking (tap the artwork). */}
+              there and let the full-screen view handle seeking (tap the artwork).
+              When the browser has blocked our audio (a refresh mid-jam), the bar
+              would advance silently — so replace it with an explicit "Tap to play"
+              that resumes this client. Shown on phones too, where there's no bar. */}
           {room?.pending_start ? (
             <p className="text-muted-foreground mt-1 text-xs">Starting…</p>
-          ) : audioSrc ? (
-            <div className="mt-1 hidden sm:block">
-              <SeekBar currentTime={currentTime} duration={duration} onSeek={seek} />
-            </div>
-          ) : (
+          ) : !audioSrc ? (
             <p className="text-muted-foreground mt-1 text-xs">Finding audio…</p>
+          ) : audioBlocked ? (
+            <button
+              type="button"
+              onClick={togglePlay}
+              className="text-primary mt-1 flex items-center gap-1 text-xs font-medium motion-safe:animate-pulse"
+            >
+              <VolumeX className="size-3.5" />
+              Tap to play sound
+            </button>
+          ) : (
+            <div className="mt-1 hidden sm:block">
+              <SeekBar
+                currentTime={currentTime}
+                duration={duration}
+                onSeek={seek}
+                disabled={!canDrive}
+              />
+            </div>
           )}
         </div>
 
@@ -532,6 +668,7 @@ export function NowPlayingBar() {
           duration={duration}
           audioReady={!!audioSrc}
           canNext={upcoming > 0 && canDrive}
+          canDrive={canDrive}
           volume={volume}
           onTogglePlay={togglePlay}
           onPrevious={handlePrevious}
@@ -554,6 +691,11 @@ export function NowPlayingBar() {
             // to a real play attempt (onPlay) or a mid-play stall (onWaiting).
             setCurrentTime(0)
             setDuration(0)
+            // This element (keyed per track) just remounted, so it starts paused
+            // and fires no onPause. Reset local-playing so a passive guest's button
+            // doesn't read "Pause" before their new track's audio actually starts;
+            // onPlaying flips it back true the instant playback begins.
+            setLocalPlaying(false)
           }}
           onWaiting={() => setBuffering(true)} // re-buffering mid-track
           onPlay={() => {
@@ -569,9 +711,19 @@ export function NowPlayingBar() {
             setBuffering(false)
             setLocalPlaying(false)
           }}
-          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          onTimeUpdate={(e) => {
+            // In a playing jam the bar is interpolated from the server clock (above);
+            // don't let the element's own ticks fight it. Solo/paused: element drives.
+            if (isShared && serverPlaying) return
+            setCurrentTime(e.currentTarget.currentTime)
+          }}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-          onEnded={() => next.mutate()}
+          // Only the controller advances on end. A passive guest now plays real
+          // audio, so their element fires onEnded too — but a guest's next.mutate()
+          // hits their OWN room and bounces them out of the jam. They instead wait
+          // for the host's next frame (the reconcile effect re-syncs them); if they
+          // merely drifted ahead, it seeks them back and resumes the same track.
+          onEnded={() => canDrive && next.mutate()}
           onError={() => {
             // The stream failed to load (couldn't extract audio from YouTube).
             setBuffering(false)
