@@ -916,6 +916,8 @@ export interface components {
             /** Format: date-time */
             readonly playing_since: string | null;
             readonly generation: number;
+            /** Format: date-time */
+            readonly server_time: string;
             readonly members: {
                 [key: string]: string;
             }[];

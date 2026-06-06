@@ -4,16 +4,11 @@ import { api } from '@/lib/api/client'
 import type { Playlist, Room } from '@/lib/api/models'
 import { playlistKeys, roomKeys } from '@/lib/hooks/keys'
 
-/**
- * Set by the explicit play actions (play / play-now / play-playlist) so the
- * player autoplays even on its *first* mount — distinguishing a deliberate play
- * from the track restored on page load (which must NOT autoplay). The player
- * consumes (clears) it. Module-scoped so it survives the player mounting.
- */
-export const playIntent = { value: false }
-
 // Every mutation returns the fresh Room — seed the cache directly (no refetch).
 // TArgs defaults to void so no-arg mutations (next/previous/…) keep `mutate()`.
+// The player reconciles the <audio> element to whatever lands in this cache
+// (server is_playing + position), so a mutation's own response drives playback
+// just like a broadcast frame does — no separate "autoplay intent" flag needed.
 function useRoomMutation<TArgs = void>(fn: (args: TArgs) => Promise<Room>) {
   const qc = useQueryClient()
   return useMutation<Room, Error, TArgs>({
@@ -25,25 +20,23 @@ function useRoomMutation<TArgs = void>(fn: (args: TArgs) => Promise<Room>) {
 /** Play one song now (clicking a track): inserts it at the cursor and plays it —
  *  does NOT pull in the surrounding list. */
 export function usePlayNow() {
-  return useRoomMutation((trackId: string) => {
-    playIntent.value = true
-    return api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } })
-  })
+  return useRoomMutation((trackId: string) =>
+    api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } }),
+  )
 }
 
 /** Replace the context with a list and play from `startIndex` (Play playlist / all). */
 export function usePlay() {
-  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) => {
-    playIntent.value = true
-    return api<Room>('/rooms/play/', {
+  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) =>
+    api<Room>('/rooms/play/', {
       method: 'POST',
       body: {
         track_ids: args.trackIds,
         start_index: args.startIndex ?? 0,
         label: args.label ?? '',
       },
-    })
-  })
+    }),
+  )
 }
 
 /**
@@ -51,13 +44,12 @@ export function usePlay() {
  * `startTrackId` when given (clicking a song row plays the playlist from there).
  */
 export function usePlayPlaylist() {
-  return useRoomMutation((args: { playlistId: string; startTrackId?: string }) => {
-    playIntent.value = true
-    return api<Room>('/rooms/play-playlist/', {
+  return useRoomMutation((args: { playlistId: string; startTrackId?: string }) =>
+    api<Room>('/rooms/play-playlist/', {
       method: 'POST',
       body: { playlist_id: args.playlistId, start_track_id: args.startTrackId },
-    })
-  })
+    }),
+  )
 }
 
 /** Add tracks to the queue (`playNext` inserts right after current). */
@@ -72,26 +64,19 @@ export function useQueueTracks() {
 
 /** Advance the cursor to the next track. */
 export function useNext() {
-  return useRoomMutation(() => {
-    playIntent.value = true
-    return api<Room>('/rooms/next/', { method: 'POST' })
-  })
+  return useRoomMutation(() => api<Room>('/rooms/next/', { method: 'POST' }))
 }
 
 /** Move the cursor back to the previously played track. */
 export function usePrevious() {
-  return useRoomMutation(() => {
-    playIntent.value = true
-    return api<Room>('/rooms/previous/', { method: 'POST' })
-  })
+  return useRoomMutation(() => api<Room>('/rooms/previous/', { method: 'POST' }))
 }
 
 /** Click any queue row (history or up-next) to play it now. */
 export function useJump() {
-  return useRoomMutation((itemId: string) => {
-    playIntent.value = true
-    return api<Room>('/rooms/jump/', { method: 'POST', body: { item_id: itemId } })
-  })
+  return useRoomMutation((itemId: string) =>
+    api<Room>('/rooms/jump/', { method: 'POST', body: { item_id: itemId } }),
+  )
 }
 
 /** Remove a single queue item. */
@@ -103,15 +88,26 @@ export function useRemoveItem() {
 
 /** Shuffle the whole context and play from the top (Spotify-style). */
 export function useShuffle() {
-  return useRoomMutation(() => {
-    playIntent.value = true // shuffle plays a new top track → autoplay it
-    return api<Room>('/rooms/shuffle/', { method: 'POST' })
-  })
+  return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }))
 }
 
 /** Empty the queue and stop playback. */
 export function useClearQueue() {
   return useRoomMutation(() => api<Room>('/rooms/clear/', { method: 'POST' }))
+}
+
+/**
+ * Re-anchor the server playback clock: report the real playhead (ms) + whether
+ * audio is playing. Drives synced play/pause and seek across the jam — the
+ * server stamps playing_since and broadcasts, every client reconciles.
+ */
+export function useSyncPlayback() {
+  return useRoomMutation((args: { positionMs: number; isPlaying: boolean }) =>
+    api<Room>('/rooms/sync/', {
+      method: 'POST',
+      body: { position_ms: args.positionMs, is_playing: args.isPlaying },
+    }),
+  )
 }
 
 /** Save the whole queue as an owned playlist. */

@@ -153,6 +153,9 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
     playback.current_item = item
     playback.position_ms = 0
     playback.is_playing = item is not None
+    # Anchor the server clock at the track's start (None when stopped) so every
+    # client computes the live position as position_ms + (now - playing_since).
+    playback.playing_since = timezone.now() if item is not None else None
     if item is not None and item.kind == CONTEXT:
         playback.context_pos = item.position  # advancing through the context moves the pointer
     if label is not None:
@@ -164,6 +167,7 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
             "context_label",
             "position_ms",
             "is_playing",
+            "playing_since",
             "updated_at",
         ]
     )
@@ -202,7 +206,8 @@ def play_now(room: Room, track, *, added_by=None) -> QueueItem:
     if cur is not None and cur.track_id == track.id:
         playback.position_ms = 0
         playback.is_playing = True
-        playback.save(update_fields=["position_ms", "is_playing", "updated_at"])
+        playback.playing_since = timezone.now()
+        playback.save(update_fields=["position_ms", "is_playing", "playing_since", "updated_at"])
         return cur
     _ctx(room).delete()
     row = QueueItem.objects.create(
@@ -263,7 +268,8 @@ def next_track(room: Room):
 
     if playback.is_playing:
         playback.is_playing = False
-        playback.save(update_fields=["is_playing", "updated_at"])
+        playback.playing_since = None
+        playback.save(update_fields=["is_playing", "playing_since", "updated_at"])
     return None
 
 
@@ -297,7 +303,8 @@ def previous_track(room: Room):
         return prev_ctx.track
     # at the start of the context — restart the current track
     playback.position_ms = 0
-    playback.save(update_fields=["position_ms", "updated_at"])
+    playback.playing_since = timezone.now() if playback.is_playing else None
+    playback.save(update_fields=["position_ms", "playing_since", "updated_at"])
     return cur.track
 
 
@@ -352,7 +359,12 @@ def shuffle(room: Room) -> None:
 def clear(room: Room) -> None:
     """Empty both layers and stop playback."""
     PlaybackState.objects.filter(room=room).update(
-        current_item=None, is_playing=False, position_ms=0, context_pos=None, context_label=""
+        current_item=None,
+        is_playing=False,
+        position_ms=0,
+        context_pos=None,
+        context_label="",
+        playing_since=None,
     )
     room.items.all().delete()
 

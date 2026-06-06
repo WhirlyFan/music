@@ -1,3 +1,4 @@
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -40,6 +41,9 @@ class RoomSerializer(serializers.ModelSerializer):
         source="playback.playing_since", read_only=True, allow_null=True
     )
     generation = serializers.IntegerField(source="playback.generation", read_only=True)
+    # Server's current time, stamped per response, so clients can correct for
+    # client/server clock skew when computing the live position.
+    server_time = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
 
     class Meta:
@@ -59,6 +63,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "allow_guest_control",
             "playing_since",
             "generation",
+            "server_time",
             "members",
         ]
 
@@ -83,6 +88,13 @@ class RoomSerializer(serializers.ModelSerializer):
             key=lambda i: i.position,
         )
         return QueueItemSerializer(rows, many=True).data
+
+    @extend_schema_field(serializers.DateTimeField())
+    def get_server_time(self, room):
+        # Return a string (not a datetime): unlike the HTTP renderer, the
+        # WebSocket path json/msgpack-encodes this dict and can't handle a raw
+        # datetime. Use DRF's representation so it matches playing_since's format.
+        return serializers.DateTimeField().to_representation(timezone.now())
 
     @extend_schema_field(
         serializers.ListSerializer(

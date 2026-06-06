@@ -17,11 +17,10 @@ import { SeekBar } from '@/components/player/seek-bar'
 import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
-import type { QueueItem } from '@/lib/api/models'
+import type { QueueItem, Room } from '@/lib/api/models'
 import { isSessionAuthenticated } from '@/lib/auth/guards'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/hooks/mutations/catalog'
 import {
-  playIntent,
   useClearQueue,
   useJump,
   useNext,
@@ -29,6 +28,7 @@ import {
   useRemoveItem,
   useSaveQueueAsPlaylist,
   useShuffle,
+  useSyncPlayback,
 } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { useRoom } from '@/lib/hooks/queries/rooms'
@@ -66,6 +66,7 @@ export function NowPlayingBar() {
   const shuffle = useShuffle()
   const clear = useClearQueue()
   const save = useSaveQueueAsPlaylist()
+  const syncPlayback = useSyncPlayback()
 
   const audioRef = useRef<HTMLAudioElement>(null)
   const barRef = useRef<HTMLDivElement>(null)
@@ -111,28 +112,42 @@ export function NowPlayingBar() {
     return () => ro.disconnect()
   }, [itemId])
 
-  // Autoplay + loading, imperatively. We start playback with play() from an effect
-  // (after the <audio> mounts), not the `autoPlay` attribute — the attribute reads
-  // a stale value on the render that mounts a new item and silently skips play
-  // (this is why hitting Next didn't play). NEVER auto-start the track merely
-  // restored on page load: only when a deliberate action set `playIntent` (play /
-  // next / previous / jump). While we intend to play but aren't yet — resolving the
-  // source ("fetching details") or buffering — `loading` is true, so the button
-  // shows a spinner with no mis-click gap. `startedFor` records the decided item.
-  const startedFor = useRef<string | null>(null)
+  // Reconcile the <audio> element to the server's authoritative playback state.
+  // The room cache — seeded by our own mutations AND by broadcast frames from
+  // anyone in the jam — is the source of truth for play/pause + position; this
+  // effect makes the local element follow it. That's also why a deliberate
+  // play/next/jump autoplays (the action sets server is_playing=true) while a
+  // track merely restored on page load does NOT: we skip the first hydration,
+  // and browsers block gesture-less autoplay anyway. While the source is still
+  // resolving/buffering, `loading` shows a spinner so there's no mis-click gap.
+  const hydrated = useRef(false)
+  const followedItem = useRef<string | null>(null)
   useEffect(() => {
-    if (!itemId || startedFor.current === itemId) return
-    if (!playIntent.value) {
-      startedFor.current = itemId // restored / no intent → don't auto-start
-      return
+    const el = audioRef.current
+    if (!el || !itemId || !audioSrc) return
+    const serverPlaying = room?.is_playing ?? false
+
+    if (!hydrated.current) {
+      hydrated.current = true
+      followedItem.current = itemId
+      return // don't autoplay a track restored on load
     }
-    if (audioSrc) {
-      startedFor.current = itemId
-      playIntent.value = false
-      audioRef.current?.play().catch(() => {}) // onError surfaces a real failure
+
+    const newItem = followedItem.current !== itemId
+    followedItem.current = itemId
+
+    // Snap to the server's live position on a new track or when (re)starting play
+    // — e.g. a guest joining mid-song. Skip small diffs so we don't stutter.
+    if (newItem || (serverPlaying && el.paused)) {
+      const target = intendedSeconds(room)
+      if (Number.isFinite(target) && Math.abs(el.currentTime - target) > 0.75) {
+        el.currentTime = target
+      }
     }
-    // While unmatched (audioSrc null), the spinner shows via matchTrack.isPending.
-  }, [itemId, audioSrc])
+    // Follow play/pause. play() may reject until this client has a user gesture.
+    if (serverPlaying && el.paused) void el.play().catch(() => {})
+    else if (!serverPlaying && !el.paused) el.pause()
+  }, [itemId, audioSrc, room])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
@@ -183,10 +198,13 @@ export function NowPlayingBar() {
   function togglePlay() {
     const el = audioRef.current
     if (!el) return
-    // play() rejects if the source failed to load (e.g. YouTube blocked the
-    // stream) — swallow it; the <audio> onError handler surfaces the message.
-    if (el.paused) void el.play().catch(() => {})
+    const willPlay = el.paused
+    // Optimistic local response, then report to the server so the whole jam
+    // follows — the broadcast echo reconciles everyone (including us). play()
+    // rejects if the source failed to load; the <audio> onError surfaces it.
+    if (willPlay) void el.play().catch(() => {})
     else el.pause()
+    syncPlayback.mutate({ positionMs: Math.round(el.currentTime * 1000), isPlaying: willPlay })
   }
 
   function handlePrevious() {
@@ -204,6 +222,8 @@ export function NowPlayingBar() {
     if (!el) return
     el.currentTime = seconds
     setCurrentTime(seconds) // optimistic so the thumb doesn't snap back while buffering
+    // A seek moves the shared playhead for everyone in the jam.
+    syncPlayback.mutate({ positionMs: Math.round(seconds * 1000), isPlaying: !el.paused })
   }
 
   return (
@@ -442,6 +462,18 @@ export function NowPlayingBar() {
       )}
     </div>
   )
+}
+
+/** The server's intended playhead in seconds: position_ms advanced by the time
+ *  elapsed since the server stamped playing_since, corrected for client/server
+ *  clock skew via server_time. Held (not advanced) while paused. */
+function intendedSeconds(room: Room | undefined): number {
+  const base = (room?.position_ms ?? 0) / 1000
+  if (!room?.is_playing || !room?.playing_since) return base
+  const since = Date.parse(room.playing_since)
+  const serverNow = room.server_time ? Date.parse(room.server_time) : Date.now()
+  if (Number.isNaN(since) || Number.isNaN(serverNow)) return base
+  return base + Math.max(0, (serverNow - since) / 1000)
 }
 
 function QueueSection({
