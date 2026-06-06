@@ -469,5 +469,15 @@ LOGGING = {
     },
 }
 
+# --- Audio proxy cache (on-disk LRU) ---
+# The googlevideo URL is IP-locked to this backend, so clients can't fetch it
+# directly — every <audio> goes through /stream/. The first request for a track
+# warms this disk cache in the background; subsequent requests (other jam
+# listeners, replays, Range seeks) are served from disk, collapsing N listeners
+# into a single YouTube fetch. Ephemeral by design (a cache); wiped on deploy is
+# fine. LRU-evicted to stay under the cap.
+AUDIO_CACHE_DIR = env("AUDIO_CACHE_DIR", default=str(BASE_DIR / ".cache" / "audio"))
+AUDIO_CACHE_MAX_BYTES = env.int("AUDIO_CACHE_MAX_BYTES", default=500 * 1024 * 1024)
+
 # --- Defaults ---
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
