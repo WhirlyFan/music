@@ -300,7 +300,9 @@ function SettingsRow({
             ) : null}
           </div>
           {loading ? (
-            <Skeleton className="h-3 w-44" />
+            // h-4 matches the loaded description's text-xs line box (16px), so the
+            // row doesn't grow when the real text replaces the skeleton.
+            <Skeleton className="h-4 w-44" />
           ) : (
             <p className="text-muted-foreground truncate text-xs">{description}</p>
           )}

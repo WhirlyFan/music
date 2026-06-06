@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
@@ -276,6 +276,10 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         tracks = _ordered_tracks(s.validated_data["track_ids"])
         room = services.get_active_room(request.user)
+        if services.queue_count(room) + len(tracks) > services.QUEUE_CAP:
+            raise ValidationError(
+                f"Your queue is full ({services.QUEUE_CAP} max). Play or clear some tracks first."
+            )
 
         def _enqueue():
             if s.validated_data["play_next"]:

@@ -72,7 +72,11 @@ export function useRoomSocket(
         // new playlist — so refetch the cached full list. Skipped on play/pause/seek
         // frames, which carry an unchanged context_version.
         const cv = msg.room.context_version ?? null
-        if (cv !== null && lastContextVersion.current !== null && cv !== lastContextVersion.current) {
+        if (
+          cv !== null &&
+          lastContextVersion.current !== null &&
+          cv !== lastContextVersion.current
+        ) {
           void qc.invalidateQueries({ queryKey: roomKeys.context() })
         }
         lastContextVersion.current = cv

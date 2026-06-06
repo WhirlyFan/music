@@ -347,6 +347,15 @@ def play_now(room: Room, track, *, added_by=None) -> QueueItem:
     return row
 
 
+# Cap on the explicit user queue. The context (a played-from playlist) is NOT
+# capped — playlists can be arbitrarily long; this only bounds "Add to queue".
+QUEUE_CAP = 500
+
+
+def queue_count(room: Room) -> int:
+    return _queue(room).count()
+
+
 @transaction.atomic
 def enqueue(room: Room, track, *, added_by=None, play_next: bool = False) -> QueueItem:
     """Add a track to the user queue (appended, or `play_next` at the head). Starts

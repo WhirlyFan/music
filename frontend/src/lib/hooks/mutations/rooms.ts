@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
 import { api } from '@/lib/api/client'
 import type { Playlist, Room } from '@/lib/api/models'
@@ -14,7 +15,10 @@ import { playlistKeys, roomKeys } from '@/lib/hooks/keys'
 // the panel refetches. Playback-only ops (next/prev/jump/seek/pause) leave it be.
 function useRoomMutation<TArgs = void>(
   fn: (args: TArgs) => Promise<Room>,
-  { invalidatesContext = false }: { invalidatesContext?: boolean } = {},
+  {
+    invalidatesContext = false,
+    onError,
+  }: { invalidatesContext?: boolean; onError?: (error: Error) => void } = {},
 ) {
   const qc = useQueryClient()
   return useMutation<Room, Error, TArgs>({
@@ -23,6 +27,7 @@ function useRoomMutation<TArgs = void>(
       qc.setQueryData(roomKeys.me(), room)
       if (invalidatesContext) void qc.invalidateQueries({ queryKey: roomKeys.context() })
     },
+    onError,
   })
 }
 
@@ -67,13 +72,18 @@ export function usePlayPlaylist() {
   )
 }
 
-/** Add tracks to the queue (`playNext` inserts right after current). */
+/** Add tracks to the queue (`playNext` inserts right after current). The queue is
+ *  capped at 500 server-side; a full queue 400s, surfaced here as a toast. */
 export function useQueueTracks() {
-  return useRoomMutation((args: { trackIds: string[]; playNext?: boolean }) =>
-    api<Room>('/rooms/queue/', {
-      method: 'POST',
-      body: { track_ids: args.trackIds, play_next: args.playNext ?? false },
-    }),
+  return useRoomMutation(
+    (args: { trackIds: string[]; playNext?: boolean }) =>
+      api<Room>('/rooms/queue/', {
+        method: 'POST',
+        body: { track_ids: args.trackIds, play_next: args.playNext ?? false },
+      }),
+    {
+      onError: () => toast.error('Your queue is full (500 max) — play or clear some tracks first.'),
+    },
   )
 }
 
@@ -97,8 +107,7 @@ export function useJump() {
 /** Remove a single queue item. */
 export function useRemoveItem() {
   return useRoomMutation(
-    (itemId: string) =>
-      api<Room>('/rooms/remove/', { method: 'POST', body: { item_id: itemId } }),
+    (itemId: string) => api<Room>('/rooms/remove/', { method: 'POST', body: { item_id: itemId } }),
     { invalidatesContext: true },
   )
 }

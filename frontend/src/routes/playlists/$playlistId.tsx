@@ -1,5 +1,15 @@
 import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
-import { GripVertical, ListPlus, MoreVertical, Pencil, RefreshCw, Trash2, X } from 'lucide-react'
+import {
+  GripVertical,
+  ListPlus,
+  MoreVertical,
+  Pencil,
+  RefreshCw,
+  SearchX,
+  Trash2,
+  TriangleAlert,
+  X,
+} from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -22,7 +32,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { FormError } from '@/components/ui/form-error'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
@@ -97,7 +107,16 @@ function PlaylistDetailPage() {
     [hasNextPage, isFetchingNextPage, fetchNextPage],
   )
 
-  if (error) return <FormError message="Failed to load playlist." />
+  if (error)
+    return (
+      <EmptyState
+        tone="error"
+        icon={TriangleAlert}
+        title="Couldn’t load this playlist"
+        description="Something went wrong reaching the server. Refresh to try again."
+        className="py-24"
+      />
+    )
   // Loading: the REAL header + rows rendered inside a SkeletonZone so each shows
   // its own skeleton (no parallel skeleton tree).
   if (isLoading || !playlist) {
@@ -174,7 +193,14 @@ function PlaylistDetailPage() {
         />
       )}
 
-      {tracks.isError && <FormError message="Failed to load tracks." />}
+      {tracks.isError && (
+        <EmptyState
+          tone="error"
+          icon={TriangleAlert}
+          title="Couldn’t load tracks"
+          description="The track list didn’t come through. Refresh to try again."
+        />
+      )}
 
       <ol className="space-y-2">
         {items.map((item) => (
@@ -202,7 +228,11 @@ function PlaylistDetailPage() {
       </ol>
 
       {q && items.length === 0 && !tracks.isFetching && (
-        <p className="text-muted-foreground text-sm">No songs match “{q}”.</p>
+        <EmptyState
+          icon={SearchX}
+          title="No matching songs"
+          description={`Nothing in this playlist matches “${q.length > 40 ? `${q.slice(0, 40)}…` : q}”.`}
+        />
       )}
 
       {/* Infinite-scroll sentinel — shows skeleton rows while the next page loads. */}
@@ -292,7 +322,16 @@ function EditPanel({
   const [isPublic, setIsPublic] = useState(playlist.is_public ?? false)
 
   return (
-    <section className="border-border space-y-3 rounded-lg border p-4">
+    <section className="bg-card border-border/60 space-y-3 rounded-2xl border p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <span className="from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
+          <Pencil className="size-4" aria-hidden />
+        </span>
+        <div>
+          <p className="text-sm font-medium">Edit details</p>
+          <p className="text-muted-foreground text-xs">Rename, describe, or change visibility.</p>
+        </div>
+      </div>
       <div className="space-y-1">
         <label htmlFor="pl-title" className="text-sm font-medium">
           Title
@@ -373,7 +412,7 @@ function TrackRow({
   // lines), so it inherits the row's dimensions. No separate skeleton component.
   if (skeleton || !item) {
     return (
-      <li aria-hidden className="border-border flex items-center gap-3 rounded-lg border p-3">
+      <li aria-hidden className="border-border/60 flex items-center gap-3 rounded-xl border p-3">
         <Skeleton className="size-10 shrink-0 rounded-md" />
         <div className="min-w-0 flex-1 space-y-1.5">
           <SkeletonText className="max-w-[14rem]" />
@@ -392,7 +431,7 @@ function TrackRow({
       onDragOver={editing ? (e) => e.preventDefault() : undefined}
       onDrop={editing ? () => onDropOnItem?.(item.position) : undefined}
       onPointerDown={editing ? undefined : ripple.onPointerDown}
-      className={`border-border relative flex items-center gap-3 overflow-hidden rounded-lg border p-3 ${
+      className={`border-border/60 relative flex items-center gap-3 overflow-hidden rounded-xl border p-3 ${
         editing ? 'cursor-grab' : 'hover:bg-accent/40'
       }`}
     >

@@ -199,3 +199,17 @@ def test_context_version_changes_only_when_list_changes(client):
     # Shuffle rewrites positions → version changes.
     api.post("/api/v1/rooms/shuffle/", format="json")
     assert api.get("/api/v1/rooms/me/").data["context_version"] != v0
+
+
+@pytest.mark.django_db
+def test_queue_is_capped(client, monkeypatch):
+    # The user queue is capped (playlists/context are not). Adding past the cap 400s.
+    from apps.rooms import services
+
+    monkeypatch.setattr(services, "QUEUE_CAP", 3)
+    api, _ = client
+    tracks = [TrackFactory() for _ in range(4)]
+    ok = api.post("/api/v1/rooms/queue/", {"track_ids": ids(tracks[:3])}, format="json")
+    assert ok.status_code == 200
+    full = api.post("/api/v1/rooms/queue/", {"track_ids": [str(tracks[3].id)]}, format="json")
+    assert full.status_code == 400

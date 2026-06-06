@@ -232,7 +232,7 @@ export function JamDialog() {
                     void fetchNextPage()
                   }
                 }}
-                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto pr-0.5 py-1.5"
+                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto py-1.5 pr-0.5"
               >
                 {members.map((m, i) => (
                   <li

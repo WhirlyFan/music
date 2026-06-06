@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { ListMusic, SearchX, TriangleAlert } from 'lucide-react'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 
 import { CoverCluster } from '@/components/playlists/cover-cluster'
-import { FormError } from '@/components/ui/form-error'
+import { EmptyState } from '@/components/ui/empty-state'
 import { useDeletePlaylist } from '@/lib/hooks/mutations/catalog'
 import { useInfinitePlaylists } from '@/lib/hooks/queries/catalog'
 import { useRouteSearch } from '@/lib/hooks/queries/ui'
@@ -33,6 +34,8 @@ function PlaylistsPage() {
 
   const items = data?.pages.flatMap((p) => p.results) ?? []
   const empty = !playlists.isLoading && items.length === 0
+  // Clip a very long search so the no-results message can't run off screen.
+  const qShort = q.length > 40 ? `${q.slice(0, 40)}…` : q
 
   // Full-bleed drag canvas: a fixed full-viewport layer escaping <main>'s max-width
   // + padding (the floating top chrome simply rides above it). overflow-hidden — you
@@ -40,8 +43,13 @@ function PlaylistsPage() {
   return (
     <div className="fixed inset-0 overflow-hidden">
       {playlists.isError ? (
-        <div className="grid size-full place-items-center p-6">
-          <FormError message="Failed to load playlists." />
+        <div className="grid size-full place-items-center">
+          <EmptyState
+            tone="error"
+            icon={TriangleAlert}
+            title="Couldn’t load your playlists"
+            description="Something went wrong reaching the server. Refresh to try again."
+          />
         </div>
       ) : (
         <>
@@ -57,10 +65,20 @@ function PlaylistsPage() {
             }
           />
           {empty && (
-            <div className="text-muted-foreground motion-safe:animate-fade-in pointer-events-none absolute inset-0 grid place-items-center p-6 text-center">
-              {q
-                ? `No playlists match “${q}”.`
-                : 'No playlists yet — import one from the home page, then save it.'}
+            <div className="pointer-events-none absolute inset-0 grid place-items-center">
+              {q ? (
+                <EmptyState
+                  icon={SearchX}
+                  title="No matches"
+                  description={`No playlists match “${qShort}”.`}
+                />
+              ) : (
+                <EmptyState
+                  icon={ListMusic}
+                  title="No playlists yet"
+                  description="Import one from the home page, then save it here."
+                />
+              )}
             </div>
           )}
         </>
