@@ -1,25 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
-import type { PlaylistActivity, PlaylistCollaborator } from '@/lib/api/models'
+import type { PlaylistCollaborator } from '@/lib/api/models'
 import { notificationKeys, playlistKeys } from '@/lib/hooks/keys'
 
-type ActivityPage = { count: number; results: PlaylistActivity[] }
-
-/** Collaborators on a playlist (pending + accepted). Owner + any member may read. */
+/** Collaborators on a playlist (pending + accepted). Owner + any member may read.
+ *  A plain (non-infinite) query on purpose: the set is small + bounded — you invite a
+ *  handful of people — unlike the tracks/notifications lists, which paginate. */
 export function useCollaborators(playlistId: string, enabled = true) {
   return useQuery({
     queryKey: playlistKeys.collaborators(playlistId),
     queryFn: () => api<PlaylistCollaborator[]>(`/catalog/playlists/${playlistId}/collaborators/`),
-    enabled: enabled && !!playlistId,
-  })
-}
-
-/** A playlist's edit history (first page). Owner + any member may read. */
-export function usePlaylistActivity(playlistId: string, enabled = true) {
-  return useQuery({
-    queryKey: playlistKeys.activity(playlistId),
-    queryFn: () => api<ActivityPage>(`/catalog/playlists/${playlistId}/activity/`),
     enabled: enabled && !!playlistId,
   })
 }
