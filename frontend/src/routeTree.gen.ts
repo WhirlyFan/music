@@ -21,12 +21,10 @@ import { Route as PlaylistsPlaylistIdRouteImport } from './routes/playlists/$pla
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
 import { Route as AccountMfaRouteImport } from './routes/account/mfa'
-import { Route as AccountEmailRouteImport } from './routes/account/email'
 import { Route as AccountVerifyEmailIndexRouteImport } from './routes/account/verify-email/index'
 import { Route as AccountMfaIndexRouteImport } from './routes/account/mfa/index'
 import { Route as AccountVerifyEmailKeyRouteImport } from './routes/account/verify-email/$key'
 import { Route as AccountPasswordForgotRouteImport } from './routes/account/password/forgot'
-import { Route as AccountPasswordChangeRouteImport } from './routes/account/password/change'
 import { Route as AccountMfaWebauthnRouteImport } from './routes/account/mfa/webauthn'
 import { Route as AccountMfaTotpRouteImport } from './routes/account/mfa/totp'
 import { Route as AccountMfaRecoveryCodesRouteImport } from './routes/account/mfa/recovery-codes'
@@ -92,11 +90,6 @@ const AccountMfaRoute = AccountMfaRouteImport.update({
   path: '/account/mfa',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AccountEmailRoute = AccountEmailRouteImport.update({
-  id: '/account/email',
-  path: '/account/email',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AccountVerifyEmailIndexRoute = AccountVerifyEmailIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -115,11 +108,6 @@ const AccountVerifyEmailKeyRoute = AccountVerifyEmailKeyRouteImport.update({
 const AccountPasswordForgotRoute = AccountPasswordForgotRouteImport.update({
   id: '/account/password/forgot',
   path: '/account/password/forgot',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AccountPasswordChangeRoute = AccountPasswordChangeRouteImport.update({
-  id: '/account/password/change',
-  path: '/account/password/change',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountMfaWebauthnRoute = AccountMfaWebauthnRouteImport.update({
@@ -151,7 +139,6 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
-  '/account/email': typeof AccountEmailRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
@@ -161,7 +148,6 @@ export interface FileRoutesByFullPath {
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
-  '/account/password/change': typeof AccountPasswordChangeRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
   '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
   '/account/mfa/': typeof AccountMfaIndexRoute
@@ -175,7 +161,6 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
-  '/account/email': typeof AccountEmailRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
   '/u/$username': typeof UUsernameRoute
@@ -183,7 +168,6 @@ export interface FileRoutesByTo {
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
-  '/account/password/change': typeof AccountPasswordChangeRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
   '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
   '/account/mfa': typeof AccountMfaIndexRoute
@@ -198,7 +182,6 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
-  '/account/email': typeof AccountEmailRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
@@ -208,7 +191,6 @@ export interface FileRoutesById {
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
-  '/account/password/change': typeof AccountPasswordChangeRoute
   '/account/password/forgot': typeof AccountPasswordForgotRoute
   '/account/verify-email/$key': typeof AccountVerifyEmailKeyRoute
   '/account/mfa/': typeof AccountMfaIndexRoute
@@ -224,7 +206,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/signup'
-    | '/account/email'
     | '/account/mfa'
     | '/account/verify-email'
     | '/auth/callback'
@@ -234,7 +215,6 @@ export interface FileRouteTypes {
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
-    | '/account/password/change'
     | '/account/password/forgot'
     | '/account/verify-email/$key'
     | '/account/mfa/'
@@ -248,7 +228,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/signup'
-    | '/account/email'
     | '/auth/callback'
     | '/playlists/$playlistId'
     | '/u/$username'
@@ -256,7 +235,6 @@ export interface FileRouteTypes {
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
-    | '/account/password/change'
     | '/account/password/forgot'
     | '/account/verify-email/$key'
     | '/account/mfa'
@@ -270,7 +248,6 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/signup'
-    | '/account/email'
     | '/account/mfa'
     | '/account/verify-email'
     | '/auth/callback'
@@ -280,7 +257,6 @@ export interface FileRouteTypes {
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
-    | '/account/password/change'
     | '/account/password/forgot'
     | '/account/verify-email/$key'
     | '/account/mfa/'
@@ -295,14 +271,12 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
-  AccountEmailRoute: typeof AccountEmailRoute
   AccountMfaRoute: typeof AccountMfaRouteWithChildren
   AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
   AuthCallbackRoute: typeof AuthCallbackRoute
   PlaylistsPlaylistIdRoute: typeof PlaylistsPlaylistIdRoute
   UUsernameRoute: typeof UUsernameRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
-  AccountPasswordChangeRoute: typeof AccountPasswordChangeRoute
   AccountPasswordForgotRoute: typeof AccountPasswordForgotRoute
   AccountPasswordResetKeyKeyRoute: typeof AccountPasswordResetKeyKeyRoute
 }
@@ -393,13 +367,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountMfaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/account/email': {
-      id: '/account/email'
-      path: '/account/email'
-      fullPath: '/account/email'
-      preLoaderRoute: typeof AccountEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/account/verify-email/': {
       id: '/account/verify-email/'
       path: '/'
@@ -426,13 +393,6 @@ declare module '@tanstack/react-router' {
       path: '/account/password/forgot'
       fullPath: '/account/password/forgot'
       preLoaderRoute: typeof AccountPasswordForgotRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/account/password/change': {
-      id: '/account/password/change'
-      path: '/account/password/change'
-      fullPath: '/account/password/change'
-      preLoaderRoute: typeof AccountPasswordChangeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/account/mfa/webauthn': {
@@ -504,14 +464,12 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
-  AccountEmailRoute: AccountEmailRoute,
   AccountMfaRoute: AccountMfaRouteWithChildren,
   AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,
   AuthCallbackRoute: AuthCallbackRoute,
   PlaylistsPlaylistIdRoute: PlaylistsPlaylistIdRoute,
   UUsernameRoute: UUsernameRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
-  AccountPasswordChangeRoute: AccountPasswordChangeRoute,
   AccountPasswordForgotRoute: AccountPasswordForgotRoute,
   AccountPasswordResetKeyKeyRoute: AccountPasswordResetKeyKeyRoute,
 }

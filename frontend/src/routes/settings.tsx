@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { KeyRound, Loader2, Mail, Pencil, ShieldCheck, UserRound, Users } from 'lucide-react'
+import { KeyRound, Loader2, Pencil, ShieldCheck, UserRound, Users } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
+import { ChangeEmailForm, ChangePasswordForm } from '@/components/account/account-forms'
 import { GoogleIcon } from '@/components/auth/google-button'
 import { PageHeader } from '@/components/layout/page-header'
 import { SectionSidebar, type SidebarItem } from '@/components/layout/section-sidebar'
@@ -60,24 +61,15 @@ function SettingsPage() {
   )
 }
 
-/** Account section — password + connected accounts. */
+/** Account section — email, password + connected accounts, all inline (no separate
+ *  pages). */
 function AccountSection() {
   const social = useSocialProviders()
   const { hasGoogle } = social
   return (
     <>
-      <Section title="Account" description="How you sign in.">
-        <SettingsRow
-          icon={<KeyRound className="size-4" aria-hidden="true" />}
-          title="Password"
-          description="Set a new password. At least 12 characters."
-          action={
-            <Button asChild variant="outline" size="sm">
-              <Link to="/account/password/change">Change</Link>
-            </Button>
-          }
-        />
-      </Section>
+      <ChangeEmailForm />
+      <ChangePasswordForm />
 
       {/* Reserve the section while we learn whether Google is configured, so it
           doesn't pop in after load. (Hidden once we know it isn't.) */}
@@ -167,24 +159,10 @@ function ProfileBanner({ user }: { user?: SessionUser }) {
         </Button>
       </div>
 
+      {/* Username editing lives here; email + password are in the Account section. */}
       {editing && (
-        <div className="border-border/60 space-y-4 border-t px-6 py-4">
+        <div className="border-border/60 border-t px-6 py-4">
           <UsernameField username={username} />
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium">Email</label>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground inline-flex min-h-9 flex-1 items-center gap-2 truncate text-sm">
-                <Mail className="size-4 shrink-0" aria-hidden />
-                {user?.email ?? '—'}
-              </span>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/account/email">Change</Link>
-              </Button>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Changing your email requires verifying the new address.
-            </p>
-          </div>
         </div>
       )}
     </header>
