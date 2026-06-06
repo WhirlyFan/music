@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
+  Globe,
   GripVertical,
   ListPlus,
   MoreVertical,
@@ -34,6 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
+import { SwitchRow } from '@/components/ui/switch'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -145,7 +147,16 @@ function PlaylistDetailPage() {
       <PageHeader
         breadcrumbs={[{ label: 'Playlists', to: '/playlists' }, { label: playlist.title }]}
         title={playlist.title}
-        description={`${playlist.track_count} track${playlist.track_count === 1 ? '' : 's'}`}
+        description={
+          <span className="flex items-center gap-2">
+            {`${playlist.track_count} track${playlist.track_count === 1 ? '' : 's'}`}
+            {playlist.is_public && (
+              <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                <Globe className="size-3" aria-hidden /> Public
+              </span>
+            )}
+          </span>
+        }
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -183,6 +194,12 @@ function PlaylistDetailPage() {
           </div>
         }
       />
+
+      {playlist.description && (
+        <p className="text-muted-foreground max-w-2xl text-sm whitespace-pre-wrap">
+          {playlist.description}
+        </p>
+      )}
 
       {editing && (
         <EditPanel
@@ -347,24 +364,40 @@ function EditPanel({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional"
+          maxLength={1000}
         />
+        <p className="text-muted-foreground text-right text-xs tabular-nums">
+          {description.length}/1000
+        </p>
       </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="size-4"
-          checked={isPublic}
-          onChange={(e) => setIsPublic(e.target.checked)}
-        />
-        Public — anyone with the link can view
-      </label>
+
+      {/* Visibility saves on its own the instant you toggle it (with a toast), so
+          it's clearly live — separate from the batched title/description Save. */}
+      <SwitchRow
+        label="Public"
+        description="Anyone with the link can view"
+        checked={isPublic}
+        disabled={update.isPending}
+        onCheckedChange={(v) => {
+          setIsPublic(v)
+          update.mutate(
+            { id: playlistId, isPublic: v },
+            {
+              onSuccess: () =>
+                toast.success(v ? 'Playlist is now public.' : 'Playlist is private.'),
+              onError: () => setIsPublic(!v), // revert the toggle if it didn't stick
+            },
+          )
+        }}
+      />
+
       <div className="flex gap-2">
         <Button
           size="sm"
           disabled={update.isPending || !title.trim()}
           onClick={() =>
             update.mutate(
-              { id: playlistId, title: title.trim(), description, isPublic },
+              { id: playlistId, title: title.trim(), description },
               {
                 onSuccess: () => {
                   toast.success('Saved.')

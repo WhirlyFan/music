@@ -9,6 +9,7 @@ import { AuthCard } from '@/components/auth/auth-card'
 import { GoogleButton } from '@/components/auth/google-button'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
+import { SwitchRow } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
 import { isEmailVerificationPending, isMfaChallenge, isMfaTrustPending } from '@/lib/auth/guards'
@@ -294,16 +295,13 @@ function MfaChallenge({ onCancel, returnTo }: { onCancel: () => void; returnTo?:
           }}
         </codeForm.Field>
 
-        <label className="text-muted-foreground flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="h-4 w-4"
-            checked={trustChoice}
-            onChange={(e) => setTrustChoice(e.target.checked)}
-            disabled={busy}
-          />
-          <span>Remember this browser for 30 days</span>
-        </label>
+        <SwitchRow
+          label="Remember this browser"
+          description="Skip the code here for 30 days"
+          checked={trustChoice}
+          onCheckedChange={setTrustChoice}
+          disabled={busy}
+        />
 
         <Button type="submit" disabled={busy} aria-busy={busy || undefined} className="w-full">
           {busy ? (

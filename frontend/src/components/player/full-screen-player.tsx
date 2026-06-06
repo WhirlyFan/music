@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom'
 
 import { AudioVisualizer } from '@/components/player/audio-visualizer'
 import { SeekBar } from '@/components/player/seek-bar'
+import { VolumeControl } from '@/components/player/volume-control'
 import { ExplicitBadge } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import type { Track } from '@/lib/api/models'
@@ -29,10 +30,12 @@ export function FullScreenPlayer({
   duration,
   audioReady,
   canNext,
+  volume,
   onTogglePlay,
   onPrevious,
   onNext,
   onSeek,
+  onVolumeChange,
   onClose,
 }: {
   track: Track
@@ -42,10 +45,12 @@ export function FullScreenPlayer({
   duration: number
   audioReady: boolean
   canNext: boolean
+  volume: number
   onTogglePlay: () => void
   onPrevious: () => void
   onNext: () => void
   onSeek: (seconds: number) => void
+  onVolumeChange: (v: number) => void
   onClose: () => void
 }) {
   useEffect(() => {
@@ -156,6 +161,11 @@ export function FullScreenPlayer({
           ) : (
             <p className="text-muted-foreground text-center text-xs">Finding audio…</p>
           )}
+          <VolumeControl
+            volume={volume}
+            onVolumeChange={onVolumeChange}
+            className="mx-auto mt-1 w-48 max-w-full"
+          />
         </div>
 
         {/* Details: where it came from, what's actually playing, and the clip. */}

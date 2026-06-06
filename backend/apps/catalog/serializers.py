@@ -80,6 +80,10 @@ class CreatePlaylistSerializer(serializers.Serializer):
 class PlaylistUpdateSerializer(serializers.ModelSerializer):
     """Edit a playlist's own metadata (rename / describe / visibility)."""
 
+    # The model field is an unbounded TextField; cap it here so a description can't
+    # grow unreasonably (the client also enforces this in the textarea).
+    description = serializers.CharField(max_length=1000, allow_blank=True, required=False)
+
     class Meta:
         model = Playlist
         fields = ["title", "description", "is_public"]

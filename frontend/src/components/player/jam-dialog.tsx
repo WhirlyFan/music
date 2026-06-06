@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { SwitchRow } from '@/components/ui/switch'
 import { dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
 import { roomKeys } from '@/lib/hooks/keys'
@@ -115,53 +116,49 @@ export function JamDialog() {
           </div>
         </DialogHeader>
 
-        {/* Not in a jam → start one (left), or join with a code. Colocated on a
-            row from sm+, stacked on phones so it doesn't get cramped. */}
+        {/* Not in a jam → the join-code input on top, then Start (left) / Join
+            (right) below. Enter in the field joins; Start shares your own room. */}
         {!shared && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-              type="button"
-              variant="shadow"
-              className="sm:shrink-0"
-              disabled={share.isPending}
-              onClick={() => share.mutate()}
-            >
-              <Radio className="mr-2 size-4" />
-              {share.isPending ? 'Starting…' : 'Start a jam'}
-            </Button>
-
-            <span className="text-muted-foreground hidden text-xs sm:inline">or</span>
-
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                submitJoin()
-              }}
-              className="flex gap-2 sm:min-w-0 sm:flex-1"
-            >
-              <input
-                value={joinCode}
-                onChange={(e) =>
-                  setJoinCode(
-                    e.target.value
-                      .toUpperCase()
-                      .replace(/[^A-Z0-9]/g, '')
-                      .slice(0, 6),
-                  )
-                }
-                placeholder="ABC123"
-                aria-label="Jam code"
-                autoComplete="off"
-                autoCapitalize="characters"
-                className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 min-w-0 flex-1 rounded-xl border py-2 text-center font-mono text-base font-bold tracking-[0.25em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
-                  wiggle ? 'border-destructive animate-wiggle' : ''
-                }`}
-              />
-              <Button type="submit" className="shrink-0" disabled={!joinCode || join.isPending}>
-                {join.isPending ? 'Joining…' : 'Join'}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              submitJoin()
+            }}
+            className="space-y-3"
+          >
+            <input
+              value={joinCode}
+              onChange={(e) =>
+                setJoinCode(
+                  e.target.value
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9]/g, '')
+                    .slice(0, 6),
+                )
+              }
+              placeholder="ABC123"
+              aria-label="Jam code"
+              autoComplete="off"
+              autoCapitalize="characters"
+              className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 w-full rounded-xl border py-2.5 text-center font-mono text-lg font-bold tracking-[0.3em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
+                wiggle ? 'border-destructive animate-wiggle' : ''
+              }`}
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="shadow"
+                disabled={share.isPending}
+                onClick={() => share.mutate()}
+              >
+                <Radio className="mr-2 size-4" />
+                {share.isPending ? 'Starting…' : 'Start a jam'}
               </Button>
-            </form>
-          </div>
+              <Button type="submit" variant="outline" disabled={!joinCode || join.isPending}>
+                {join.isPending ? 'Joining…' : 'Join jam'}
+              </Button>
+            </div>
+          </form>
         )}
 
         {/* In a jam — code (host), roster, controls. */}
@@ -288,32 +285,13 @@ export function JamDialog() {
             </div>
 
             {isHost && (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={room.allow_guest_control ?? false}
+              <SwitchRow
+                label="Let guests control"
+                description="Play, pause, seek & skip"
+                checked={room.allow_guest_control ?? false}
                 disabled={setGuestControl.isPending}
-                onClick={() => setGuestControl.mutate(!room.allow_guest_control)}
-                className="border-border bg-muted/30 hover:bg-muted/50 ease-standard flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left transition-colors"
-              >
-                <span className="flex flex-col">
-                  <span className="text-sm font-medium">Let guests control</span>
-                  <span className="text-muted-foreground text-xs">
-                    Play, pause, seek &amp; skip
-                  </span>
-                </span>
-                <span
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
-                    room.allow_guest_control ? 'bg-primary' : 'bg-muted-foreground/30'
-                  }`}
-                >
-                  <span
-                    className={`ease-out-back absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                      room.allow_guest_control ? 'translate-x-[22px]' : 'translate-x-0.5'
-                    }`}
-                  />
-                </span>
-              </button>
+                onCheckedChange={(v) => setGuestControl.mutate(v)}
+              />
             )}
 
             {isHost ? (

@@ -36,15 +36,31 @@ export function useInfinitePlaylists(search = '') {
  * as catalog Tracks ready to play (YouTube audio resolves lazily on play). Keeps
  * prior results on screen while a new term resolves; idle for an empty query.
  */
+// Shared query options so the home OmniBox can PREFETCH (and thus validate) a
+// search/import on the same cache key the destination page reads — letting it only
+// navigate once the request actually succeeds, instead of landing on a broken page.
+export const searchQuery = (q: string) => ({
+  queryKey: searchKeys.songs(q),
+  queryFn: () => api<Track[]>(`/catalog/tracks/search/?q=${encodeURIComponent(q)}`),
+  staleTime: 5 * 60 * 1000,
+  retry: false, // fail fast so a failed search doesn't hang the home button on retries
+})
+
+export const importQuery = (url: string) => ({
+  queryKey: importKeys.result(url),
+  queryFn: () => api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
+  staleTime: Infinity,
+  gcTime: Infinity,
+  retry: false,
+})
+
 export function useSongSearch(query: string) {
   const q = query.trim()
+  const opts = searchQuery(q)
   return useQuery({
-    queryKey: searchKeys.songs(q),
-    queryFn: q
-      ? () => api<Track[]>(`/catalog/tracks/search/?q=${encodeURIComponent(q)}`)
-      : skipToken,
+    ...opts,
+    queryFn: q ? opts.queryFn : skipToken,
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60 * 1000,
   })
 }
 
@@ -85,13 +101,6 @@ export function useInfinitePlaylistTracks(id: string, search = '') {
  * first visit re-runs the ingest. The result feeds play / queue / save-as-playlist.
  */
 export function useImport(url: string) {
-  return useQuery({
-    queryKey: importKeys.result(url),
-    queryFn: url
-      ? () => api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } })
-      : skipToken,
-    staleTime: Infinity,
-    gcTime: Infinity,
-    retry: false,
-  })
+  const opts = importQuery(url)
+  return useQuery({ ...opts, queryFn: url ? opts.queryFn : skipToken })
 }

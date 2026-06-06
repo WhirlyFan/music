@@ -79,6 +79,12 @@ export function NowPlayingBar() {
   // of any single client's element diverging (e.g. a swallowed autoplay reject).
   const [localPlaying, setLocalPlaying] = useState(false)
   const [buffering, setBuffering] = useState(false)
+  // Output volume (0–1), persisted across sessions. Applied to the <audio> element
+  // below; a fresh element (per-track remount) re-reads it.
+  const [volume, setVolume] = useState(() => {
+    const v = Number(localStorage.getItem('player:volume'))
+    return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 1
+  })
   const queuePanelRef = useRef<HTMLDivElement>(null)
   // Open-state in the URL (linkable, survives nav/refresh); measured geometry in a
   // Zustand client store (shared with the playlists search pill + FAB).
@@ -167,6 +173,14 @@ export function NowPlayingBar() {
     if (serverPlaying && el.paused) void el.play().catch(() => {})
     else if (!serverPlaying && !el.paused) el.pause()
   }, [itemId, audioSrc, room])
+
+  // Apply + persist output volume. Re-runs on itemId/audioSrc too, since a new
+  // track remounts the <audio> element (which resets to full volume).
+  useEffect(() => {
+    const el = audioRef.current
+    if (el) el.volume = volume
+    localStorage.setItem('player:volume', String(volume))
+  }, [volume, itemId, audioSrc])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
@@ -472,10 +486,12 @@ export function NowPlayingBar() {
           duration={duration}
           audioReady={!!audioSrc}
           canNext={upcoming > 0 && canDrive}
+          volume={volume}
           onTogglePlay={togglePlay}
           onPrevious={handlePrevious}
           onNext={() => canDrive && next.mutate()}
           onSeek={seek}
+          onVolumeChange={setVolume}
           onClose={() => setExpanded(false)}
         />
       )}

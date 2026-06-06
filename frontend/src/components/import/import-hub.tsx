@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Music, Search } from 'lucide-react'
 import { useEffect } from 'react'
@@ -14,7 +15,7 @@ import { ApiError } from '@/lib/api/client'
 import type { ImportResult } from '@/lib/api/models'
 import { useCreatePlaylist } from '@/lib/hooks/mutations/catalog'
 import { usePlay, usePlayNow, useQueueTracks } from '@/lib/hooks/mutations/rooms'
-import { useImport, useSongSearch } from '@/lib/hooks/queries/catalog'
+import { importQuery, searchQuery, useImport, useSongSearch } from '@/lib/hooks/queries/catalog'
 import { promptText } from '@/lib/overlay'
 
 const urlSchema = z.string().url()
@@ -103,20 +104,18 @@ export function OmniBox({
   submit?: boolean
 }) {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const [text, setText] = useState(() => initial)
   const [waving, setWaving] = useState(false) // pointer/focus over the action button
+  const [validating, setValidating] = useState(false)
   const fieldRef = useRef<HTMLDivElement>(null)
 
   const trimmed = text.trim()
   const isUrl = urlSchema.safeParse(trimmed).success
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (isUrl) {
-      navigate({ to: '/import', search: { url: trimmed } })
-    } else if (trimmed) {
-      navigate({ to: '/search', search: { q: trimmed } })
-    } else {
+    if (!trimmed) {
       // Empty submit → wiggle the field (the placeholder says what to do).
       const el = fieldRef.current
       if (el) {
@@ -124,6 +123,29 @@ export function OmniBox({
         void el.offsetWidth
         el.classList.add('animate-wiggle')
       }
+      return
+    }
+    if (validating) return
+    // Run the request HERE and only navigate once it succeeds — so a failed
+    // import/search never strands the user on a broken results page. The fetch is
+    // cached under the same key the destination reads, so it isn't run twice.
+    setValidating(true)
+    try {
+      if (isUrl) {
+        await qc.fetchQuery(importQuery(trimmed))
+        navigate({ to: '/import', search: { url: trimmed } })
+      } else {
+        await qc.fetchQuery(searchQuery(trimmed))
+        navigate({ to: '/search', search: { q: trimmed } })
+      }
+    } catch {
+      toast.error(
+        isUrl
+          ? 'Couldn’t import that link — check it’s a Spotify, Apple Music, or YouTube URL.'
+          : 'Search failed — try again in a moment.',
+      )
+    } finally {
+      setValidating(false)
     }
   }
 
@@ -156,12 +178,18 @@ export function OmniBox({
           <RainbowButton
             type="submit"
             className="min-w-36"
+            disabled={validating}
             onMouseEnter={() => setWaving(true)}
             onMouseLeave={() => setWaving(false)}
             onFocus={() => setWaving(true)}
             onBlur={() => setWaving(false)}
           >
-            <RollingLabel text={isUrl ? 'Import' : 'Search'} waving={waving} />
+            <RollingLabel
+              text={
+                validating ? (isUrl ? 'Importing…' : 'Searching…') : isUrl ? 'Import' : 'Search'
+              }
+              waving={waving}
+            />
           </RainbowButton>
         </div>
       )}
