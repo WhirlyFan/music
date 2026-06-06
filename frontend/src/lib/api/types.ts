@@ -315,6 +315,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/current/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The room the user is actively in — a Jam they've joined as a guest,
+         *     else their own room. This is what the player subscribes to.
+         */
+        get: operations["v1_rooms_current_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/join/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Join a Jam by its code (as a guest). */
+        post: operations["v1_rooms_join_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/jump/": {
         parameters: {
             query?: never;
@@ -506,6 +543,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/share/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Turn the caller's room into a Jam (assigns a join code). */
+        post: operations["v1_rooms_share_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/shuffle/": {
         parameters: {
             query?: never;
@@ -523,6 +577,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/sync/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Host re-anchors the server clock to its real playhead (periodic
+         *     heartbeat, or after a seek/play/pause). Operates on the caller's OWN room,
+         *     so only a host re-anchors their jam — a guest's call just touches their own
+         *     private room harmlessly.
+         */
+        post: operations["v1_rooms_sync_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/unshare/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description End the Jam — drop guests, clear the code, go private again. */
+        post: operations["v1_rooms_unshare_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/invite/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Any logged-in member invites an email to the (invite-only) platform: creates a
+         *     pending invitation and emails the signup link. 400 if the email is already a member.
+         */
+        post: operations["v1_users_invite_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/invite/redeem/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Anonymous (pre-signup): the invite link redeems its token here, which stashes
+         *     the email as verified for the imminent signup and returns it for the form to
+         *     pre-fill. 404 if the token is invalid/expired/used (the SPA then falls back to a
+         *     normal signup + email verification).
+         */
+        post: operations["v1_users_invite_redeem_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/passkey-credential-ids/": {
         parameters: {
             query?: never;
@@ -533,6 +668,27 @@ export interface paths {
         get: operations["v1_users_passkey_credential_ids_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/username/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Change the signed-in user's handle. Usernames are case-insensitive
+         *     (ACCOUNT_PRESERVE_USERNAME_CASING is off), so we store it lowercased and reject a
+         *     case-insensitive collision with anyone else.
+         */
+        post: operations["v1_users_username_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -572,6 +728,10 @@ export interface components {
         Ingest: {
             /** Format: uri */
             url: string;
+        };
+        /** @description Join a Jam by its code. */
+        JoinRoom: {
+            code: string;
         };
         /**
          * @description * `context` - From context
@@ -748,6 +908,17 @@ export interface components {
             readonly context_label: string;
             readonly queue: components["schemas"]["QueueItem"][];
             readonly context: components["schemas"]["QueueItem"][];
+            /** Format: uuid */
+            readonly host_id: string;
+            code?: string;
+            is_shared?: boolean;
+            allow_guest_control?: boolean;
+            /** Format: date-time */
+            readonly playing_since: string | null;
+            readonly generation: number;
+            readonly members: {
+                [key: string]: string;
+            }[];
         };
         SaveAsPlaylist: {
             title: string;
@@ -761,6 +932,11 @@ export interface components {
          * @enum {string}
          */
         StatusEnum: "active" | "candidate" | "dead" | "replaced" | "rejected";
+        /** @description Host re-anchor: the real playhead (ms) + whether audio is actually playing. */
+        SyncPosition: {
+            position_ms: number;
+            is_playing: boolean;
+        };
         Track: {
             /** Format: uuid */
             readonly id: string;
@@ -1172,6 +1348,50 @@ export interface operations {
             };
         };
     };
+    v1_rooms_current_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_join_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinRoom"];
+                "application/x-www-form-urlencoded": components["schemas"]["JoinRoom"];
+                "multipart/form-data": components["schemas"]["JoinRoom"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
     v1_rooms_jump_create: {
         parameters: {
             query?: never;
@@ -1404,6 +1624,25 @@ export interface operations {
             };
         };
     };
+    v1_rooms_share_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
     v1_rooms_shuffle_create: {
         parameters: {
             query?: never;
@@ -1423,7 +1662,105 @@ export interface operations {
             };
         };
     };
+    v1_rooms_sync_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SyncPosition"];
+                "application/x-www-form-urlencoded": components["schemas"]["SyncPosition"];
+                "multipart/form-data": components["schemas"]["SyncPosition"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_unshare_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_users_invite_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_users_invite_redeem_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_users_passkey_credential_ids_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_users_username_create: {
         parameters: {
             query?: never;
             header?: never;

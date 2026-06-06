@@ -39,9 +39,14 @@ services:
       # NODE_VERSION pins Render's build-env Node to match our Dockerfile + CI.
       - key: NODE_VERSION
         value: 24.16.0
-      # Build-time variable: baked into the bundle, NOT runtime overridable.
+      # Build-time variables: baked into the bundle, NOT runtime overridable.
       - key: VITE_API_BASE
         value: /api/v1
+      # WebSocket origin. HTTP rides the same-origin rewrites above, but Render
+      # static sites don't proxy WS — so the jam socket connects straight to the
+      # backend's custom domain. (Dev leaves this unset and derives ws://localhost.)
+      - key: VITE_WS_BASE
+        value: wss://api.whirlyfan.com
     routes:
       # Proxy server-rendered Django + DRF + allauth paths to the backend.
       # Order matters — most specific first.

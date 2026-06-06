@@ -32,6 +32,7 @@ import {
 } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { useRoom } from '@/lib/hooks/queries/rooms'
+import { useRoomSocket } from '@/lib/hooks/useRoomSocket'
 import { promptText } from '@/lib/overlay'
 import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
@@ -52,6 +53,9 @@ export function NowPlayingBar() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const { data: room } = useRoom(authed)
+  // Live updates: feed broadcast frames into the same room cache useRoom reads,
+  // so a jam stays in sync without polling. No-op until we have a room id.
+  useRoomSocket(room?.id, authed)
   const refreshArtwork = useRefreshArtwork()
 
   const matchTrack = useMatchTrack()
