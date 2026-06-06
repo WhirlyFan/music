@@ -1,4 +1,20 @@
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useForm } from '@tanstack/react-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Check,
@@ -35,7 +51,8 @@ import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { SwitchRow } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import type { PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
+import type { PaginatedPlaylistTrackList, PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
+import { playlistKeys } from '@/lib/hooks/keys'
 import {
   useDeletePlaylist,
   useRefreshArtwork,
@@ -87,7 +104,10 @@ function PlaylistDetailPage() {
   const [removeOpen, setRemoveOpen] = useState(false)
   // Track ids selected (in edit mode) for batch removal.
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
-  const dragId = useRef<string | null>(null)
+  const qc = useQueryClient()
+  // Drag starts only after a 5px move, so a tap still selects (and the grip is the
+  // only handle) — dnd-kit animates siblings out of the way during the drag.
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = tracks
   // Auto-load the next page when the sentinel nears the viewport (callback ref so the
@@ -179,6 +199,36 @@ function PlaylistDetailPage() {
         setRemoveOpen(false)
       },
     })
+  }
+
+  // Reorder via drag: optimistically reorder the cached track pages (so the row
+  // stays put instead of snapping back), then persist to the new absolute position.
+  const tracksKey = [...playlistKeys.tracks(playlistId), q]
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const from = items.findIndex((i) => i.track.id === active.id)
+    const to = items.findIndex((i) => i.track.id === over.id)
+    if (from < 0 || to < 0) return
+    qc.setQueryData<{ pages: PaginatedPlaylistTrackList[]; pageParams: unknown[] }>(
+      tracksKey,
+      (data) => {
+        if (!data) return data
+        const flat = arrayMove(
+          data.pages.flatMap((p) => p.results),
+          from,
+          to,
+        )
+        let cursor = 0
+        const pages = data.pages.map((p) => {
+          const results = flat.slice(cursor, cursor + p.results.length)
+          cursor += p.results.length
+          return { ...p, results }
+        })
+        return { ...data, pages }
+      },
+    )
+    reorder.mutate({ trackId: String(active.id), position: to })
   }
 
   return (
@@ -299,36 +349,54 @@ function PlaylistDetailPage() {
         />
       )}
 
-      <ol className="space-y-2">
-        {items.map((item) => (
-          <TrackRow
-            key={item.track.id}
-            item={item}
-            editing={editing}
-            selected={selected.has(item.track.id)}
-            refreshing={refreshArtwork.isPending}
-            adderUsername={
-              hasCollaborators && item.added_by && item.added_by !== myUsername
-                ? item.added_by
-                : undefined
-            }
-            onToggleSelect={() => toggleSelect(item.track.id)}
-            onPlayFrom={(trackId) => playPlaylist.mutate({ playlistId, startTrackId: trackId })}
-            onQueue={(trackId) =>
-              queueTracks.mutate(
-                { trackIds: [trackId] },
-                { onSuccess: () => toast.success('Added to queue.') },
-              )
-            }
-            onRefreshArt={(trackId) => refreshArtwork.mutate(trackId)}
-            onDragStartItem={(trackId) => (dragId.current = trackId)}
-            onDropOnItem={(position) => {
-              if (dragId.current) reorder.mutate({ trackId: dragId.current, position })
-              dragId.current = null
-            }}
-          />
-        ))}
-      </ol>
+      {/* Edit mode (unfiltered) → drag-to-reorder with dnd-kit: siblings animate out
+          of the way as you drag the grip. While searching, reordering a filtered
+          subset is ambiguous, so we fall back to the plain selectable rows. */}
+      {editing && !q ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext
+            items={items.map((i) => i.track.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ol className="space-y-2">
+              {items.map((item) => (
+                <SortableTrackRow
+                  key={item.track.id}
+                  item={item}
+                  selected={selected.has(item.track.id)}
+                  onToggleSelect={() => toggleSelect(item.track.id)}
+                />
+              ))}
+            </ol>
+          </SortableContext>
+        </DndContext>
+      ) : (
+        <ol className="space-y-2">
+          {items.map((item) => (
+            <TrackRow
+              key={item.track.id}
+              item={item}
+              editing={editing}
+              selected={selected.has(item.track.id)}
+              refreshing={refreshArtwork.isPending}
+              adderUsername={
+                hasCollaborators && item.added_by && item.added_by !== myUsername
+                  ? item.added_by
+                  : undefined
+              }
+              onToggleSelect={() => toggleSelect(item.track.id)}
+              onPlayFrom={(trackId) => playPlaylist.mutate({ playlistId, startTrackId: trackId })}
+              onQueue={(trackId) =>
+                queueTracks.mutate(
+                  { trackIds: [trackId] },
+                  { onSuccess: () => toast.success('Added to queue.') },
+                )
+              }
+              onRefreshArt={(trackId) => refreshArtwork.mutate(trackId)}
+            />
+          ))}
+        </ol>
+      )}
 
       {q && items.length === 0 && !tracks.isFetching && (
         <EmptyState
@@ -586,6 +654,69 @@ function EditPanel({
   )
 }
 
+/** Edit-mode row in the unfiltered list: drag the grip to reorder. dnd-kit applies a
+ *  transform/transition so the other rows glide out of the way as you drag; tapping
+ *  the row (not the grip) toggles selection for batch removal. */
+function SortableTrackRow({
+  item,
+  selected,
+  onToggleSelect,
+}: {
+  item: PlaylistTrack
+  selected: boolean
+  onToggleSelect: () => void
+}) {
+  const { track } = item
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: track.id,
+  })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      onClick={onToggleSelect}
+      className={`border-border/60 flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${
+        isDragging ? 'bg-card relative z-10 shadow-lg' : ''
+      } ${selected ? 'border-primary/50 bg-primary/5' : 'hover:bg-accent/40'}`}
+    >
+      <span
+        aria-hidden
+        className={`grid size-5 shrink-0 place-items-center rounded-md border transition-colors ${
+          selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+        }`}
+      >
+        {selected && <Check className="size-3.5" />}
+      </span>
+      {/* Only the grip starts a drag — clicking the row body selects. */}
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        aria-label={`Reorder ${track.title}`}
+        className="text-muted-foreground hover:text-foreground -ml-1 shrink-0 cursor-grab touch-none rounded p-0.5 active:cursor-grabbing"
+      >
+        <GripVertical className="size-4" aria-hidden />
+      </button>
+      <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
+        {item.position + 1}
+      </span>
+      <TrackArtwork track={track} />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          {track.is_explicit && <ExplicitBadge />}
+          <p className="truncate font-medium">{track.title}</p>
+        </div>
+        <p className="text-muted-foreground truncate text-sm">
+          {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
+        </p>
+      </div>
+    </li>
+  )
+}
+
 function TrackRow({
   item,
   editing = false,
@@ -596,8 +727,6 @@ function TrackRow({
   onPlayFrom,
   onQueue,
   onRefreshArt,
-  onDragStartItem,
-  onDropOnItem,
 }: {
   item?: PlaylistTrack
   editing?: boolean
@@ -610,8 +739,6 @@ function TrackRow({
   onPlayFrom?: (trackId: string) => void
   onQueue?: (trackId: string) => void
   onRefreshArt?: (trackId: string) => void
-  onDragStartItem?: (trackId: string) => void
-  onDropOnItem?: (position: number) => void
 }) {
   const ripple = useRipple()
   const skeleton = useSkeletonZone()
@@ -635,15 +762,11 @@ function TrackRow({
 
   const { track } = item
 
-  // Edit mode: the row is a drag-to-reorder + tap-to-select target (checkbox on the
-  // left, grip handle); no inline play/queue/remove. Selection drives batch removal.
+  // Edit mode while SEARCHING: a tap-to-select row (no drag — reordering a filtered
+  // subset is ambiguous, so the unfiltered list uses SortableTrackRow instead).
   if (editing) {
     return (
       <li
-        draggable
-        onDragStart={() => onDragStartItem?.(track.id)}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={() => onDropOnItem?.(item.position)}
         onClick={() => onToggleSelect?.()}
         className={`border-border/60 flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors ${
           selected ? 'border-primary/50 bg-primary/5' : 'hover:bg-accent/40'
@@ -657,7 +780,6 @@ function TrackRow({
         >
           {selected && <Check className="size-3.5" />}
         </span>
-        <GripVertical className="text-muted-foreground size-4 shrink-0" aria-hidden />
         <span className="text-muted-foreground w-6 text-right text-sm tabular-nums">
           {item.position + 1}
         </span>
