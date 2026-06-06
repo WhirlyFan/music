@@ -180,7 +180,7 @@ services:
       # validates against this list, so the public host must be present — it's
       # what allauth builds the Google OAuth redirect_uri from.
       - key: DJANGO_ALLOWED_HOSTS
-        value: music.whirlyfan.com,music-backend-ll7r.onrender.com,api.whirlyfan.com
+        value: music.whirlyfan.com,music-frontend-d8sr.onrender.com,music-backend-ll7r.onrender.com,api.whirlyfan.com
       # CSRF middleware checks the Origin/Referer of state-changing requests.
       # The browser sends the origin it actually loaded, so once the custom
       # domain is live that's https://music.whirlyfan.com. We trust BOTH it and
@@ -188,18 +188,18 @@ services:
       # either URL through the DNS cutover. Drop the onrender one later if you
       # want to force the custom domain only.
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
-        value: https://music.whirlyfan.com,https://music-frontend.onrender.com
+        value: https://music.whirlyfan.com,https://music-frontend-d8sr.onrender.com
       # CORS is a defense-in-depth backstop. With rewrites we don't strictly
       # need it, but leaving both frontend origins allow-listed costs nothing.
       - key: DJANGO_CORS_ALLOWED_ORIGINS
-        value: https://music.whirlyfan.com,https://music-frontend.onrender.com
+        value: https://music.whirlyfan.com,https://music-frontend-d8sr.onrender.com
 
       # Origins allowed to open a WebSocket (CSWSH guard). The SPA loads from
       # music.whirlyfan.com, so that's the Origin on the jam socket's upgrade —
       # NOT the backend's own host. Hostnames only (OriginValidator matches the
       # Origin header's host).
       - key: DJANGO_WEBSOCKET_ALLOWED_ORIGINS
-        value: music.whirlyfan.com,music-frontend.onrender.com
+        value: music.whirlyfan.com,music-frontend-d8sr.onrender.com
 
       # Cross-subdomain session cookie so it rides the WS upgrade to
       # api.whirlyfan.com. SET THIS ONLY after api.whirlyfan.com's DNS is live
