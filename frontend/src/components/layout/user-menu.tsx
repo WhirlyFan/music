@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Settings, UserRound } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -54,6 +54,11 @@ export function UserMenu({ username, firstName, lastName }: Props) {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onSelect={() => navigate({ to: '/profile' })}>
+          <UserRound className="mr-2 h-4 w-4" />
+          Profile
+        </DropdownMenuItem>
+
         <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
           <Settings className="mr-2 h-4 w-4" />
           Settings

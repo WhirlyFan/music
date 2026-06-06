@@ -65,6 +65,14 @@ export const notificationKeys = {
   unread: () => ['notifications', 'unread'] as const,
 }
 
+export const friendKeys = {
+  all: () => ['friends'] as const,
+  list: () => ['friends', 'list'] as const,
+  requests: () => ['friends', 'requests'] as const,
+  // User search for adding friends — `q` is part of the key so each term caches.
+  search: (q: string) => ['friends', 'search', q] as const,
+}
+
 // Import result keyed by source URL — so /import?url=… is shareable + refresh-safe
 // (cached per URL; only a hard refresh / first visit re-runs the ingest).
 export const importKeys = {

@@ -13,4 +13,5 @@ urlpatterns = [
     path("invite/", views.invite, name="invite"),
     path("invite/redeem/", views.redeem_invite, name="redeem-invite"),
     path("username/", views.change_username, name="change-username"),
+    path("search/", views.search_users, name="search-users"),
 ]

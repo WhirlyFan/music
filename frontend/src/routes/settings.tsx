@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AtSign, KeyRound, Loader2, Mail, ShieldCheck } from 'lucide-react'
+import { AtSign, KeyRound, Loader2, Mail, ShieldCheck, UserRound } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -44,6 +44,16 @@ function SettingsPage() {
       description="Manage your account, security, and preferences."
     >
       <Section title="Account" description="Your sign-in identity.">
+        <SettingsRow
+          icon={<UserRound className="size-4" aria-hidden="true" />}
+          title="Profile"
+          description="Your public profile and friends."
+          action={
+            <Button asChild variant="outline" size="sm">
+              <Link to="/profile">View</Link>
+            </Button>
+          }
+        />
         <SettingsRow
           icon={<Mail className="size-4" aria-hidden="true" />}
           title="Email"
