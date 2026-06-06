@@ -113,12 +113,14 @@ export function JamDialog() {
           </div>
         </DialogHeader>
 
-        {/* Not in a jam → start one, or join with a code. */}
+        {/* Not in a jam → start one (left), or join with a code. Colocated on a
+            row from sm+, stacked on phones so it doesn't get cramped. */}
         {!shared && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Button
+              type="button"
               variant="shadow"
-              className="w-full"
+              className="sm:shrink-0"
               disabled={share.isPending}
               onClick={() => share.mutate()}
             >
@@ -126,17 +128,14 @@ export function JamDialog() {
               {share.isPending ? 'Starting…' : 'Start a jam'}
             </Button>
 
-            <div className="text-muted-foreground flex items-center gap-3 text-xs">
-              <span className="bg-border h-px flex-1" /> or join with a code{' '}
-              <span className="bg-border h-px flex-1" />
-            </div>
+            <span className="text-muted-foreground hidden text-xs sm:inline">or</span>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault()
                 submitJoin()
               }}
-              className="space-y-2"
+              className="flex gap-2 sm:min-w-0 sm:flex-1"
             >
               <input
                 value={joinCode}
@@ -152,12 +151,12 @@ export function JamDialog() {
                 aria-label="Jam code"
                 autoComplete="off"
                 autoCapitalize="characters"
-                className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 w-full rounded-xl border py-2.5 text-center font-mono text-xl font-bold tracking-[0.35em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
+                className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 min-w-0 flex-1 rounded-xl border py-2 text-center font-mono text-base font-bold tracking-[0.25em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
                   wiggle ? 'border-destructive animate-wiggle' : ''
                 }`}
               />
-              <Button type="submit" className="w-full" disabled={!joinCode || join.isPending}>
-                {join.isPending ? 'Joining…' : 'Join jam'}
+              <Button type="submit" className="shrink-0" disabled={!joinCode || join.isPending}>
+                {join.isPending ? 'Joining…' : 'Join'}
               </Button>
             </form>
           </div>
