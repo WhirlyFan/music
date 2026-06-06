@@ -79,6 +79,11 @@ INSTALLED_APPS = ["daphne", *DJANGO_APPS, *THIRD_PARTY_APPS, *LOCAL_APPS]
 # --- Middleware (order matters — see plan) ---
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Pin the host to the public domain on OAuth/auth paths so allauth's
+    # redirect_uri is correct behind Render's reverse-proxy rewrite. Must run
+    # before CSRF/Common/allauth so get_host() is already pinned. No-ops unless
+    # OAUTH_CALLBACK_HOST is set (prod only) — local dev is untouched.
+    "apps.core.middleware.CanonicalAuthHostMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django_guid.middleware.guid_middleware",
     "corsheaders.middleware.CorsMiddleware",

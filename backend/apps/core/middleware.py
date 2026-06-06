@@ -18,10 +18,15 @@ Middleware in this module:
   is configured with `ACCOUNT_EMAIL_VERIFICATION = "optional"` so signup
   creates a real session; this middleware (plus the frontend root guard)
   enforces verification before any protected resource access.
+
+- CanonicalAuthHostMiddleware: pins request.get_host() to the public domain on
+  OAuth/auth paths so allauth builds the correct redirect_uri behind a
+  reverse-proxy rewrite that doesn't forward the public host. No-ops in dev.
 """
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 
@@ -147,3 +152,43 @@ class RequireVerifiedEmailMiddleware:
             },
             status=403,
         )
+
+
+# Auth-flow paths whose absolute URLs must use the public domain. allauth builds
+# the OAuth redirect_uri under /accounts/<provider>/login/callback/; the headless
+# provider-redirect that kicks the flow off lives under /_allauth/.
+_CANONICAL_HOST_PREFIXES: tuple[str, ...] = ("/accounts/", "/_allauth/")
+
+
+class CanonicalAuthHostMiddleware:
+    """Pin request.get_host() to the public domain for OAuth/auth flows.
+
+    Why: allauth derives the OAuth ``redirect_uri`` from ``request.get_host()``.
+    This backend sits behind the frontend's reverse-proxy rewrite (Render static
+    site → backend service), which does NOT reliably forward the public host in
+    ``X-Forwarded-Host``. So ``get_host()`` returns the internal *.onrender.com
+    service host, Google sees an unregistered ``redirect_uri`` and rejects with
+    ``redirect_uri_mismatch`` — and even past that, a callback completing on
+    *.onrender.com can't set the ``.whirlyfan.com``-scoped session cookie, so
+    login would silently fail. Header-trust (``USE_X_FORWARDED_HOST``) can't fix
+    this when the proxy doesn't send the header, so we pin it explicitly.
+
+    For auth paths only, override the host with ``settings.OAUTH_CALLBACK_HOST``
+    (and drop any forwarded-host header so it can't win) so the generated
+    ``redirect_uri`` and the cookie it sets use the public domain. The host must
+    be in ``ALLOWED_HOSTS``. No-ops when the setting is empty/unset (local dev),
+    leaving Google's localhost flow untouched.
+
+    Ordering: runs early (before CSRF / CommonMiddleware / the allauth views) so
+    ``get_host()`` already returns the pinned host wherever it's read.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+        self.host: str = getattr(settings, "OAUTH_CALLBACK_HOST", "") or ""
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        if self.host and (request.path or "").startswith(_CANONICAL_HOST_PREFIXES):
+            request.META["HTTP_HOST"] = self.host
+            request.META.pop("HTTP_X_FORWARDED_HOST", None)
+        return self.get_response(request)
