@@ -136,13 +136,14 @@ export function NowPlayingBar() {
     const newItem = followedItem.current !== itemId
     followedItem.current = itemId
 
-    // Snap to the server's live position on a new track or when (re)starting play
-    // — e.g. a guest joining mid-song. Skip small diffs so we don't stutter.
-    if (newItem || (serverPlaying && el.paused)) {
-      const target = intendedSeconds(room)
-      if (Number.isFinite(target) && Math.abs(el.currentTime - target) > 0.75) {
-        el.currentTime = target
-      }
+    // Converge on the server's live position: on a new track, when (re)starting
+    // play, or when the playhead has diverged enough to be a deliberate seek (or
+    // real drift) rather than buffering jitter. The >1.5s gate keeps us from
+    // stuttering on normal sub-second skew while still following a host's seek.
+    const target = intendedSeconds(room)
+    const diverged = Math.abs(el.currentTime - target) > 1.5
+    if (Number.isFinite(target) && (newItem || (serverPlaying && el.paused) || diverged)) {
+      el.currentTime = target
     }
     // Follow play/pause. play() may reject until this client has a user gesture.
     if (serverPlaying && el.paused) void el.play().catch(() => {})
