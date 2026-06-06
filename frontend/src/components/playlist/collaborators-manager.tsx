@@ -1,4 +1,4 @@
-import { UserPlus, X } from 'lucide-react'
+import { UserPlus, Users, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -33,12 +33,24 @@ export function CollaboratorsManager({
   const members = collaborators.data ?? []
 
   return (
-    <div className="border-border/60 space-y-2 border-t pt-3">
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-medium">Collaborators</p>
-        {members.length > 0 && (
-          <span className="text-muted-foreground text-xs tabular-nums">{members.length}</span>
-        )}
+    <section className="bg-card border-border/60 space-y-2.5 rounded-2xl border p-4 shadow-sm">
+      <div className="flex items-center gap-2.5">
+        <span className="from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
+          <Users className="size-4" aria-hidden />
+        </span>
+        <div>
+          <p className="text-sm font-medium">
+            Collaborators
+            {members.length > 0 && (
+              <span className="text-muted-foreground ml-1.5 text-xs tabular-nums">
+                {members.length}
+              </span>
+            )}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {isOwner ? 'People who can edit this playlist with you.' : 'Editing this playlist.'}
+          </p>
+        </div>
       </div>
 
       {members.length > 0 ? (
@@ -89,7 +101,7 @@ export function CollaboratorsManager({
       )}
 
       {isOwner && <InlineInvite playlistId={playlistId} />}
-    </div>
+    </section>
   )
 }
 

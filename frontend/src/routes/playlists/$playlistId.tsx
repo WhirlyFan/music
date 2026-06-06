@@ -128,11 +128,17 @@ function PlaylistDetailPage() {
   if (isLoading || !playlist) {
     return (
       <SkeletonZone>
-        <div className="space-y-6">
+        <div className="space-y-6 pb-36">
           <PageHeader
             breadcrumbs={[{ label: 'playlists', to: '/playlists' }]}
             title={<SkeletonText className="max-w-[16rem]" />}
             description={<SkeletonText className="max-w-[6rem]" />}
+            actions={
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-9 w-16 rounded-md" />
+                <Skeleton className="h-9 w-20 rounded-md" />
+              </div>
+            }
           />
           <ol className="space-y-2">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -236,7 +242,7 @@ function PlaylistDetailPage() {
           className="ease-out-quint grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none"
           style={{ gridTemplateRows: editing ? '1fr' : '0fr' }}
         >
-          <div className="overflow-hidden">
+          <div className="space-y-3 overflow-hidden">
             <EditPanel
               key={playlistId}
               playlist={playlist}
@@ -246,6 +252,8 @@ function PlaylistDetailPage() {
               onDone={() => setEditing(false)}
               onRefresh={isOwner && playlist.origin ? () => setRefreshOpen(true) : undefined}
             />
+            {/* Its own section, distinct from the metadata form above. */}
+            <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />
           </div>
         </div>
       )}
@@ -575,9 +583,6 @@ function EditPanel({
           </Button>
         </div>
       </form>
-
-      {/* Collaborator management lives here — compact + tucked inside the editor. */}
-      <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />
     </section>
   )
 }
@@ -612,15 +617,19 @@ function TrackRow({
   const ripple = useRipple()
   const skeleton = useSkeletonZone()
 
-  // Zone-driven skeleton: same <li> shell as the real row (artwork + two text lines).
+  // Zone-driven skeleton: mirror the real VIEW-mode row exactly — leading position
+  // number, artwork, two text lines, and the trailing add-to-queue button — so the
+  // skeleton occupies the same box the loaded row will.
   if (skeleton || !item) {
     return (
       <li aria-hidden className="border-border/60 flex items-center gap-3 rounded-xl border p-3">
+        <Skeleton className="h-4 w-5 shrink-0" />
         <Skeleton className="size-10 shrink-0 rounded-md" />
         <div className="min-w-0 flex-1 space-y-1.5">
           <SkeletonText className="max-w-[14rem]" />
           <SkeletonText className="max-w-[9rem] text-sm" />
         </div>
+        <Skeleton className="size-9 shrink-0 rounded-md" />
       </li>
     )
   }

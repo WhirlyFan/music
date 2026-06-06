@@ -138,9 +138,14 @@ class Playlist(BaseModel, RLSModel):
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
     artwork_url = models.URLField(max_length=1024, blank=True)  # the playlist's own cover
+    # CASCADE (not SET_NULL): a playlist always has an owner. If the user is deleted,
+    # their playlists go with them — which cascades on to PlaylistTrack, collaborators,
+    # activity, and imports — rather than leaving an ownerless row that RLS's owner
+    # policy can never match and no one can manage or delete. (null=True is retained
+    # only so historical rows / the ORM stay flexible; the app always sets an owner.)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
         blank=True,
         related_name="playlists",
