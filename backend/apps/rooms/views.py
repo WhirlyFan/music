@@ -16,6 +16,7 @@ from .models import PlaybackState
 from .serializers import (
     GuestControlSerializer,
     JoinRoomSerializer,
+    KickMemberSerializer,
     PlayNowSerializer,
     PlayPlaylistSerializer,
     PlaySerializer,
@@ -121,6 +122,16 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         room = services.get_active_room(request.user)
         return self._apply(room, lambda: services.set_guest_control(room, s.validated_data["enabled"]))
+
+    @extend_schema(request=KickMemberSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def kick(self, request):
+        """Host removes a guest from their jam (broadcasts; the kicked guest's
+        client falls back to their own room)."""
+        s = KickMemberSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        room = services.get_active_room(request.user)
+        return self._apply(room, lambda: services.kick_member(room, s.validated_data["user_id"]))
 
     @extend_schema(request=JoinRoomSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

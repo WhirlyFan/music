@@ -193,6 +193,18 @@ def leave_room(user) -> Room | None:
     return room
 
 
+@transaction.atomic
+def kick_member(room: Room, user_id) -> bool:
+    """Host removes a guest from the jam. Returns whether anyone was removed.
+    The host can't be kicked (no-op)."""
+    if str(user_id) == str(room.host_id):
+        return False
+    deleted, _ = RoomMember.objects.filter(
+        room=room, user_id=user_id, role=RoomMember.Role.GUEST
+    ).delete()
+    return bool(deleted)
+
+
 def current_room(user) -> Room:
     """The room the user is actively in: the Jam they've joined as a guest (most
     recent, if somehow more than one), else their own active room."""

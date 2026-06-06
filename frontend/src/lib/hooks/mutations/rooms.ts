@@ -139,6 +139,13 @@ export function useSetGuestControl() {
   )
 }
 
+/** Host removes a guest from the jam. */
+export function useKickMember() {
+  return useRoomMutation((userId: string) =>
+    api<Room>('/rooms/kick/', { method: 'POST', body: { user_id: userId } }),
+  )
+}
+
 /** Save the whole queue as an owned playlist. */
 export function useSaveQueueAsPlaylist() {
   const qc = useQueryClient()

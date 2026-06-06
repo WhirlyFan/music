@@ -437,7 +437,7 @@ export function NowPlayingBar() {
         >
           <Radio className={`size-4 ${isShared ? 'text-primary' : ''}`} />
           {isShared && memberCount > 0 && (
-            <span className="bg-primary text-primary-foreground ring-background absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-semibold tabular-nums ring-2 motion-safe:animate-pop-in">
+            <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-semibold tabular-nums ring-2">
               {memberCount}
             </span>
           )}

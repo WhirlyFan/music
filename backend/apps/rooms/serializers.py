@@ -171,6 +171,12 @@ class GuestControlSerializer(serializers.Serializer):
     enabled = serializers.BooleanField()
 
 
+class KickMemberSerializer(serializers.Serializer):
+    """Host removes a guest from the jam, by user id."""
+
+    user_id = serializers.UUIDField()
+
+
 class SyncPositionSerializer(serializers.Serializer):
     """Host re-anchor: the real playhead (ms) + whether audio is actually playing."""
 

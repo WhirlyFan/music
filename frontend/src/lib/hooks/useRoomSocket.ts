@@ -60,11 +60,17 @@ export function useRoomSocket(
         if (gen < lastGen.current) return // older than what we've already applied
         lastGen.current = gen
         qc.setQueryData(roomKeys.me(), msg.room)
-        // The jam I'm a guest in just ended (host unshared). Fall back to my own
-        // room: refetch /rooms/current/, which now resolves there, and the socket
+        // I'm a guest and no longer belong here — the jam ended (unshared) or the
+        // host kicked me (I've dropped out of members). Fall back to my own room:
+        // refetch /rooms/current/, which now resolves there, and the socket
         // re-subscribes to the new room id.
-        if (myUserId && msg.room.host_id !== myUserId && !msg.room.is_shared) {
-          void qc.invalidateQueries({ queryKey: roomKeys.me() })
+        if (myUserId && msg.room.host_id !== myUserId) {
+          const amMember = (msg.room.members ?? []).some(
+            (m: { user_id?: string }) => m.user_id === myUserId,
+          )
+          if (!msg.room.is_shared || !amMember) {
+            void qc.invalidateQueries({ queryKey: roomKeys.me() })
+          }
         }
       }
       ws.onclose = () => {

@@ -1,4 +1,4 @@
-import { Check, Copy, Crown, LogOut, Radio, Users } from 'lucide-react'
+import { Check, Copy, Crown, LogOut, Radio, UserMinus, Users } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -14,6 +14,7 @@ import {
 import type { Room } from '@/lib/api/models'
 import { dicebearAvatarUrl } from '@/lib/auth/avatar'
 import {
+  useKickMember,
   useLeaveRoom,
   useSetGuestControl,
   useShareRoom,
@@ -42,6 +43,7 @@ export function JamDialog({
   const unshare = useUnshareRoom()
   const leave = useLeaveRoom()
   const setGuestControl = useSetGuestControl()
+  const kick = useKickMember()
   const [copied, setCopied] = useState(false)
 
   const isHost = !!myUserId && room.host_id === myUserId
@@ -104,7 +106,7 @@ export function JamDialog({
                     <span
                       key={`${ch}-${i}`}
                       style={{ animationDelay: `${i * 45}ms` }}
-                      className="from-primary/10 to-accent/10 border-border/70 flex size-11 items-center justify-center rounded-xl border bg-gradient-to-br font-mono text-2xl font-bold motion-safe:animate-pop-in"
+                      className="from-primary/10 to-accent/10 border-border/70 motion-safe:animate-pop-in flex size-11 items-center justify-center rounded-xl border bg-gradient-to-br font-mono text-2xl font-bold"
                     >
                       {ch}
                     </span>
@@ -133,7 +135,7 @@ export function JamDialog({
                   <li
                     key={m.user_id}
                     style={{ animationDelay: `${i * 60}ms` }}
-                    className="flex items-center gap-2.5 motion-safe:animate-fade-in"
+                    className="group motion-safe:animate-fade-in flex items-center gap-2.5"
                   >
                     <div className="relative shrink-0">
                       <Avatar className="size-8">
@@ -148,10 +150,23 @@ export function JamDialog({
                         <span className="text-muted-foreground font-normal"> (you)</span>
                       )}
                     </span>
-                    {m.role === 'host' && (
+                    {m.role === 'host' ? (
                       <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
                         <Crown className="size-3" /> Host
                       </span>
+                    ) : (
+                      isHost && (
+                        <button
+                          type="button"
+                          onClick={() => kick.mutate(m.user_id)}
+                          disabled={kick.isPending}
+                          aria-label={`Remove ${m.username}`}
+                          title={`Remove ${m.username}`}
+                          className="text-muted-foreground hover:text-destructive ease-standard rounded-md p-1 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+                        >
+                          <UserMinus className="size-4" />
+                        </button>
+                      )
                     )}
                   </li>
                 ))}
@@ -169,7 +184,9 @@ export function JamDialog({
               >
                 <span className="flex flex-col">
                   <span className="text-sm font-medium">Let guests control</span>
-                  <span className="text-muted-foreground text-xs">Play, pause, seek &amp; skip</span>
+                  <span className="text-muted-foreground text-xs">
+                    Play, pause, seek &amp; skip
+                  </span>
                 </span>
                 <span
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${

@@ -169,6 +169,23 @@ def test_guest_control_gating_and_toggle():
 
 
 @pytest.mark.django_db
+def test_host_can_kick_guest():
+    host_api, host = authed()
+    code = host_api.post("/api/v1/rooms/share/").json()["code"]
+    guest_api, guest = authed()
+    guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json")
+
+    body = host_api.post(
+        "/api/v1/rooms/kick/", {"user_id": str(guest.id)}, format="json"
+    ).json()
+    # Guest is gone from the jam; the host remains.
+    assert [m["user_id"] for m in body["members"]] == [str(host.id)]
+    assert not RoomMember.objects.filter(user=guest, role="guest").exists()
+    # Kicked guest's current falls back to their own room.
+    assert guest_api.get("/api/v1/rooms/current/").json()["host_id"] == str(guest.id)
+
+
+@pytest.mark.django_db
 def test_guest_can_leave_and_falls_back_to_own_room():
     host_api, host = authed()
     code = host_api.post("/api/v1/rooms/share/").json()["code"]
