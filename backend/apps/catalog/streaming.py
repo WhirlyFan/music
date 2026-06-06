@@ -36,6 +36,11 @@ log = logging.getLogger(__name__)
 
 _CHUNK = 64 * 1024
 _URL_TTL = 60 * 60  # 1h — comfortably inside the googlevideo URL lifetime
+# Cap how long a jam waits on "Starting…" for a cold track. A never-resolved
+# YouTube video can take many seconds to resolve + download; past this we start
+# everyone anyway (they live-proxy; the cache keeps warming for next time) rather
+# than holding the whole room hostage.
+_START_TIMEOUT = 8
 
 # Guards against two concurrent misses both downloading the same video.
 _warming: set[str] = set()
@@ -117,6 +122,10 @@ def warm_video(video_id: str) -> None:
         _notify_ready(video_id)
         return
     _spawn_fill(video_id, None, None)
+    # Start-anyway cap: if the cold fetch is slow, don't leave the jam stuck on
+    # "Starting…" — fire ready after the timeout too (on_audio_ready is idempotent,
+    # so the later fill-completion signal is a harmless no-op).
+    threading.Timer(_START_TIMEOUT, _notify_ready, args=(video_id,)).start()
 
 
 def _spawn_fill(video_id: str, url: str | None, headers: dict | None) -> None:

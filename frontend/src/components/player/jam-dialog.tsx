@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
 import { roomKeys } from '@/lib/hooks/keys'
 import {
@@ -218,7 +219,7 @@ export function JamDialog() {
                     void fetchNextPage()
                   }
                 }}
-                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto"
+                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto pr-0.5 pb-1.5"
               >
                 {members.map((m, i) => (
                   <li
@@ -227,8 +228,15 @@ export function JamDialog() {
                     className="group motion-safe:animate-fade-in flex items-center gap-2.5"
                   >
                     <div className="relative shrink-0">
-                      <span className="from-primary to-accent text-primary-foreground flex size-8 items-center justify-center rounded-full bg-gradient-to-br">
-                        <User className="size-4" />
+                      {/* The user's unique DiceBear "glass" gradient, with a person
+                          icon on top so a row clearly reads as a user. */}
+                      <span className="relative flex size-8 items-center justify-center overflow-hidden rounded-full">
+                        <img
+                          src={dicebearAvatarUrl(m.username)}
+                          alt=""
+                          className="absolute inset-0 size-full object-cover"
+                        />
+                        <User className="relative size-4 text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.55)]" />
                       </span>
                       <span className="bg-success ring-background absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2" />
                     </div>
