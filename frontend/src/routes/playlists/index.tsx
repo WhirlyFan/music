@@ -43,19 +43,27 @@ function PlaylistsPage() {
         <div className="grid size-full place-items-center p-6">
           <FormError message="Failed to load playlists." />
         </div>
-      ) : empty ? (
-        <div className="text-muted-foreground grid size-full place-items-center p-6 text-center">
-          {q
-            ? `No playlists match “${q}”.`
-            : 'No playlists yet — import one from the home page, then save it.'}
-        </div>
       ) : (
-        <CoverCluster
-          loading={playlists.isLoading}
-          items={items}
-          onOpen={(id) => navigate({ to: '/playlists/$playlistId', params: { playlistId: id } })}
-          onDelete={(id) => del.mutate(id, { onSuccess: () => toast.success('Playlist deleted.') })}
-        />
+        <>
+          {/* Always mounted — a no-results search passes items=[] so the cluster
+              pops every cover OUT (its exit spring) instead of vanishing the moment
+              the component unmounts. The empty message then fades in over the top. */}
+          <CoverCluster
+            loading={playlists.isLoading}
+            items={items}
+            onOpen={(id) => navigate({ to: '/playlists/$playlistId', params: { playlistId: id } })}
+            onDelete={(id) =>
+              del.mutate(id, { onSuccess: () => toast.success('Playlist deleted.') })
+            }
+          />
+          {empty && (
+            <div className="text-muted-foreground motion-safe:animate-fade-in pointer-events-none absolute inset-0 grid place-items-center p-6 text-center">
+              {q
+                ? `No playlists match “${q}”.`
+                : 'No playlists yet — import one from the home page, then save it.'}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
