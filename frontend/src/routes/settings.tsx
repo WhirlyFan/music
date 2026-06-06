@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { GoogleIcon } from '@/components/auth/google-button'
-import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -45,7 +45,7 @@ function SettingsPage() {
     >
       <Section title="Account" description="Your sign-in identity.">
         <SettingsRow
-          icon={<Mail className="h-5 w-5" aria-hidden="true" />}
+          icon={<Mail className="size-4" aria-hidden="true" />}
           title="Email"
           description={user?.email ?? 'The address you sign in and receive mail at.'}
           action={
@@ -56,7 +56,7 @@ function SettingsPage() {
         />
         <UsernameRow username={user?.username} />
         <SettingsRow
-          icon={<KeyRound className="h-5 w-5" aria-hidden="true" />}
+          icon={<KeyRound className="size-4" aria-hidden="true" />}
           title="Password"
           description="Set a new password. At least 12 characters."
           action={
@@ -77,7 +77,7 @@ function SettingsPage() {
 
       <Section title="Security" description="How you sign in to your account.">
         <SettingsRow
-          icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
+          icon={<ShieldCheck className="size-4" aria-hidden="true" />}
           title="Multi-factor authentication"
           loading={authenticators.isPending}
           description={
@@ -132,9 +132,9 @@ function UsernameRow({ username }: { username?: string }) {
   return (
     <div className="flex items-center justify-between gap-4 p-4">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="text-muted-foreground shrink-0">
-          <AtSign className="h-5 w-5" aria-hidden="true" />
-        </div>
+        <IconBadge>
+          <AtSign className="size-4" aria-hidden="true" />
+        </IconBadge>
         <div className="min-w-0 space-y-1">
           <p className="text-sm font-medium">Username</p>
           {editing ? (
@@ -184,6 +184,7 @@ function GoogleConnectionRow({ loading: parentLoading }: { loading?: boolean }) 
   return (
     <SettingsRow
       icon={<GoogleIcon />}
+      brand
       title="Google"
       loading={parentLoading || isPending}
       description={connected ? (google?.display ?? 'Connected.') : 'Link your Google account.'}
@@ -242,8 +243,25 @@ function Section({
         <h2 className="text-lg font-medium">{title}</h2>
         {description ? <p className="text-muted-foreground text-sm">{description}</p> : null}
       </div>
-      <div className="bg-card divide-border divide-y rounded-md border">{children}</div>
+      <div className={`${settingsCard} divide-border divide-y overflow-hidden`}>{children}</div>
     </section>
+  )
+}
+
+/** The round gradient icon badge used on each settings row — matches the dialog +
+ *  auth-card header icons. `brand` swaps in a neutral tile so a multicolor logo
+ *  (e.g. Google) sits on a plain surface instead of the gradient. */
+function IconBadge({ children, brand = false }: { children: React.ReactNode; brand?: boolean }) {
+  return (
+    <span
+      className={
+        brand
+          ? 'bg-background ring-border flex size-9 shrink-0 items-center justify-center rounded-full ring-1'
+          : 'from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm'
+      }
+    >
+      {children}
+    </span>
   )
 }
 
@@ -254,6 +272,7 @@ function SettingsRow({
   status,
   action,
   loading = false,
+  brand = false,
 }: {
   icon: React.ReactNode
   title: string
@@ -261,18 +280,21 @@ function SettingsRow({
   status?: 'on' | 'off'
   action: React.ReactNode
   loading?: boolean
+  brand?: boolean
 }) {
   return (
     <div className="flex items-center justify-between gap-4 p-4">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="text-muted-foreground shrink-0">{icon}</div>
+        <IconBadge brand={brand}>{icon}</IconBadge>
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{title}</p>
             {!loading && status === 'on' ? (
-              <span className="text-success inline-flex items-center gap-1 text-xs">On</span>
+              <span className="bg-success/10 text-success inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                On
+              </span>
             ) : !loading && status === 'off' ? (
-              <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
+              <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
                 Off
               </span>
             ) : null}

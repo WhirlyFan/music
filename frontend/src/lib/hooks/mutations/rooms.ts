@@ -146,12 +146,17 @@ export function useKickMember() {
   )
 }
 
-/** Save the whole queue as an owned playlist. */
+/** Save the whole queue as an owned playlist. `trackIds` is a snapshot of what was
+ *  lined up when the Save dialog opened, so a track ending meanwhile doesn't change
+ *  what's saved (the server uses the snapshot verbatim when present). */
 export function useSaveQueueAsPlaylist() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (title: string) =>
-      api<Playlist>('/rooms/save-as-playlist/', { method: 'POST', body: { title } }),
+    mutationFn: ({ title, trackIds }: { title: string; trackIds: string[] }) =>
+      api<Playlist>('/rooms/save-as-playlist/', {
+        method: 'POST',
+        body: { title, track_ids: trackIds },
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: playlistKeys.list() }),
   })
 }

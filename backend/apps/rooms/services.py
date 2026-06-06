@@ -24,7 +24,7 @@ from django.utils import timezone
 from apps.catalog import streaming
 from apps.catalog.models import PlaybackSource
 
-from .models import PlaybackState, QueueItem, Room, RoomMember
+from .models import PlaybackState, QueueItem, Room, RoomMember, _new_shuffle_seed
 
 CONTEXT = QueueItem.Kind.CONTEXT
 QUEUE = QueueItem.Kind.QUEUE
@@ -85,13 +85,26 @@ def on_audio_ready(video_id: str) -> None:
 
 
 def prewarm_upcoming(room: Room, count: int = 2) -> None:
-    """Warm the next few tracks' audio so advancing the jam starts instantly
-    (no 'Starting…' wait). Each warm is a background no-op if already cached."""
+    """Warm upcoming tracks so advancing the jam starts instantly (no 'Starting…'
+    wait). Covers two cases:
+      • the next 2 tracks in line — what plays on a normal skip/auto-advance, and
+      • the exact track a shuffle would land on — shuffle is server-side and
+        seeded, so its result is deterministic; we warm precisely that one.
+    Each warm is a background no-op if already cached or in flight."""
     up = upcoming(room)
-    for item in (up["queue"] + up["context"])[:count]:
+    candidates = list((up["queue"] + up["context"])[:count])
+    shuffle_top = next_shuffle_top(room)
+    if shuffle_top is not None:
+        candidates.append(shuffle_top)
+
+    seen = set()
+    for item in candidates:
+        if item.id in seen:
+            continue
+        seen.add(item.id)
         vid = _video_id(item.track)
         if vid and not streaming.is_cached(vid):
-            streaming.warm_video(vid)
+            streaming.warm_video(vid)  # no gate — nothing is waiting on these yet
 
 
 # --- Jam (sharing / membership) ---------------------------------------------
@@ -261,7 +274,7 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
             pending = True
             # Spawn the warm AFTER commit, so the cache-ready signal sees the
             # committed pending_start row (no race with this transaction).
-            transaction.on_commit(lambda v=vid: streaming.warm_video(v))
+            transaction.on_commit(lambda v=vid: streaming.warm_video(v, gate=True))
 
     playback.is_playing = item is not None and not pending
     playback.pending_start = pending
@@ -457,19 +470,46 @@ def remove(room: Room, item_id) -> bool:
 
 @transaction.atomic
 @transaction.atomic
+def _seeded_shuffle(items: list[QueueItem], seed: int):
+    """Assign new positions for a Spotify-style shuffle, deterministically from
+    `seed`. Items are taken in a stable order (current position) first, so the
+    same (seed, context) always yields the same permutation — letting prewarm
+    predict exactly what a shuffle will land on. Returns (ordered_items, positions)
+    aligned by index; positions[i] is the new position of ordered_items[i]."""
+    ordered = sorted(items, key=lambda i: i.position)
+    positions = list(range(len(ordered)))
+    random.Random(seed).shuffle(positions)
+    return ordered, positions
+
+
+def next_shuffle_top(room: Room) -> QueueItem | None:
+    """The context item a shuffle would play next under the room's current seed
+    (the track that lands at position 0), or None. Pure — no writes — so prewarm
+    can warm exactly that track."""
+    playback = getattr(room, "playback", None)
+    items = list(_ctx(room))
+    if playback is None or not items:
+        return None
+    ordered, positions = _seeded_shuffle(items, playback.next_shuffle_seed)
+    return next(it for it, p in zip(ordered, positions, strict=True) if p == 0)
+
+
 def shuffle(room: Room) -> None:
     """Shuffle the whole context (incl. the current track), Spotify-style, and play
-    from the top of the newly-shuffled order. The user queue is untouched."""
+    from the top of the newly-shuffled order. The user queue is untouched. Uses the
+    room's seeded permutation (the one prewarm already warmed), then rotates the
+    seed so the next shuffle differs."""
     playback, _ = PlaybackState.objects.get_or_create(room=room)
     items = list(_ctx(room))
     if not items:
         return
-    positions = list(range(len(items)))
-    random.shuffle(positions)
-    for item, pos in zip(items, positions, strict=True):
+    ordered, positions = _seeded_shuffle(items, playback.next_shuffle_seed)
+    for item, pos in zip(ordered, positions, strict=True):
         item.position = pos
-    QueueItem.objects.bulk_update(items, ["position"])
-    top = next(i for i in items if i.position == 0)
+    QueueItem.objects.bulk_update(ordered, ["position"])
+    top = next(it for it, p in zip(ordered, positions, strict=True) if p == 0)
+    playback.next_shuffle_seed = _new_shuffle_seed()
+    playback.save(update_fields=["next_shuffle_seed"])
     _set_current(playback, top)  # play from the top of the shuffle
 
 
@@ -516,17 +556,25 @@ def upcoming(room: Room) -> dict:
 
 
 @transaction.atomic
-def save_as_playlist(room: Room, user, title: str):
+def save_as_playlist(room: Room, user, title: str, track_ids: list | None = None):
     """Save what's lined up (now-playing + queue + remaining context) as an owned
-    playlist, in play order, de-duplicated."""
-    from apps.catalog.models import Playlist, PlaylistTrack
+    playlist, in play order, de-duplicated.
 
-    playback = PlaybackState.objects.filter(room=room).first()
-    up = upcoming(room)
-    tracks = []
-    if playback and playback.current_item_id and playback.current_item:
-        tracks.append(playback.current_item.track)
-    tracks += [i.track for i in up["queue"]] + [i.track for i in up["context"]]
+    `track_ids` is a client snapshot of the lined-up tracks, captured when the Save
+    dialog opened — used verbatim (in order) so a track ending/advancing while the
+    dialog is open doesn't change what gets saved. Without it, we read live state."""
+    from apps.catalog.models import Playlist, PlaylistTrack, Track
+
+    if track_ids:
+        by_id = Track.objects.in_bulk(track_ids)
+        tracks = [by_id[tid] for tid in track_ids if tid in by_id]  # keep order, drop unknown
+    else:
+        playback = PlaybackState.objects.filter(room=room).first()
+        up = upcoming(room)
+        tracks = []
+        if playback and playback.current_item_id and playback.current_item:
+            tracks.append(playback.current_item.track)
+        tracks += [i.track for i in up["queue"]] + [i.track for i in up["context"]]
 
     playlist = Playlist.objects.create(title=title or "Saved queue", created_by=user)
     position = 0

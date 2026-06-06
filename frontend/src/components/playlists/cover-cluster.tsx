@@ -44,6 +44,15 @@ const TAP_THRESHOLD = 6 // px of pointer travel below which a press is a tap, no
 const REST_SPEED = 0.04 // below this (and nothing scaling/dragging) the loop idle-stops
 const cardFor = (w: number) => (w < 640 ? 112 : 144)
 
+// The cluster is "paginated" to a screenful: it shows as many covers as fit the
+// available real estate (card size vs viewport), and the rest are reachable by
+// searching — so it never crams 1000 playlists into one viewport. Searching swaps
+// the set; covers still on screen stay put, newcomers pop in, dropouts pop out.
+const capacityFor = (w: number, h: number, c: number) => {
+  const pitch = c * 1.12 // card + a little spacing (≈ the packed min-distance)
+  return Math.max(6, Math.floor(w / pitch) * Math.floor(h / pitch))
+}
+
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
@@ -121,8 +130,10 @@ export function CoverCluster({
   const drag = useRef({ id: null as string | null, px: 0, py: 0, vx: 0, vy: 0, moved: 0 })
   const wakeRef = useRef<() => void>(() => {})
   const sigRef = useRef('') // signature of the currently-rendered body set
+  const orderRef = useRef<string[]>([]) // stable shuffled order → the screenful is a varied sample
   const calm = useRef(reducedMotion())
   const [card, setCard] = useState(144)
+  const [capacity, setCapacity] = useState(48)
   const [renderList, setRenderList] = useState<CoverItem[]>(() => items)
 
   const measure = useCallback(() => {
@@ -300,12 +311,30 @@ export function CoverCluster({
     const g = geom.current
     const b = bodies.current
     const reduce = calm.current
-    const want = new Set(items.map((i) => i.id))
+    // Only a screenful is on the cluster at once (the rest are reachable via search).
+    // Show a varied SAMPLE rather than always the first N: keep a stable shuffled
+    // order so covers already on screen stay put, while new arrivals slot in at
+    // random positions (so over a delete / search the surfaced set changes). The
+    // order is re-rolled per mount, so each visit shows a different screenful.
+    const ids = items.map((i) => i.id)
+    const present = new Set(ids)
+    const order = orderRef.current.filter((id) => present.has(id)) // drop departed
+    const have = new Set(order)
+    for (const id of ids) {
+      if (!have.has(id)) order.splice(Math.floor(Math.random() * (order.length + 1)), 0, id)
+    }
+    orderRef.current = order
+    const byId = new Map(items.map((i) => [i.id, i]))
+    const shown = order
+      .slice(0, capacity)
+      .map((id) => byId.get(id))
+      .filter((it): it is CoverItem => !!it)
+    const want = new Set(shown.map((i) => i.id))
     // Under reduced motion: a static packed layout (spiral slots) snapped into place — no
     // spawn-from-centre + settle. Otherwise: spawn near the centre and bloom out.
-    const cells = reduce ? spiralCells(items.length) : []
+    const cells = reduce ? spiralCells(shown.length) : []
     const pitch = g.r * 2
-    items.forEach((it, i) => {
+    shown.forEach((it, i) => {
       let sx: number
       let sy: number
       if (reduce) {
@@ -344,14 +373,16 @@ export function CoverCluster({
     })
     for (const body of Array.from(b.values())) if (!want.has(body.id)) body.exiting = true
     wakeRef.current()
-  }, [items, measure])
+  }, [items, capacity, measure])
 
   // Resize → re-measure, re-arm, and (async) update the rendered card size.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const ro = new ResizeObserver(() => {
-      setCard(cardFor(el.clientWidth))
+      const c = cardFor(el.clientWidth)
+      setCard(c)
+      setCapacity(capacityFor(el.clientWidth, el.clientHeight, c))
       measure()
       wakeRef.current()
     })

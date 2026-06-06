@@ -72,11 +72,12 @@ export function NowPlayingBar() {
   const { analyser, connect: connectAnalyser } = useAudioAnalyser(audioRef)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  // Playback status, driven by the <audio> element's own events (DOM state) +
-  // the match query. `playing` flips on the real `playing` event; `buffering`
-  // covers the audio fetch/buffer gap. The spinner state (`loading`) is derived
-  // below from the match-in-progress + buffering — no effect sets it.
-  const [playing, setPlaying] = useState(false)
+  // Local playback status from the <audio> element's own events (DOM state).
+  // `buffering` covers the audio fetch/buffer gap. The button's displayed state
+  // and the toggle intent are derived from this in a solo room but from the
+  // SERVER in a jam (below) — so the whole room agrees on play/pause regardless
+  // of any single client's element diverging (e.g. a swallowed autoplay reject).
+  const [localPlaying, setLocalPlaying] = useState(false)
   const [buffering, setBuffering] = useState(false)
   const queuePanelRef = useRef<HTMLDivElement>(null)
   // Open-state in the URL (linkable, survives nav/refresh); measured geometry in a
@@ -99,6 +100,11 @@ export function NowPlayingBar() {
   const isShared = room?.is_shared ?? false
   const isHost = room?.host_id === myUserId
   const canDrive = !isShared || isHost || (room?.allow_guest_control ?? false)
+  // The play/pause the UI shows and the toggle acts on. In a jam this is the
+  // server's authoritative is_playing (so every client agrees and a tap always
+  // means the same thing); solo, it's this element's own state (most responsive).
+  const serverPlaying = room?.is_playing ?? false
+  const playing = isShared ? serverPlaying : localPlaying
   const canEditQueue = !isShared || isHost
   const memberCount = room?.members_count ?? 0
 
@@ -134,7 +140,6 @@ export function NowPlayingBar() {
   useEffect(() => {
     const el = audioRef.current
     if (!el || !itemId || !audioSrc) return
-    const serverPlaying = room?.is_playing ?? false
 
     if (!hydrated.current) {
       hydrated.current = true
@@ -213,7 +218,10 @@ export function NowPlayingBar() {
     if (!canDrive) return // guests follow the host
     const el = audioRef.current
     if (!el) return
-    const willPlay = el.paused
+    // Intent comes from the shared `playing` (server truth in a jam), NOT the
+    // local element — so every client toggles the same direction even if its own
+    // <audio> drifted out of sync (e.g. an autoplay reject left it paused).
+    const willPlay = !playing
     // Optimistic local response, then report to the server so the whole jam
     // follows — the broadcast echo reconciles everyone (including us). play()
     // rejects if the source failed to load; the <audio> onError surfaces it.
@@ -470,11 +478,11 @@ export function NowPlayingBar() {
           onPlaying={() => {
             // Real playback started — flip to "playing" so the button matches reality.
             setBuffering(false)
-            setPlaying(true)
+            setLocalPlaying(true)
           }}
           onPause={() => {
             setBuffering(false)
-            setPlaying(false)
+            setLocalPlaying(false)
           }}
           onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
@@ -482,7 +490,7 @@ export function NowPlayingBar() {
           onError={() => {
             // The stream failed to load (couldn't extract audio from YouTube).
             setBuffering(false)
-            setPlaying(false)
+            setLocalPlaying(false)
             toast.error(`Couldn't load audio for “${track.title}” — try again shortly.`)
           }}
         />

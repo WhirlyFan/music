@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { Check, Copy, Crown, Link2, LogOut, Radio, User, UserMinus, Users } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -201,6 +202,18 @@ export function JamDialog() {
                     {copied === 'code' ? 'Copied' : 'Copy code'}
                   </Button>
                 </div>
+
+                {/* QR to the join link so a phone can hop in without typing the
+                    code. White tile (not theme-tinted) so it stays high-contrast
+                    and scannable in dark mode — same rule as the TOTP QR. */}
+                {link && (
+                  <div className="flex flex-col items-center gap-2 pt-1">
+                    <div className="rounded-xl bg-white p-2.5 shadow-sm">
+                      <QRCodeSVG value={link} size={132} marginSize={0} />
+                    </div>
+                    <p className="text-muted-foreground text-xs">Scan to join on another device</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -219,7 +232,7 @@ export function JamDialog() {
                     void fetchNextPage()
                   }
                 }}
-                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto pr-0.5 pb-1.5"
+                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto pr-0.5 py-1.5"
               >
                 {members.map((m, i) => (
                   <li
@@ -229,8 +242,10 @@ export function JamDialog() {
                   >
                     <div className="relative shrink-0">
                       {/* The user's unique DiceBear "glass" gradient, with a person
-                          icon on top so a row clearly reads as a user. */}
-                      <span className="relative flex size-8 items-center justify-center overflow-hidden rounded-full">
+                          icon on top so a row clearly reads as a user. The muted
+                          backdrop + theme-token icon keep it sitting in the theme
+                          (the glass SVG has transparency) rather than floating. */}
+                      <span className="bg-muted text-muted-foreground relative flex size-8 items-center justify-center overflow-hidden rounded-full">
                         <img
                           src={dicebearAvatarUrl(m.username)}
                           alt=""

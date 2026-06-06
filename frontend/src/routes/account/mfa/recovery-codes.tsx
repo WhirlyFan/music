@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { RefreshCw } from 'lucide-react'
 
 import { ReauthenticateStep, requiresReauth } from '@/components/auth/reauthenticate-step'
-import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { useGenerateRecoveryCodes, useRecoveryCodes } from '@/lib/auth/mfa'
 import { mfaKeys } from '@/lib/hooks/keys'
@@ -68,7 +68,7 @@ function RecoveryCodesPage() {
         </p>
       ) : (
         <>
-          <div className="bg-card grid grid-cols-1 gap-2 rounded-md border p-4 font-mono text-sm sm:grid-cols-2">
+          <div className={`${settingsCard} grid grid-cols-1 gap-2 p-4 font-mono text-sm sm:grid-cols-2`}>
             {unused.map((code) => (
               <code key={code} className="bg-muted rounded px-2 py-1">
                 {code}

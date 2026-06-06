@@ -36,11 +36,11 @@ log = logging.getLogger(__name__)
 
 _CHUNK = 64 * 1024
 _URL_TTL = 60 * 60  # 1h — comfortably inside the googlevideo URL lifetime
-# Cap how long a jam waits on "Starting…" for a cold track. A never-resolved
-# YouTube video can take many seconds to resolve + download; past this we start
-# everyone anyway (they live-proxy; the cache keeps warming for next time) rather
-# than holding the whole room hostage.
-_START_TIMEOUT = 8
+# A waiting jam starts as soon as the audio URL RESOLVES (then everyone streams
+# progressively via the live proxy while the disk cache keeps filling) — we don't
+# wait for the whole file. This is a last-resort safety only: if the resolve
+# itself hangs, start anyway rather than stranding the room forever.
+_RESOLVE_HANG_GUARD = 45
 
 # Guards against two concurrent misses both downloading the same video.
 _warming: set[str] = set()
@@ -113,19 +113,19 @@ def warm_cache(video_id: str, url: str, headers: dict) -> None:
     _spawn_fill(video_id, url, dict(headers))
 
 
-def warm_video(video_id: str) -> None:
-    """Like warm_cache, but resolves the URL inside the worker thread (so the
-    caller — e.g. a request thread gating a jam start — never blocks on yt-dlp).
-    If the video is already cached, fire the ready signal immediately so a room
-    that's waiting on it can start."""
+def warm_video(video_id: str, *, gate: bool = False) -> None:
+    """Resolve + cache a video in the background (resolution runs in the worker
+    thread, off the request path). `gate=True` means a jam is waiting on this
+    track to start: _fill signals ready the moment the URL resolves (so everyone
+    streams progressively), and we add a last-resort guard in case resolution
+    itself hangs. Prewarming passes gate=False (no room is waiting)."""
     if is_cached(video_id):
-        _notify_ready(video_id)
+        if gate:
+            _notify_ready(video_id)
         return
     _spawn_fill(video_id, None, None)
-    # Start-anyway cap: if the cold fetch is slow, don't leave the jam stuck on
-    # "Starting…" — fire ready after the timeout too (on_audio_ready is idempotent,
-    # so the later fill-completion signal is a harmless no-op).
-    threading.Timer(_START_TIMEOUT, _notify_ready, args=(video_id,)).start()
+    if gate:
+        threading.Timer(_RESOLVE_HANG_GUARD, _notify_ready, args=(video_id,)).start()
 
 
 def _spawn_fill(video_id: str, url: str | None, headers: dict | None) -> None:
@@ -144,6 +144,11 @@ def _fill(video_id: str, url: str | None, headers: dict | None) -> None:
             audio = resolved_audio(video_id)
             url = audio["url"]
             headers = dict(audio.get("http_headers") or {})
+        # Resolved — that's the slow, cold part. A jam waiting on this track can start
+        # NOW and stream progressively via the live proxy (the resolved URL is cached,
+        # so every listener's /stream/ is fast); the full file keeps downloading below
+        # to back replays, seeks, and late joiners from disk.
+        _notify_ready(video_id)
         # Full file (drop any Range) so we can serve arbitrary ranges from disk.
         h = {k: v for k, v in (headers or {}).items() if k.lower() != "range"}
         with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=60) as up:

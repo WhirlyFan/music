@@ -10,11 +10,19 @@ is the clock authority (`PlaybackState.playing_since` + `position_ms`).
 See docs/design/queue-rooms.md.
 """
 
+import random
+
 from django.conf import settings
 from django.db import models
 
 from apps.catalog.models import Track
 from apps.core.models import BaseModel
+
+
+def _new_shuffle_seed() -> int:
+    """A fresh seed for a room's next shuffle. Module-level (not a lambda) so
+    migrations can reference it. 63 bits keeps it inside a signed BIGINT."""
+    return random.getrandbits(63)
 
 
 class Room(BaseModel):
@@ -146,6 +154,11 @@ class PlaybackState(BaseModel):
     # members can fetch from disk and start together. Flips to is_playing on the
     # cache-ready signal. Always false in a solo room (starts immediately).
     pending_start = models.BooleanField(default=False)
+    # Seed for the room's NEXT shuffle. Because shuffle is server-side and seeded,
+    # the result is deterministic from (seed, current context) — so prewarm can
+    # warm the exact track a shuffle will land on. shuffle() rotates this after it
+    # runs, so the following shuffle differs.
+    next_shuffle_seed = models.BigIntegerField(default=_new_shuffle_seed)
 
     def __str__(self) -> str:
         return f"Playback({self.room_id}, item={self.current_item_id}, playing={self.is_playing})"

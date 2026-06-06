@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
@@ -66,7 +66,7 @@ function ChangePasswordPage() {
           e.preventDefault()
           form.handleSubmit()
         }}
-        className="bg-card max-w-sm space-y-4 rounded-md border p-4"
+        className={`${settingsCard} space-y-4 p-4`}
       >
         <form.Field name="current">
           {(field) => {

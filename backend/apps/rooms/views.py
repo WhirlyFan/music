@@ -315,7 +315,12 @@ class RoomViewSet(viewsets.ViewSet):
         s = SaveAsPlaylistSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         room = services.get_active_room(request.user)
-        playlist = services.save_as_playlist(room, request.user, s.validated_data["title"])
+        playlist = services.save_as_playlist(
+            room,
+            request.user,
+            s.validated_data["title"],
+            track_ids=s.validated_data.get("track_ids"),
+        )
         # PlaylistSerializer reads a `track_count` annotation — re-fetch with it.
         playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
         return Response(PlaylistSerializer(playlist).data)

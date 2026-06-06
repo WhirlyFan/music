@@ -147,6 +147,14 @@
 }
 
 @layer base {
+  html {
+    /* Always reserve the scrollbar's space so opening a modal (Radix locks body
+       scroll, removing the scrollbar) doesn't reclaim that width and shift the
+       fixed player/seek bar. No-op under overlay scrollbars (macOS), which take
+       no layout space anyway. */
+    scrollbar-gutter: stable;
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
@@ -159,6 +167,17 @@
       Roboto,
       sans-serif;
   }
+}
+
+/* When a Radix dialog opens, react-remove-scroll locks body scroll and adds a
+   margin-right (= scrollbar width) to compensate for the scrollbar it removes.
+   But `scrollbar-gutter: stable` (above) already reserves that space, so the
+   compensation double-counts and shifts in-flow content (e.g. search results)
+   sideways. Zero it out. Unlayered + higher specificity than the library's
+   injected `body[data-scroll-locked]` rule so it wins the !important conflict. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
+  padding-right: 0 !important;
 }
 
 /*

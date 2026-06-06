@@ -48,7 +48,7 @@ function AlertDialogContent({
         ref={ref}
         data-slot="alert-dialog-content"
         className={cn(
-          'bg-background fixed top-[50%] left-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl',
+          'bg-background border-border/60 fixed top-[50%] left-[50%] z-50 grid w-[95vw] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-2xl border p-6 shadow-xl',
           'data-[state=open]:animate-dialog-in data-[state=closed]:animate-dialog-out',
           'focus:outline-hidden',
           className,

@@ -3,7 +3,7 @@ import { Fingerprint, KeyRound, ShieldAlert, ShieldCheck, Smartphone } from 'luc
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { bannerError } from '@/lib/auth/errors'
 import { useAuthenticators, useDeactivateTotp } from '@/lib/auth/mfa'
@@ -74,7 +74,7 @@ function TwoFactorOverview() {
       {search.required ? (
         <div
           role="alert"
-          className="border-warning/30 bg-warning/10 flex items-start gap-3 rounded-md border p-4"
+          className="border-warning/30 bg-warning/10 flex items-start gap-3 rounded-2xl border p-4 shadow-sm"
         >
           <ShieldAlert className="text-warning mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div className="space-y-1 text-sm">
@@ -93,7 +93,7 @@ function TwoFactorOverview() {
         </div>
       ) : null}
 
-      <ul className="divide-border bg-card divide-y rounded-md border" role="list">
+      <ul className={`${settingsCard} divide-border divide-y overflow-hidden`} role="list">
         <MethodRow
           name="Authenticator app (TOTP)"
           icon={<Smartphone className="size-4" aria-hidden="true" />}
@@ -167,8 +167,10 @@ function MethodRow({
         {/* Icon tile fills in green once the method is enrolled — a glanceable
             status that doubles as the method's identity. */}
         <div
-          className={`grid size-9 shrink-0 place-items-center rounded-lg transition-colors ${
-            enrolled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
+          className={`grid size-9 shrink-0 place-items-center rounded-full transition-colors ${
+            enrolled
+              ? 'bg-success/15 text-success'
+              : 'from-primary to-accent text-primary-foreground shadow-primary/30 bg-gradient-to-br shadow-sm'
           }`}
           aria-hidden="true"
         >
@@ -178,8 +180,8 @@ function MethodRow({
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{name}</p>
             {enrolled ? (
-              <span className="text-success inline-flex items-center gap-1 text-xs font-medium">
-                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Enrolled
+              <span className="bg-success/10 text-success inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                <ShieldCheck className="size-3" aria-hidden="true" /> Enrolled
               </span>
             ) : null}
           </div>

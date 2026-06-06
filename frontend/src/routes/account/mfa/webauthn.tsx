@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { ReauthenticateStep, requiresReauth } from '@/components/auth/reauthenticate-step'
-import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
@@ -154,7 +154,7 @@ function WebAuthnPage() {
 
       {/* Existing passkeys */}
       {passkeys.length > 0 ? (
-        <ul className="divide-border bg-card divide-y rounded-md border" role="list">
+        <ul className={`${settingsCard} divide-border divide-y overflow-hidden`} role="list">
           {passkeys.map((p) => (
             <PasskeyRow
               key={p.id}
@@ -316,7 +316,7 @@ function EnrollStep({ onDone, onCancel }: { onDone: () => void; onCancel: () => 
         e.preventDefault()
         form.handleSubmit()
       }}
-      className="bg-card space-y-4 rounded-md border p-4"
+      className={`${settingsCard} space-y-4 p-4`}
       aria-labelledby="enroll-heading"
     >
       <div>

@@ -2,6 +2,19 @@ import { PageHeader } from '@/components/layout/page-header'
 import type { Crumb } from '@/components/ui/breadcrumbs'
 
 /**
+ * Shared surface for settings / account cards: rounded, softly bordered, gently
+ * raised. Solid `bg-card` and NO backdrop-blur — unlike the dialogs/auth card
+ * (which sit over a glow blob, so blur is meaningful), these sit on a plain page,
+ * where blur only adds a faint edge artifact. The soft border carries the panel
+ * in light mode, where `--card` equals `--background`.
+ *
+ * Compose with layout utilities, e.g.
+ *   `${settingsCard} divide-y divide-border overflow-hidden`   (row list)
+ *   `${settingsCard} p-4 space-y-4`                            (form)
+ */
+export const settingsCard = 'bg-card border-border/70 rounded-2xl border shadow-sm'
+
+/**
  * Container for the settings tree (`/settings` and `/account/*` sub-pages).
  *
  * Provides:

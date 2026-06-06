@@ -4,7 +4,7 @@ import { Loader2, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
@@ -53,7 +53,7 @@ function ChangeEmailPage() {
       title="Change email"
       description="We send a verification link to the new address. Your current email stays active until you click it."
     >
-      <dl className="bg-card divide-border grid grid-cols-1 divide-y rounded-md border text-sm">
+      <dl className={`${settingsCard} divide-border grid grid-cols-1 divide-y overflow-hidden text-sm`}>
         <div className="flex items-center justify-between p-4">
           <dt className="text-muted-foreground">Current email</dt>
           <dd className="font-medium">{primary?.email ?? '—'}</dd>
@@ -73,7 +73,7 @@ function ChangeEmailPage() {
           e.preventDefault()
           form.handleSubmit()
         }}
-        className="bg-card max-w-sm space-y-4 rounded-md border p-4"
+        className={`${settingsCard} space-y-4 p-4`}
       >
         <form.Field name="email">
           {(field) => {

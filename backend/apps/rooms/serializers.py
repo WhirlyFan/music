@@ -157,6 +157,12 @@ class QueueItemRefSerializer(serializers.Serializer):
 
 class SaveAsPlaylistSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
+    # An ordered snapshot of the track ids that were lined up when the user opened
+    # the Save dialog. Sent so a track ending/advancing afterward doesn't change
+    # what gets saved. Optional — without it the server reads live room state.
+    track_ids = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_empty=True
+    )
 
 
 class JoinRoomSerializer(serializers.Serializer):

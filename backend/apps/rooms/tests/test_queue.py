@@ -105,6 +105,23 @@ def test_play_playlist_and_save():
 
 
 @pytest.mark.django_db
+def test_save_as_playlist_uses_track_snapshot():
+    # A client snapshot (taken when the Save dialog opened) is saved verbatim, in
+    # order — so a track ending afterward doesn't change what's saved. The live
+    # room state is ignored when a snapshot is given.
+    user = UserFactory()
+    room = services.get_active_room(user)
+    tracks = [TrackFactory() for _ in range(4)]
+    services.play_now(room, tracks[0], added_by=user)  # live room: just tracks[0]
+
+    snapshot = [tracks[2].id, tracks[0].id, tracks[3].id]  # arbitrary order, subset
+    saved = services.save_as_playlist(room, user, "Snap", track_ids=snapshot)
+
+    ordered = list(saved.items.order_by("position").values_list("track_id", flat=True))
+    assert ordered == snapshot
+
+
+@pytest.mark.django_db
 def test_play_playlist_starts_at_given_track():
     # Clicking a row plays the whole playlist but starts at that track.
     user = UserFactory()
@@ -157,12 +174,19 @@ def test_shuffle_includes_all_and_plays_from_top():
         PlaylistTrackFactory(playlist=playlist, track=t, position=i)
     services.play_playlist(room, playlist, start_track_id=tracks[2].id, added_by=user)
 
+    # The seeded shuffle is deterministic, so prewarm can predict the landing
+    # track: next_shuffle_top must equal what shuffle actually plays.
+    predicted = services.next_shuffle_top(room)
+
     services.shuffle(room)
     room.refresh_from_db()
 
+    assert room.playback.current_item_id == predicted.id
     # Spotify-style: play from the top of the freshly-shuffled order.
     assert room.playback.context_pos == 0
     assert room.playback.current_item.position == 0
     assert room.playback.position_ms == 0
     # All 6 context tracks remain, positions stay a contiguous 0..5 permutation.
     assert sorted(i.position for i in _ctx(room)) == [0, 1, 2, 3, 4, 5]
+    # Seed rotated → the next shuffle is predictable again (and independent).
+    assert services.next_shuffle_top(room) is not None
