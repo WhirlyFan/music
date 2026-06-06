@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
+import { PlaylistCollaboration } from '@/components/playlist/playlist-collaboration'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import {
   AlertDialog,
@@ -140,6 +141,8 @@ function PlaylistDetailPage() {
 
   const items = tracks.data?.pages.flatMap((p) => p.results) ?? []
   const isOwner = playlist.is_owner
+  // Collaborators can edit tracks + metadata too (delete/visibility/refresh stay owner-only).
+  const canEdit = playlist.can_edit
   const allSelected = items.length > 0 && items.every((i) => selected.has(i.track.id))
 
   const toggleSelect = (trackId: string) =>
@@ -184,26 +187,26 @@ function PlaylistDetailPage() {
             >
               Play
             </Button>
+            {canEdit && (
+              <Button
+                variant={editing ? 'default' : 'outline'}
+                onClick={() => setEditing((v) => !v)}
+              >
+                <Pencil className="mr-2 size-4" />
+                {editing ? 'Done' : 'Edit'}
+              </Button>
+            )}
             {isOwner && (
-              <>
-                <Button
-                  variant={editing ? 'default' : 'outline'}
-                  onClick={() => setEditing((v) => !v)}
-                >
-                  <Pencil className="mr-2 size-4" />
-                  {editing ? 'Done' : 'Edit'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Delete playlist"
-                  title="Delete playlist"
-                  className="text-muted-foreground hover:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Delete playlist"
+                title="Delete playlist"
+                className="text-muted-foreground hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
             )}
           </div>
         }
@@ -216,8 +219,9 @@ function PlaylistDetailPage() {
       )}
 
       {/* Edit details — grows out from below the header and collapses on close
-          (grid-rows 0fr→1fr is the cheap, reversible "motion" here). */}
-      {isOwner && (
+          (grid-rows 0fr→1fr is the cheap, reversible "motion" here). Collaborators
+          get the editor too; the visibility toggle + refresh stay owner-only inside. */}
+      {canEdit && (
         <div
           className="ease-out-quint grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none"
           style={{ gridTemplateRows: editing ? '1fr' : '0fr' }}
@@ -228,12 +232,17 @@ function PlaylistDetailPage() {
               playlist={playlist}
               playlistId={playlistId}
               open={editing}
+              isOwner={isOwner}
               onDone={() => setEditing(false)}
-              onRefresh={playlist.origin ? () => setRefreshOpen(true) : undefined}
+              onRefresh={isOwner && playlist.origin ? () => setRefreshOpen(true) : undefined}
             />
           </div>
         </div>
       )}
+
+      {/* Collaboration: members + invite/leave, and the edit history. Shown to the
+          owner and to collaborators (hidden for a public viewer who isn't a member). */}
+      {canEdit && <PlaylistCollaboration playlistId={playlistId} isOwner={isOwner} />}
 
       {/* Batch-select toolbar (edit mode). */}
       {editing && (
@@ -402,12 +411,14 @@ function EditPanel({
   playlist,
   playlistId,
   open,
+  isOwner,
   onDone,
   onRefresh,
 }: {
   playlist: PlaylistDetail
   playlistId: string
   open: boolean
+  isOwner: boolean
   onDone: () => void
   onRefresh?: () => void
 }) {
@@ -456,7 +467,9 @@ function EditPanel({
           </span>
           <div>
             <p className="text-sm font-medium">Edit details</p>
-            <p className="text-muted-foreground text-xs">Rename, describe, or change visibility.</p>
+            <p className="text-muted-foreground text-xs">
+              {isOwner ? 'Rename, describe, or change visibility.' : 'Rename or describe.'}
+            </p>
           </div>
         </div>
         {onRefresh && (
@@ -511,16 +524,20 @@ function EditPanel({
           )}
         </form.Field>
 
-        <form.Field name="isPublic">
-          {(field) => (
-            <SwitchRow
-              label="Public"
-              description="Anyone with the link can view"
-              checked={field.state.value}
-              onCheckedChange={(v) => field.handleChange(v)}
-            />
-          )}
-        </form.Field>
+        {/* Visibility is the owner's call — collaborators don't see this toggle, and
+            the backend rejects an is_public change from a non-owner. */}
+        {isOwner && (
+          <form.Field name="isPublic">
+            {(field) => (
+              <SwitchRow
+                label="Public"
+                description="Anyone with the link can view"
+                checked={field.state.value}
+                onCheckedChange={(v) => field.handleChange(v)}
+              />
+            )}
+          </form.Field>
+        )}
 
         <div className="flex gap-2">
           <form.Subscribe selector={(s) => [s.values.title, s.isSubmitting] as const}>

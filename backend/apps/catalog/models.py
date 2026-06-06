@@ -17,7 +17,12 @@ from django.db import models
 from django_rls import RLSModel
 
 from apps.core.models import BaseModel
-from apps.core.rls import owner_scoped_policy, public_readable_policy
+from apps.core.rls import (
+    collaborator_readable_policy,
+    collaborator_writable_policy,
+    owner_scoped_policy,
+    public_readable_policy,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +127,12 @@ class Playlist(BaseModel, RLSModel):
     The one owner-isolated table in the catalog: RLS enforces, at the DB layer,
     that the runtime `app_user` role only sees rows where `created_by` matches
     the request's user — a backstop under the viewset's app-layer filter. Reads
-    additionally allow `is_public` rows (forward-compat with public sharing);
-    writes stay owner-only. Admin (`rls.bypass`) and migrations (BYPASSRLS role)
-    are unaffected. The rest of the catalog stays shared-global.
+    additionally allow `is_public` rows and rows the user is an accepted
+    collaborator on; an accepted collaborator can also UPDATE the row (edit
+    metadata/tracks). INSERT + DELETE stay owner-only (only the owner ALL-policy
+    covers them), so creating and deleting a playlist remain the creator's
+    privilege. Admin (`rls.bypass`) and migrations (BYPASSRLS role) are
+    unaffected. The rest of the catalog stays shared-global.
     """
 
     title = models.CharField(max_length=255)
@@ -152,7 +160,12 @@ class Playlist(BaseModel, RLSModel):
 
     class Meta:
         ordering = ["-created_at"]
-        rls_policies = [owner_scoped_policy("created_by"), public_readable_policy()]
+        rls_policies = [
+            owner_scoped_policy("created_by"),
+            public_readable_policy(),
+            collaborator_readable_policy(),
+            collaborator_writable_policy(),
+        ]
 
     def __str__(self) -> str:
         return self.title
@@ -376,3 +389,75 @@ class SourcePlaylistTrack(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.source_playlist_id}[{self.position}] → {self.track_id}"
+
+
+# ---------------------------------------------------------------------------
+# Collaboration
+# ---------------------------------------------------------------------------
+class PlaylistCollaborator(BaseModel):
+    """A user invited to co-edit a Playlist. PENDING until they accept; an ACCEPTED
+    collaborator may add/remove/reorder tracks and edit metadata. They can NEVER
+    toggle visibility, delete the playlist, or manage collaborators — those stay the
+    creator's. The Playlist RLS policies (collaborator_readable / collaborator_writable)
+    grant an accepted collaborator row SELECT + UPDATE at the DB layer; INSERT/DELETE
+    stay owner-only, and the is_public column guard lives in the serializer.
+
+    Invites reference the invitee by id (picked from a user search), like friendships.
+    """
+
+    class Role(models.TextChoices):
+        EDITOR = "editor", "Editor"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        ACCEPTED = "accepted", "Accepted"
+
+    playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE, related_name="collaborators")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="playlist_collaborations"
+    )
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.EDITOR)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["playlist", "user"], name="uniq_playlist_collaborator")
+        ]
+        indexes = [models.Index(fields=["user", "status"])]
+
+    def __str__(self) -> str:
+        return f"Collaborator({self.user_id} on {self.playlist_id}: {self.status})"
+
+
+class PlaylistActivity(BaseModel):
+    """Append-only audit log of edits to a Playlist (who did what, when) — written in
+    the same transaction as the edit, alongside the events fan-out. Surfaced on the
+    playlist page so collaborators can see the history."""
+
+    class Action(models.TextChoices):
+        TRACKS_ADDED = "tracks_added", "Added tracks"
+        TRACKS_REMOVED = "tracks_removed", "Removed tracks"
+        TRACK_REORDERED = "track_reordered", "Reordered a track"
+        METADATA_EDITED = "metadata_edited", "Edited details"
+        COLLABORATOR_INVITED = "collaborator_invited", "Invited a collaborator"
+        COLLABORATOR_JOINED = "collaborator_joined", "Joined as collaborator"
+        COLLABORATOR_REMOVED = "collaborator_removed", "Removed a collaborator"
+
+    playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE, related_name="activity")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    action = models.CharField(max_length=32, choices=Action.choices)
+    detail = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["playlist", "-created_at"])]
+
+    def __str__(self) -> str:
+        return f"Activity({self.action} on {self.playlist_id})"

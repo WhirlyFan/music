@@ -41,6 +41,9 @@ export const playlistKeys = {
   // search variant. Nested under detail so invalidating the playlist refreshes
   // both its metadata and its track pages.
   tracks: (id: string) => ['playlists', 'detail', id, 'tracks'] as const,
+  // Collaborators + edit history of one playlist (nested under detail).
+  collaborators: (id: string) => ['playlists', 'detail', id, 'collaborators'] as const,
+  activity: (id: string) => ['playlists', 'detail', id, 'activity'] as const,
 }
 
 /**

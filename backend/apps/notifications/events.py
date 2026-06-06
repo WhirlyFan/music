@@ -40,6 +40,15 @@ def emit(kind: str, *, recipient, actor=None, **payload) -> Notification | None:
     return note
 
 
+def emit_many(kind: str, *, recipients, actor=None, **payload) -> list[Notification]:
+    """Fan a single event out to several recipients (e.g. every collaborator on a
+    playlist). Thin loop over `emit` — which already skips the actor and any None —
+    so each recipient gets their own durable row + live nudge. Returns the rows
+    actually created."""
+    notes = [emit(kind, recipient=r, actor=actor, **payload) for r in recipients]
+    return [n for n in notes if n is not None]
+
+
 def _push(recipient_id) -> None:
     """Nudge the recipient's live socket(s) to refetch. Best-effort — the durable
     row is already committed, so a missed push just means 'seen on next load'."""

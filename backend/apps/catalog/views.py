@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import Http404, StreamingHttpResponse
@@ -7,14 +8,24 @@ from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from . import match, streaming
+from . import collab, match, streaming
 from .ingest.spotify import SpotifyError
-from .models import PlaybackSource, Playlist, PlaylistTrack, SourcePlaylist, Track
+from .models import (
+    PlaybackSource,
+    Playlist,
+    PlaylistActivity,
+    PlaylistCollaborator,
+    PlaylistTrack,
+    SourcePlaylist,
+    Track,
+)
 from .serializers import (
     CreatePlaylistSerializer,
     ImportResultSerializer,
     IngestSerializer,
     PlaybackSourceSerializer,
+    PlaylistActivitySerializer,
+    PlaylistCollaboratorSerializer,
     PlaylistDetailSerializer,
     PlaylistSerializer,
     PlaylistTrackSerializer,
@@ -28,6 +39,8 @@ from .services import (
     search_songs,
 )
 from .services import ingest as ingest_source
+
+User = get_user_model()
 
 # Prefetch playlist items (ordered) + each track's playback sources in one go.
 _DETAIL_PREFETCH = [
@@ -90,13 +103,17 @@ class PlaylistViewSet(
     mixins.DestroyModelMixin,
     viewsets.ReadOnlyModelViewSet,
 ):
-    """The caller's own playlists: list/search, retrieve, create, rename/edit,
-    delete, and edit track membership.
+    """A caller's playlists — owned, public (read), and ones they collaborate on.
 
-    Playlists are a shared/global table (not RLS); we scope every action to
-    `created_by=request.user` so a caller only ever sees and mutates their own.
-    Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-    `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT)."""
+    Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+    RLS policies in the app layer per action group:
+      - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+      - edit  (update/track actions): owner OR accepted-collaborator
+      - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+    Collaborator-management + accept + activity are custom actions that resolve the
+    playlist directly with their own scope (see the helpers below). Deleting a
+    playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+    catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only."""
 
     permission_classes = [permissions.IsAuthenticated]
     # `?search=` matches a playlist by title. (Searching *within* a playlist's songs
@@ -104,22 +121,49 @@ class PlaylistViewSet(
     filter_backends = [filters.SearchFilter]
     search_fields = ["title"]
 
+    # Actions whose object may be owned OR co-edited by the caller.
+    _EDIT_ACTIONS = ("update", "partial_update", "remove_track", "remove_tracks", "reorder", "add_tracks")
+
     def get_queryset(self):
+        user = self.request.user
         qs = Playlist.objects.annotate(track_count=Count("items", distinct=True))
-        # Read actions may target a PUBLIC playlist owned by someone else (RLS's
-        # public_readable_policy permits the row); mutations stay owner-only.
+        collaborated = Q(
+            collaborators__user=user, collaborators__status=PlaylistCollaborator.Status.ACCEPTED
+        )
         if self.action in ("retrieve", "tracks"):
-            qs = qs.filter(Q(created_by=self.request.user) | Q(is_public=True))
+            qs = qs.filter(Q(created_by=user) | Q(is_public=True) | collaborated)
+        elif self.action in self._EDIT_ACTIONS:
+            qs = qs.filter(Q(created_by=user) | collaborated)
+        elif self.action == "list" and self.request.query_params.get("filter") == "shared":
+            qs = qs.filter(collaborated)  # playlists I collaborate on (not mine)
         else:
-            qs = qs.filter(created_by=self.request.user)
+            qs = qs.filter(created_by=user)
         if self.action == "retrieve":
             qs = qs.prefetch_related(*_DETAIL_PREFETCH)
-        return qs.order_by("-created_at")
+        # The collaborator join can fan out rows → dedupe (the Count is distinct-safe).
+        return qs.distinct().order_by("-created_at")
+
+    def _member_playlist(self, pk):
+        """A playlist the caller owns OR is a collaborator on (any status) — the scope
+        for viewing collaborators/activity. RLS also permits these rows."""
+        return get_object_or_404(
+            Playlist.objects.filter(
+                Q(created_by=self.request.user) | Q(collaborators__user=self.request.user)
+            ).distinct(),
+            pk=pk,
+        )
 
     def get_serializer_class(self):
         if self.action in ("update", "partial_update"):
             return PlaylistUpdateSerializer
         return PlaylistDetailSerializer if self.action == "retrieve" else PlaylistSerializer
+
+    def perform_update(self, serializer):
+        # Metadata edit (owner or collaborator) → save + log to the audit trail.
+        # The is_public column guard lives in PlaylistUpdateSerializer.
+        with transaction.atomic():
+            playlist = serializer.save()
+            collab.log(playlist, self.request.user, PlaylistActivity.Action.METADATA_EDITED)
 
     @extend_schema(request=CreatePlaylistSerializer, responses=PlaylistSerializer)
     def create(self, request, *args, **kwargs):
@@ -180,27 +224,87 @@ class PlaylistViewSet(
     @action(detail=True, methods=["post"], url_path="remove-track")
     def remove_track(self, request, pk=None):
         """Remove one track from this playlist and re-pack positions. The global
-        Track row is untouched — only the membership (PlaylistTrack) is dropped."""
+        Track row is untouched — only the membership (PlaylistTrack) is dropped.
+        Allowed for the owner and accepted collaborators."""
         playlist = self.get_object()
         with transaction.atomic():
-            deleted, _ = playlist.items.filter(track_id=request.data.get("track_id")).delete()
-            if not deleted:
+            item = (
+                playlist.items.select_related("track")
+                .filter(track_id=request.data.get("track_id"))
+                .first()
+            )
+            if item is None:
                 raise Http404("Track not in this playlist.")
+            title = item.track.title
+            item.delete()
             _repack(playlist)
+            collab.record_track_edit(
+                playlist,
+                request.user,
+                PlaylistActivity.Action.TRACKS_REMOVED,
+                summary=f"removed “{title}”",
+                count=1,
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(request=None, responses=None)
     @action(detail=True, methods=["post"], url_path="remove-tracks")
     def remove_tracks(self, request, pk=None):
         """Remove one OR many tracks (batch) and re-pack once. Idempotent — ids not
-        in the playlist are simply ignored."""
+        in the playlist are simply ignored. Owner + accepted collaborators."""
         playlist = self.get_object()
         ids = request.data.get("track_ids") or []
         with transaction.atomic():
-            deleted, _ = playlist.items.filter(track_id__in=ids).delete()
-            if deleted:
+            n = playlist.items.filter(track_id__in=ids).count()
+            if n:
+                playlist.items.filter(track_id__in=ids).delete()
                 _repack(playlist)
+                collab.record_track_edit(
+                    playlist,
+                    request.user,
+                    PlaylistActivity.Action.TRACKS_REMOVED,
+                    summary=f"removed {n} track{'s' if n != 1 else ''}",
+                    count=n,
+                )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["post"], url_path="add-tracks")
+    def add_tracks(self, request, pk=None):
+        """Append tracks to the end of the playlist, in request order, skipping any
+        already present. The write path for collaboration — available to the owner
+        and accepted collaborators."""
+        playlist = self.get_object()
+        ids = request.data.get("track_ids") or []
+        with transaction.atomic():
+            existing = set(playlist.items.values_list("track_id", flat=True))
+            by_id = {str(t.id): t for t in Track.objects.filter(pk__in=ids)}
+            pos = playlist.items.count()
+            added = []
+            for tid in ids:
+                track = by_id.get(str(tid))
+                if track is None or track.id in existing:
+                    continue
+                PlaylistTrack.objects.create(
+                    playlist=playlist, track=track, position=pos, added_by=request.user
+                )
+                existing.add(track.id)
+                pos += 1
+                added.append(track)
+            if added:
+                summary = (
+                    f"added “{added[0].title}”"
+                    if len(added) == 1
+                    else f"added {len(added)} tracks"
+                )
+                collab.record_track_edit(
+                    playlist,
+                    request.user,
+                    PlaylistActivity.Action.TRACKS_ADDED,
+                    summary=summary,
+                    count=len(added),
+                )
+        return Response({"added": len(added)}, status=status.HTTP_200_OK)
 
     @extend_schema(request=None, responses=None)
     @action(detail=True, methods=["post"])
@@ -226,7 +330,74 @@ class PlaylistViewSet(
                 if it.position != i:
                     it.position = i
                     it.save(update_fields=["position"])
+            collab.record_track_edit(
+                playlist,
+                request.user,
+                PlaylistActivity.Action.TRACK_REORDERED,
+                summary="reordered the tracks",
+            )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # --- collaboration ---
+
+    @extend_schema(request=None, responses=PlaylistCollaboratorSerializer(many=True))
+    @action(detail=True, methods=["get", "post"])
+    def collaborators(self, request, pk=None):
+        """GET: list collaborators (owner + any member may view). POST: invite a user
+        by `{user_id}` (owner only) — creates a PENDING invite + notifies them."""
+        if request.method == "POST":
+            playlist = get_object_or_404(
+                Playlist.objects.filter(created_by=request.user), pk=pk
+            )
+            invitee = get_object_or_404(User, pk=request.data.get("user_id"))
+            try:
+                c = collab.invite(playlist, invitee=invitee, by=request.user)
+            except collab.CollaboratorError as e:
+                return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                PlaylistCollaboratorSerializer(c).data, status=status.HTTP_201_CREATED
+            )
+        playlist = self._member_playlist(pk)
+        qs = playlist.collaborators.select_related("user").all()
+        return Response(PlaylistCollaboratorSerializer(qs, many=True).data)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["delete"], url_path="collaborators/(?P<user_id>[^/.]+)")
+    def remove_collaborator(self, request, pk=None, user_id=None):
+        """Owner removes any collaborator, or a collaborator removes themselves (leave)."""
+        c = get_object_or_404(PlaylistCollaborator, playlist_id=pk, user_id=user_id)
+        is_owner = c.playlist.created_by_id == request.user.id
+        if not (is_owner or c.user_id == request.user.id):
+            return Response(
+                {"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN
+            )
+        collab.remove(c, by=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["post"], url_path="collab-accept")
+    def collab_accept(self, request, pk=None):
+        """The invitee accepts a pending collaboration invite (→ edit access)."""
+        c = get_object_or_404(PlaylistCollaborator, playlist_id=pk, user=request.user)
+        collab.accept(c, by=request.user)
+        return Response(status=status.HTTP_200_OK)
+
+    @extend_schema(request=None, responses=None)
+    @action(detail=True, methods=["post"], url_path="collab-decline")
+    def collab_decline(self, request, pk=None):
+        """The invitee declines their own pending invite (drops the row)."""
+        c = get_object_or_404(PlaylistCollaborator, playlist_id=pk, user=request.user)
+        collab.remove(c, by=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(responses=PlaylistActivitySerializer(many=True))
+    @action(detail=True, methods=["get"])
+    def activity(self, request, pk=None):
+        """The playlist's edit history (owner + any member may view), paginated."""
+        playlist = self._member_playlist(pk)
+        qs = playlist.activity.select_related("actor").all()
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(PlaylistActivitySerializer(page, many=True).data)
 
 
 def _repack(playlist):

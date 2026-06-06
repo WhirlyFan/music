@@ -23,7 +23,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 
-from apps.catalog.models import Playlist
+from apps.catalog.models import Playlist, PlaylistCollaborator
 
 User = get_user_model()
 
@@ -75,7 +75,12 @@ def test_rls_policy_is_present_on_table():
 
         cur.execute("SELECT polname FROM pg_policy WHERE polrelid = 'catalog_playlist'::regclass")
         names = {row[0] for row in cur.fetchall()}
-        assert {"owner_isolation", "public_readable"} <= names
+        assert {
+            "owner_isolation",
+            "public_readable",
+            "collaborator_readable",
+            "collaborator_writable",
+        } <= names
 
 
 @pytest.mark.django_db(transaction=True)
@@ -129,3 +134,43 @@ def test_public_playlist_readable_cross_user_but_not_writable(two_users):
 
     pub.refresh_from_db()
     assert pub.title == "B public"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_accepted_collaborator_can_read_and_update_private_playlist(two_users):
+    """An accepted collaborator sees + can UPDATE a private playlist at the DB layer
+    (collaborator_readable + collaborator_writable), even though they don't own it."""
+    a, b = two_users
+    pl = Playlist.objects.create(created_by=b, title="B collab", is_public=False)
+    PlaylistCollaborator.objects.create(
+        playlist=pl, user=a, status=PlaylistCollaborator.Status.ACCEPTED
+    )
+    with as_app_user(user_id=a.id):
+        assert "B collab" in set(Playlist.objects.values_list("title", flat=True))
+        assert Playlist.objects.filter(pk=pl.pk).update(title="edited by collaborator") == 1
+    pl.refresh_from_db()
+    assert pl.title == "edited by collaborator"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_pending_collaborator_can_read_but_not_update(two_users):
+    """A pending invitee may preview the playlist (read) but can't edit it until they
+    accept — collaborator_readable includes pending; collaborator_writable doesn't."""
+    a, b = two_users
+    pl = Playlist.objects.create(created_by=b, title="B pending", is_public=False)
+    PlaylistCollaborator.objects.create(
+        playlist=pl, user=a, status=PlaylistCollaborator.Status.PENDING
+    )
+    with as_app_user(user_id=a.id):
+        assert "B pending" in set(Playlist.objects.values_list("title", flat=True))
+        assert Playlist.objects.filter(pk=pl.pk).update(title="nope") == 0
+    pl.refresh_from_db()
+    assert pl.title == "B pending"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_non_collaborator_cannot_see_private_playlist(two_users):
+    a, b = two_users
+    Playlist.objects.create(created_by=b, title="B secret", is_public=False)
+    with as_app_user(user_id=a.id):
+        assert "B secret" not in set(Playlist.objects.values_list("title", flat=True))

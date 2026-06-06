@@ -34,24 +34,32 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
-         *     delete, and edit track membership.
+         * @description A caller's playlists — owned, public (read), and ones they collaborate on.
          *
-         *     Playlists are a shared/global table (not RLS); we scope every action to
-         *     `created_by=request.user` so a caller only ever sees and mutates their own.
-         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         *     Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+         *     RLS policies in the app layer per action group:
+         *       - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+         *       - edit  (update/track actions): owner OR accepted-collaborator
+         *       - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+         *     Collaborator-management + accept + activity are custom actions that resolve the
+         *     playlist directly with their own scope (see the helpers below). Deleting a
+         *     playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+         *     catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only.
          */
         get: operations["v1_catalog_playlists_list"];
         put?: never;
         /**
-         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
-         *     delete, and edit track membership.
+         * @description A caller's playlists — owned, public (read), and ones they collaborate on.
          *
-         *     Playlists are a shared/global table (not RLS); we scope every action to
-         *     `created_by=request.user` so a caller only ever sees and mutates their own.
-         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         *     Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+         *     RLS policies in the app layer per action group:
+         *       - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+         *       - edit  (update/track actions): owner OR accepted-collaborator
+         *       - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+         *     Collaborator-management + accept + activity are custom actions that resolve the
+         *     playlist directly with their own scope (see the helpers below). Deleting a
+         *     playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+         *     catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only.
          */
         post: operations["v1_catalog_playlists_create"];
         delete?: never;
@@ -68,48 +76,160 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
-         *     delete, and edit track membership.
+         * @description A caller's playlists — owned, public (read), and ones they collaborate on.
          *
-         *     Playlists are a shared/global table (not RLS); we scope every action to
-         *     `created_by=request.user` so a caller only ever sees and mutates their own.
-         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         *     Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+         *     RLS policies in the app layer per action group:
+         *       - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+         *       - edit  (update/track actions): owner OR accepted-collaborator
+         *       - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+         *     Collaborator-management + accept + activity are custom actions that resolve the
+         *     playlist directly with their own scope (see the helpers below). Deleting a
+         *     playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+         *     catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only.
          */
         get: operations["v1_catalog_playlists_retrieve"];
         /**
-         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
-         *     delete, and edit track membership.
+         * @description A caller's playlists — owned, public (read), and ones they collaborate on.
          *
-         *     Playlists are a shared/global table (not RLS); we scope every action to
-         *     `created_by=request.user` so a caller only ever sees and mutates their own.
-         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         *     Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+         *     RLS policies in the app layer per action group:
+         *       - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+         *       - edit  (update/track actions): owner OR accepted-collaborator
+         *       - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+         *     Collaborator-management + accept + activity are custom actions that resolve the
+         *     playlist directly with their own scope (see the helpers below). Deleting a
+         *     playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+         *     catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only.
          */
         put: operations["v1_catalog_playlists_update"];
         post?: never;
         /**
-         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
-         *     delete, and edit track membership.
+         * @description A caller's playlists — owned, public (read), and ones they collaborate on.
          *
-         *     Playlists are a shared/global table (not RLS); we scope every action to
-         *     `created_by=request.user` so a caller only ever sees and mutates their own.
-         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         *     Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+         *     RLS policies in the app layer per action group:
+         *       - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+         *       - edit  (update/track actions): owner OR accepted-collaborator
+         *       - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+         *     Collaborator-management + accept + activity are custom actions that resolve the
+         *     playlist directly with their own scope (see the helpers below). Deleting a
+         *     playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+         *     catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only.
          */
         delete: operations["v1_catalog_playlists_destroy"];
         options?: never;
         head?: never;
         /**
-         * @description The caller's own playlists: list/search, retrieve, create, rename/edit,
-         *     delete, and edit track membership.
+         * @description A caller's playlists — owned, public (read), and ones they collaborate on.
          *
-         *     Playlists are a shared/global table (not RLS); we scope every action to
-         *     `created_by=request.user` so a caller only ever sees and mutates their own.
-         *     Deleting a playlist drops its `PlaylistTrack` rows but leaves the global
-         *     `Track`/`PlaybackSource` catalog intact (PlaylistTrack.track is PROTECT).
+         *     Playlists are a shared/global table fronted by RLS. The queryset mirrors the
+         *     RLS policies in the app layer per action group:
+         *       - read  (retrieve/tracks): owner OR public OR accepted-collaborator
+         *       - edit  (update/track actions): owner OR accepted-collaborator
+         *       - else  (list/create/refresh/destroy/collaborator mgmt): owner-only
+         *     Collaborator-management + accept + activity are custom actions that resolve the
+         *     playlist directly with their own scope (see the helpers below). Deleting a
+         *     playlist drops its PlaylistTrack rows but leaves the global Track/PlaybackSource
+         *     catalog intact (PlaylistTrack.track is PROTECT), and stays owner-only.
          */
         patch: operations["v1_catalog_playlists_partial_update"];
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/activity/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The playlist's edit history (owner + any member may view), paginated. */
+        get: operations["v1_catalog_playlists_activity_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/add-tracks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Append tracks to the end of the playlist, in request order, skipping any
+         *     already present. The write path for collaboration — available to the owner
+         *     and accepted collaborators.
+         */
+        post: operations["v1_catalog_playlists_add_tracks_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/collab-accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The invitee accepts a pending collaboration invite (→ edit access). */
+        post: operations["v1_catalog_playlists_collab_accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/collaborators/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET: list collaborators (owner + any member may view). POST: invite a user
+         *     by `{user_id}` (owner only) — creates a PENDING invite + notifies them.
+         */
+        get: operations["v1_catalog_playlists_collaborators_list"];
+        put?: never;
+        /**
+         * @description GET: list collaborators (owner + any member may view). POST: invite a user
+         *     by `{user_id}` (owner only) — creates a PENDING invite + notifies them.
+         */
+        post: operations["v1_catalog_playlists_collaborators_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/collaborators/{user_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Owner removes any collaborator, or a collaborator removes themselves (leave). */
+        delete: operations["v1_catalog_playlists_collaborators_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/catalog/playlists/{id}/refresh/": {
@@ -144,8 +264,29 @@ export interface paths {
         /**
          * @description Remove one track from this playlist and re-pack positions. The global
          *     Track row is untouched — only the membership (PlaylistTrack) is dropped.
+         *     Allowed for the owner and accepted collaborators.
          */
         post: operations["v1_catalog_playlists_remove_track_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/playlists/{id}/remove-tracks/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Remove one OR many tracks (batch) and re-pack once. Idempotent — ids not
+         *     in the playlist are simply ignored. Owner + accepted collaborators.
+         */
+        post: operations["v1_catalog_playlists_remove_tracks_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -295,6 +436,183 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/friends/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Accepted friends. */
+        get: operations["v1_friends_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/friends/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * @description The caller's friend graph: accepted friends, pending requests, and the
+         *     request/accept/decline/unfriend actions. Friendships aren't RLS — every query
+         *     is scoped here to rows where the caller is the requester or the addressee, so
+         *     you only ever see and act on your own.
+         */
+        delete: operations["v1_friends_destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/friends/{id}/accept/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description The caller's friend graph: accepted friends, pending requests, and the
+         *     request/accept/decline/unfriend actions. Friendships aren't RLS — every query
+         *     is scoped here to rows where the caller is the requester or the addressee, so
+         *     you only ever see and act on your own.
+         */
+        post: operations["v1_friends_accept_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/friends/{id}/decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Decline an incoming request (drops the row). */
+        post: operations["v1_friends_decline_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/friends/request/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Send a friend request. Body `{"user_id": "<uuid>"}` — the addressee is
+         *     picked from a user search, so we reference them by id, not username.
+         */
+        post: operations["v1_friends_request_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/friends/requests/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Pending requests split into incoming (to me) and outgoing (from me). */
+        get: operations["v1_friends_requests_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The caller's own notifications: a paginated list, an unread count for the
+         *     badge, and mark-read (specific ids, or all). Scoped to the caller — you only
+         *     ever see and mutate your own.
+         */
+        get: operations["v1_notifications_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/mark-read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Mark notifications read. Body `{"ids": [...]}` marks those; omit `ids`
+         *     to mark everything read.
+         */
+        post: operations["v1_notifications_mark_read_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The caller's own notifications: a paginated list, an unread count for the
+         *     badge, and mark-read (specific ids, or all). Scoped to the caller — you only
+         *     ever see and mutate your own.
+         */
+        get: operations["v1_notifications_unread_count_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/clear/": {
         parameters: {
             query?: never;
@@ -309,6 +627,28 @@ export interface paths {
          *     `request.user`'s active room — there is no other-user access.
          */
         post: operations["v1_rooms_clear_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/context/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Paginated FULL context (the played-from list) for the room the user is
+         *     in, ordered by position. Kept off the broadcast frames (which carry only
+         *     a small window + count); fetched once and cached, refetched only when
+         *     context_version changes. Resolves the jam (guest → host's room).
+         */
+        get: operations["v1_rooms_context_list"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -381,7 +721,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Play a specific queue item now (click any row in the queue). */
+        /**
+         * @description Play a specific queue item now (click any row in the queue). This is a
+         *     playback action (like skip), so it targets the jam and is allowed for a
+         *     guest when the host enabled guest control — not a host-only queue edit.
+         */
         post: operations["v1_rooms_jump_create"];
         delete?: never;
         options?: never;
@@ -755,6 +1099,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/search/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Find people by username (or name) to befriend — `?q=`. Excludes the caller;
+         *     capped at 20. The friend-request flow references the picked user by id, so this
+         *     is the lookup that turns a typed handle into an id. Existing friends aren't
+         *     filtered here (keeps users decoupled from the friends app) — the client
+         *     cross-references its own friend list, and send_request is idempotent anyway.
+         */
+        get: operations["v1_users_search_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/username/": {
         parameters: {
             query?: never;
@@ -780,6 +1147,23 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description * `tracks_added` - Added tracks
+         *     * `tracks_removed` - Removed tracks
+         *     * `track_reordered` - Reordered a track
+         *     * `metadata_edited` - Edited details
+         *     * `collaborator_invited` - Invited a collaborator
+         *     * `collaborator_joined` - Joined as collaborator
+         *     * `collaborator_removed` - Removed a collaborator
+         * @enum {string}
+         */
+        ActionEnum: "tracks_added" | "tracks_removed" | "track_reordered" | "metadata_edited" | "collaborator_invited" | "collaborator_joined" | "collaborator_removed";
+        CollaboratorUser: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly username: string;
+            readonly display_name: string;
+        };
         /** @description Create a named playlist from a set of track ids (e.g. a saved import). */
         CreatePlaylist: {
             title: string;
@@ -791,6 +1175,23 @@ export interface components {
             artwork_url: string;
             /** Format: uuid */
             source_playlist?: string | null;
+        };
+        /** @description The minimal public shape of a user in friend lists/requests. */
+        FriendUser: {
+            /** Format: uuid */
+            readonly id: string;
+            /** @description 3-30 chars. Letters, numbers, underscores, dashes. */
+            username: string;
+            readonly display_name: string;
+        };
+        Friendship: {
+            /** Format: uuid */
+            readonly id: string;
+            status?: components["schemas"]["StatusD1eEnum"];
+            readonly requester: components["schemas"]["FriendUser"];
+            readonly addressee: components["schemas"]["FriendUser"];
+            /** Format: date-time */
+            readonly created_at: string;
         };
         /** @description Host toggle: whether guests may drive playback. */
         GuestControl: {
@@ -824,18 +1225,33 @@ export interface components {
             user_id: string;
         };
         /**
-         * @description * `context` - From context
-         *     * `queue` - User queue
-         * @enum {string}
-         */
-        KindEnum: "context" | "queue";
-        /**
          * @description * `video_id` - YouTube video id
          *     * `storage_key` - Object-storage key
          *     * `url` - Direct URL
          * @enum {string}
          */
         LocatorKindEnum: "video_id" | "storage_key" | "url";
+        Notification: {
+            /** Format: uuid */
+            readonly id: string;
+            kind: components["schemas"]["NotificationKindEnum"];
+            readonly actor_username: string | null;
+            payload?: unknown;
+            /** Format: date-time */
+            read_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `jam_join` - Joined your jam
+         *     * `friend_request` - Sent you a friend request
+         *     * `friend_accept` - Accepted your friend request
+         *     * `playlist_invite` - Invited you to collaborate
+         *     * `playlist_invite_accept` - Joined your playlist
+         *     * `playlist_tracks` - Updated a shared playlist
+         * @enum {string}
+         */
+        NotificationKindEnum: "jam_join" | "friend_request" | "friend_accept" | "playlist_invite" | "playlist_invite_accept" | "playlist_tracks";
         /**
          * @description * `matched_auto` - Matched (auto)
          *     * `matched_manual` - Matched (manual correction)
@@ -843,6 +1259,66 @@ export interface components {
          * @enum {string}
          */
         OriginEnum: "matched_auto" | "matched_manual" | "direct";
+        PaginatedFriendshipList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Friendship"][];
+        };
+        PaginatedNotificationList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["Notification"][];
+        };
+        PaginatedPlaylistActivityList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PlaylistActivity"][];
+        };
+        PaginatedPlaylistCollaboratorList: {
+            /** @example 123 */
+            count: number;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=4
+             */
+            next?: string | null;
+            /**
+             * Format: uri
+             * @example http://api.example.org/accounts/?page=2
+             */
+            previous?: string | null;
+            results: components["schemas"]["PlaylistCollaborator"][];
+        };
         PaginatedPlaylistList: {
             /** @example 123 */
             count: number;
@@ -888,7 +1364,13 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["Track"][];
         };
-        /** @description Edit a playlist's own metadata (rename / describe / visibility). */
+        /**
+         * @description Edit a playlist's own metadata (rename / describe / visibility).
+         *
+         *     Collaborators may edit title + description, but NOT `is_public` — visibility is
+         *     the owner's call. RLS is row-level (it lets an accepted collaborator UPDATE the
+         *     row but can't protect a single column), so the column guard lives here.
+         */
         PatchedPlaylistUpdate: {
             title?: string;
             description?: string;
@@ -919,7 +1401,7 @@ export interface components {
             readonly source_code: string;
             locator_kind: components["schemas"]["LocatorKindEnum"];
             locator: string;
-            status?: components["schemas"]["StatusEnum"];
+            status?: components["schemas"]["PlaybackSourceStatusEnum"];
             origin: components["schemas"]["OriginEnum"];
             /** Format: double */
             confidence?: number | null;
@@ -928,6 +1410,15 @@ export interface components {
             uploader?: string;
             duration_ms?: number | null;
         };
+        /**
+         * @description * `active` - Active
+         *     * `candidate` - Candidate
+         *     * `dead` - Dead
+         *     * `replaced` - Replaced
+         *     * `rejected` - Rejected
+         * @enum {string}
+         */
+        PlaybackSourceStatusEnum: "active" | "candidate" | "dead" | "replaced" | "rejected";
         Playlist: {
             /** Format: uuid */
             readonly id: string;
@@ -939,6 +1430,29 @@ export interface components {
             /** Format: date-time */
             readonly created_at: string;
         };
+        PlaylistActivity: {
+            /** Format: uuid */
+            readonly id: string;
+            action: components["schemas"]["ActionEnum"];
+            readonly actor_username: string | null;
+            detail?: unknown;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        PlaylistCollaborator: {
+            /** Format: uuid */
+            readonly id: string;
+            readonly user: components["schemas"]["CollaboratorUser"];
+            role?: components["schemas"]["PlaylistCollaboratorRoleEnum"];
+            status?: components["schemas"]["StatusD1eEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `editor` - Editor
+         * @enum {string}
+         */
+        PlaylistCollaboratorRoleEnum: "editor";
         PlaylistDetail: {
             /** Format: uuid */
             readonly id: string;
@@ -948,6 +1462,7 @@ export interface components {
             artwork_url?: string;
             is_public?: boolean;
             readonly is_owner: boolean;
+            readonly can_edit: boolean;
             /** Format: date-time */
             readonly created_at: string;
             readonly track_count: number;
@@ -958,7 +1473,13 @@ export interface components {
             position: number;
             readonly track: components["schemas"]["Track"];
         };
-        /** @description Edit a playlist's own metadata (rename / describe / visibility). */
+        /**
+         * @description Edit a playlist's own metadata (rename / describe / visibility).
+         *
+         *     Collaborators may edit title + description, but NOT `is_public` — visibility is
+         *     the owner's call. RLS is row-level (it lets an accepted collaborator UPDATE the
+         *     row but can't protect a single column), so the column guard lives here.
+         */
         PlaylistUpdate: {
             title: string;
             description?: string;
@@ -973,21 +1494,21 @@ export interface components {
         QueueItem: {
             /** Format: uuid */
             readonly id: string;
-            kind?: components["schemas"]["KindEnum"];
+            kind?: components["schemas"]["QueueItemKindEnum"];
             position: number;
             readonly track: components["schemas"]["Track"];
         };
+        /**
+         * @description * `context` - From context
+         *     * `queue` - User queue
+         * @enum {string}
+         */
+        QueueItemKindEnum: "context" | "queue";
         /** @description Reference an existing queue/context item (for jump / remove). */
         QueueItemRef: {
             /** Format: uuid */
             item_id: string;
         };
-        /**
-         * @description * `host` - Host
-         *     * `guest` - Guest
-         * @enum {string}
-         */
-        RoleEnum: "host" | "guest";
         /**
          * @description The room as the player needs it: now-playing + two up-next layers —
          *     `queue` (explicit "Next in queue") and `context` (the playlist remaining,
@@ -1005,15 +1526,10 @@ export interface components {
             readonly position_ms: number;
             readonly context_label: string;
             readonly queue: components["schemas"]["QueueItem"][];
-            /** Total context (played-from list) size; full list via GET /rooms/context/. */
             readonly context_count: number;
-            /** Context items still ahead of the pointer (drives the Next button). */
             readonly context_ahead: number;
-            /** Pointer index into the context (position of the current context track). */
             readonly context_pos: number | null;
-            /** Small head (current + lookahead) for the panel's first paint. */
             readonly context_window: components["schemas"]["QueueItem"][];
-            /** Changes only when the context list's membership/order changes. */
             readonly context_version: string;
             /** Format: uuid */
             readonly host_id: string;
@@ -1032,20 +1548,24 @@ export interface components {
             /** Format: uuid */
             readonly user_id: string;
             readonly username: string;
-            role?: components["schemas"]["RoleEnum"];
-        };
-        SaveAsPlaylist: {
-            title: string;
+            role?: components["schemas"]["RoomMemberRoleEnum"];
         };
         /**
-         * @description * `active` - Active
-         *     * `candidate` - Candidate
-         *     * `dead` - Dead
-         *     * `replaced` - Replaced
-         *     * `rejected` - Rejected
+         * @description * `host` - Host
+         *     * `guest` - Guest
          * @enum {string}
          */
-        StatusEnum: "active" | "candidate" | "dead" | "replaced" | "rejected";
+        RoomMemberRoleEnum: "host" | "guest";
+        SaveAsPlaylist: {
+            title: string;
+            track_ids?: string[];
+        };
+        /**
+         * @description * `pending` - Pending
+         *     * `accepted` - Accepted
+         * @enum {string}
+         */
+        StatusD1eEnum: "pending" | "accepted";
         /** @description Host re-anchor: the real playhead (ms) + whether audio is actually playing. */
         SyncPosition: {
             position_ms: number;
@@ -1246,6 +1766,145 @@ export interface operations {
             };
         };
     };
+    v1_catalog_playlists_activity_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaylistActivityList"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_add_tracks_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_collab_accept_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_collaborators_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaylistCollaboratorList"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_collaborators_create: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+                /** @description A search term. */
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlaylistCollaboratorList"];
+                };
+            };
+        };
+    };
+    v1_catalog_playlists_collaborators_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     v1_catalog_playlists_refresh_create: {
         parameters: {
             query?: never;
@@ -1268,6 +1927,26 @@ export interface operations {
         };
     };
     v1_catalog_playlists_remove_track_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_remove_tracks_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -1443,6 +2122,191 @@ export interface operations {
             };
         };
     };
+    v1_friends_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFriendshipList"];
+                };
+            };
+        };
+    };
+    v1_friends_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_friends_accept_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Friendship"];
+                };
+            };
+        };
+    };
+    v1_friends_decline_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_friends_request_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Friendship"];
+                };
+            };
+        };
+    };
+    v1_friends_requests_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        incoming?: unknown[];
+                        outgoing?: unknown[];
+                    };
+                };
+            };
+        };
+    };
+    v1_notifications_list: {
+        parameters: {
+            query?: {
+                /** @description A page number within the paginated result set. */
+                page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNotificationList"];
+                };
+            };
+        };
+    };
+    v1_notifications_mark_read_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_notifications_unread_count_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count?: number;
+                    };
+                };
+            };
+        };
+    };
     v1_rooms_clear_create: {
         parameters: {
             query?: never;
@@ -1458,6 +2322,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_context_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueueItem"][];
                 };
             };
         };
@@ -1945,6 +2828,24 @@ export interface operations {
         };
     };
     v1_users_passkey_credential_ids_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_users_search_retrieve: {
         parameters: {
             query?: never;
             header?: never;

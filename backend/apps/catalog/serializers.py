@@ -1,7 +1,14 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from .models import PlaybackSource, Playlist, PlaylistTrack, Track
+from .models import (
+    PlaybackSource,
+    Playlist,
+    PlaylistActivity,
+    PlaylistCollaborator,
+    PlaylistTrack,
+    Track,
+)
 
 
 class PlaybackSourceSerializer(serializers.ModelSerializer):
@@ -78,7 +85,12 @@ class CreatePlaylistSerializer(serializers.Serializer):
 
 
 class PlaylistUpdateSerializer(serializers.ModelSerializer):
-    """Edit a playlist's own metadata (rename / describe / visibility)."""
+    """Edit a playlist's own metadata (rename / describe / visibility).
+
+    Collaborators may edit title + description, but NOT `is_public` — visibility is
+    the owner's call. RLS is row-level (it lets an accepted collaborator UPDATE the
+    row but can't protect a single column), so the column guard lives here.
+    """
 
     # The model field is an unbounded TextField; cap it here so a description can't
     # grow unreasonably (the client also enforces this in the textarea).
@@ -87,6 +99,36 @@ class PlaylistUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Playlist
         fields = ["title", "description", "is_public"]
+
+    def validate_is_public(self, value):
+        request = self.context.get("request")
+        owner_id = getattr(self.instance, "created_by_id", None)
+        changing = self.instance is not None and value != self.instance.is_public
+        if changing and getattr(request and request.user, "id", None) != owner_id:
+            raise serializers.ValidationError("Only the owner can change visibility.")
+        return value
+
+
+class CollaboratorUserSerializer(serializers.Serializer):
+    id = serializers.UUIDField(read_only=True)
+    username = serializers.CharField(read_only=True)
+    display_name = serializers.CharField(read_only=True)
+
+
+class PlaylistCollaboratorSerializer(serializers.ModelSerializer):
+    user = CollaboratorUserSerializer(read_only=True)
+
+    class Meta:
+        model = PlaylistCollaborator
+        fields = ["id", "user", "role", "status", "created_at"]
+
+
+class PlaylistActivitySerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source="actor.username", read_only=True, allow_null=True)
+
+    class Meta:
+        model = PlaylistActivity
+        fields = ["id", "action", "actor_username", "detail", "created_at"]
 
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
@@ -97,8 +139,11 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
     # presence enables the "Refresh from source" action.
     origin = serializers.UUIDField(source="origin_id", read_only=True, allow_null=True)
     # Whether the caller owns this playlist — false when viewing someone else's
-    # PUBLIC playlist, so the client hides edit/delete/refresh.
+    # PUBLIC playlist, so the client hides delete/refresh/visibility/collaborators.
     is_owner = serializers.SerializerMethodField()
+    # Whether the caller may edit tracks + metadata — the owner OR an accepted
+    # collaborator. Drives the track-edit affordances (which collaborators get too).
+    can_edit = serializers.SerializerMethodField()
 
     class Meta:
         model = Playlist
@@ -109,6 +154,7 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
             "artwork_url",
             "is_public",
             "is_owner",
+            "can_edit",
             "created_at",
             "track_count",
             "origin",
@@ -118,6 +164,15 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
     def get_is_owner(self, obj):
         request = self.context.get("request")
         return bool(request and obj.created_by_id == getattr(request.user, "id", None))
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_can_edit(self, obj):
+        request = self.context.get("request")
+        if not request:
+            return False
+        from . import collab
+
+        return collab.can_edit(obj, request.user)
 
 
 class IngestSerializer(serializers.Serializer):
