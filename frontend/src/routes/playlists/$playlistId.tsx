@@ -303,12 +303,7 @@ function PlaylistDetailPage() {
               {/* One visibility label, same spot in both modes. Owner edits it as a
                   toggle; everyone else (and view mode) sees a static Public/Private. */}
               {editing && isOwner ? (
-                <span className="inline-flex items-center gap-1.5">
-                  <Switch
-                    checked={draft.isPublic}
-                    onCheckedChange={(v) => setDraft((d) => ({ ...d, isPublic: v }))}
-                    aria-label="Make playlist public"
-                  />
+                <span className="inline-flex items-center gap-2">
                   <span className="text-foreground/80 inline-flex items-center gap-1 text-[11px] font-medium">
                     {draft.isPublic ? (
                       <Globe className="size-3" aria-hidden />
@@ -317,6 +312,11 @@ function PlaylistDetailPage() {
                     )}
                     {draft.isPublic ? 'Public' : 'Private'}
                   </span>
+                  <Switch
+                    checked={draft.isPublic}
+                    onCheckedChange={(v) => setDraft((d) => ({ ...d, isPublic: v }))}
+                    aria-label={draft.isPublic ? 'Make playlist private' : 'Make playlist public'}
+                  />
                 </span>
               ) : (
                 <span
