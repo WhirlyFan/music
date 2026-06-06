@@ -21,7 +21,6 @@ import {
   GripVertical,
   ListPlus,
   Lock,
-  MoreHorizontal,
   Pencil,
   RefreshCw,
   SearchX,
@@ -47,12 +46,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
@@ -359,29 +352,30 @@ function PlaylistDetailPage() {
           <div className="flex shrink-0 items-center gap-2">
             {editing ? (
               <>
+                {/* You're already in edit mode — Delete/Refresh are direct buttons
+                    (the Delete confirm is its own overlay), not hidden in a menu. */}
+                {isOwner && playlist.origin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Refresh from source"
+                    title="Refresh from source"
+                    onClick={() => setRefreshOpen(true)}
+                  >
+                    <RefreshCw className="size-4" />
+                  </Button>
+                )}
                 {isOwner && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="More actions">
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {playlist.origin && (
-                        <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
-                          <RefreshCw className="mr-2 size-4" />
-                          Refresh from source
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onSelect={() => setDeleteOpen(true)}
-                      >
-                        <Trash2 className="mr-2 size-4" />
-                        Delete playlist
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete playlist"
+                    title="Delete playlist"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
                 )}
                 <Button variant="ghost" onClick={() => setEditing(false)}>
                   Cancel

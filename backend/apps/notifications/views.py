@@ -28,7 +28,13 @@ class NotificationViewSet(
     pagination_class = NotificationPagination
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        qs = Notification.objects.filter(recipient=self.request.user)
+        # The bell lists only UNREAD notifications, so read ones drop on a fresh load
+        # (hard refresh). Other actions (mark-read / dismiss / unread-count) still
+        # operate over the full set.
+        if self.action == "list":
+            qs = qs.filter(read_at__isnull=True)
+        return qs
 
     @extend_schema(responses={200: {"type": "object", "properties": {"count": {"type": "integer"}}}})
     @action(detail=False, methods=["get"], url_path="unread-count")

@@ -27,15 +27,16 @@ export function Switch({
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-50',
+        // Flex + padding so the thumb travels within the track and can't overflow.
+        'inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors duration-200 disabled:opacity-50',
         checked ? 'bg-primary' : 'bg-muted-foreground/30',
         className,
       )}
     >
       <span
         className={cn(
-          'ease-out-back absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-          checked ? 'translate-x-[22px]' : 'translate-x-0.5',
+          'ease-out-back size-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+          checked ? 'translate-x-5' : 'translate-x-0',
         )}
       />
     </button>
@@ -74,14 +75,14 @@ export function SwitchRow({
       </span>
       <span
         className={cn(
-          'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+          'inline-flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors duration-200',
           checked ? 'bg-primary' : 'bg-muted-foreground/30',
         )}
       >
         <span
           className={cn(
-            'ease-out-back absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-            checked ? 'translate-x-[22px]' : 'translate-x-0.5',
+            'ease-out-back size-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+            checked ? 'translate-x-5' : 'translate-x-0',
           )}
         />
       </span>
