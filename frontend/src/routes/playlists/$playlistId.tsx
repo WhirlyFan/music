@@ -725,6 +725,7 @@ function TrackRow({
           size="size-6"
           icon="size-3"
           className="ring-border relative z-10 ring-1"
+          link
         />
       )}
       <div className="relative z-10 flex items-center" onPointerDown={(e) => e.stopPropagation()}>

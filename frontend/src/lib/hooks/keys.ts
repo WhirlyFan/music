@@ -72,6 +72,9 @@ export const friendKeys = {
   all: () => ['friends'] as const,
   list: () => ['friends', 'list'] as const,
   requests: () => ['friends', 'requests'] as const,
+  // A user's public profile + my relationship to them (nested under friends so a
+  // friend mutation's `all()` invalidation refreshes an open profile too).
+  profile: (username: string) => ['friends', 'profile', username] as const,
   // User search for adding friends — `q` is part of the key so each term caches.
   search: (q: string) => ['friends', 'search', q] as const,
 }

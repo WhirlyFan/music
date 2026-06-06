@@ -277,7 +277,7 @@ function UserRow({ user, action }: { user: FriendUser; action: React.ReactNode }
   return (
     <div className="hover:bg-muted/40 flex items-center justify-between gap-4 px-5 py-3 transition-colors">
       <div className="flex min-w-0 items-center gap-3">
-        <UserAvatar username={user.username} size="size-10" icon="size-5" />
+        <UserAvatar username={user.username} size="size-10" icon="size-5" link />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium">{user.display_name || user.username}</p>
           <p className="text-muted-foreground truncate text-xs">@{user.username}</p>

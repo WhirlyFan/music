@@ -63,7 +63,7 @@ export function CollaboratorsManager({
                 className="bg-muted/60 flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 text-xs"
                 title={c.status === 'pending' ? 'Invite pending' : undefined}
               >
-                <UserAvatar username={c.user.username} size="size-5" icon="size-3" />
+                <UserAvatar username={c.user.username} size="size-5" icon="size-3" link />
                 <span className={c.status === 'pending' ? 'opacity-60' : ''}>
                   @{c.user.username}
                   {isMe && ' (you)'}

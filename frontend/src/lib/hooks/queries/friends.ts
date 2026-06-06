@@ -40,6 +40,28 @@ export function useFriendRequests(enabled = true) {
   })
 }
 
+export type ProfileRelationship = {
+  status: 'self' | 'none' | 'outgoing' | 'incoming' | 'friends'
+  id?: string // the friendship id (for accept / cancel / unfriend), when one exists
+}
+export type PublicProfile = {
+  id: string
+  username: string
+  display_name: string
+  relationship: ProfileRelationship
+}
+
+/** A user's public profile + my relationship to them (drives the Add/Accept/Friends
+ *  control). Idle for an empty username. */
+export function useUserProfile(username: string | undefined) {
+  return useQuery({
+    queryKey: friendKeys.profile(username ?? ''),
+    queryFn: username
+      ? () => api<PublicProfile>(`/users/profile/${encodeURIComponent(username)}/`)
+      : skipToken,
+  })
+}
+
 /** Find people by username/name to befriend; idle for an empty query. */
 export function useUserSearch(query: string) {
   const q = query.trim()

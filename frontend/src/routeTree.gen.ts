@@ -17,6 +17,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists/index'
+import { Route as UUsernameRouteImport } from './routes/u/$username'
 import { Route as PlaylistsPlaylistIdRouteImport } from './routes/playlists/$playlistId'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
@@ -70,6 +71,11 @@ const IndexRoute = IndexRouteImport.update({
 const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
   id: '/playlists/',
   path: '/playlists/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UUsernameRoute = UUsernameRouteImport.update({
+  id: '/u/$username',
+  path: '/u/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlaylistsPlaylistIdRoute = PlaylistsPlaylistIdRouteImport.update({
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/u/$username': typeof UUsernameRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
@@ -179,6 +186,7 @@ export interface FileRoutesByTo {
   '/account/email': typeof AccountEmailRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/u/$username': typeof UUsernameRoute
   '/playlists': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
@@ -204,6 +212,7 @@ export interface FileRoutesById {
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/u/$username': typeof UUsernameRoute
   '/playlists/': typeof PlaylistsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
@@ -230,6 +239,7 @@ export interface FileRouteTypes {
     | '/account/verify-email'
     | '/auth/callback'
     | '/playlists/$playlistId'
+    | '/u/$username'
     | '/playlists/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
@@ -252,6 +262,7 @@ export interface FileRouteTypes {
     | '/account/email'
     | '/auth/callback'
     | '/playlists/$playlistId'
+    | '/u/$username'
     | '/playlists'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
@@ -276,6 +287,7 @@ export interface FileRouteTypes {
     | '/account/verify-email'
     | '/auth/callback'
     | '/playlists/$playlistId'
+    | '/u/$username'
     | '/playlists/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
@@ -301,6 +313,7 @@ export interface RootRouteChildren {
   AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
   AuthCallbackRoute: typeof AuthCallbackRoute
   PlaylistsPlaylistIdRoute: typeof PlaylistsPlaylistIdRoute
+  UUsernameRoute: typeof UUsernameRoute
   PlaylistsIndexRoute: typeof PlaylistsIndexRoute
   AccountPasswordChangeRoute: typeof AccountPasswordChangeRoute
   AccountPasswordForgotRoute: typeof AccountPasswordForgotRoute
@@ -363,6 +376,13 @@ declare module '@tanstack/react-router' {
       path: '/playlists'
       fullPath: '/playlists/'
       preLoaderRoute: typeof PlaylistsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/u/$username': {
+      id: '/u/$username'
+      path: '/u/$username'
+      fullPath: '/u/$username'
+      preLoaderRoute: typeof UUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/playlists/$playlistId': {
@@ -510,6 +530,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,
   AuthCallbackRoute: AuthCallbackRoute,
   PlaylistsPlaylistIdRoute: PlaylistsPlaylistIdRoute,
+  UUsernameRoute: UUsernameRoute,
   PlaylistsIndexRoute: PlaylistsIndexRoute,
   AccountPasswordChangeRoute: AccountPasswordChangeRoute,
   AccountPasswordForgotRoute: AccountPasswordForgotRoute,

@@ -120,3 +120,21 @@ def test_user_search_excludes_self_and_matches_username():
     names = {u["username"] for u in results}
     assert "bob" in names and "alice" not in names
     assert api.get("/api/v1/users/search/?q=").data == []
+
+
+@pytest.mark.django_db
+def test_public_profile_reports_relationship():
+    me = UserFactory(username="me")
+    friend = UserFactory(username="pal")
+    stranger = UserFactory(username="rando")  # noqa: F841 — exists so 'rando' resolves
+    asker = UserFactory(username="asker")
+    services.accept(services.send_request(me, friend), by=friend)  # friends
+    services.send_request(asker, me)  # asker → me (incoming, pending)
+    api = _authed(me)
+
+    assert api.get("/api/v1/users/profile/me/").data["relationship"]["status"] == "self"
+    assert api.get("/api/v1/users/profile/pal/").data["relationship"]["status"] == "friends"
+    assert api.get("/api/v1/users/profile/rando/").data["relationship"]["status"] == "none"
+    incoming = api.get("/api/v1/users/profile/asker/").data["relationship"]
+    assert incoming["status"] == "incoming" and "id" in incoming
+    assert api.get("/api/v1/users/profile/nope/").status_code == 404

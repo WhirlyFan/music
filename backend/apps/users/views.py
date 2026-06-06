@@ -26,6 +26,7 @@ from __future__ import annotations
 from allauth.mfa.models import Authenticator
 from django.contrib.auth import get_user_model
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.request import Request
@@ -138,3 +139,41 @@ def search_users(request: Request) -> Response:
         is_active=True,
     ).exclude(pk=request.user.pk)[:20]
     return Response(_UserSearchSerializer(matches, many=True).data)
+
+
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def public_profile(request: Request, username: str) -> Response:
+    """A user's public profile + the caller's relationship to them, so the profile
+    page can show the right control (Add / Requested / Accept / Friends / it's-you).
+    The friendship status is computed here (imported lazily to keep users decoupled
+    from the friends app at module load)."""
+    from apps.friends.models import Friendship  # lazy: avoid a load-time app coupling
+
+    user_model = get_user_model()
+    target = get_object_or_404(user_model, username__iexact=username, is_active=True)
+
+    relationship = {"status": "none"}
+    if target.id == request.user.id:
+        relationship = {"status": "self"}
+    else:
+        fr = Friendship.objects.filter(
+            Q(requester=request.user, addressee=target)
+            | Q(requester=target, addressee=request.user)
+        ).first()
+        if fr is not None:
+            if fr.status == Friendship.Status.ACCEPTED:
+                relationship = {"status": "friends", "id": str(fr.id)}
+            elif fr.requester_id == request.user.id:
+                relationship = {"status": "outgoing", "id": str(fr.id)}
+            else:
+                relationship = {"status": "incoming", "id": str(fr.id)}
+
+    return Response(
+        {
+            "id": str(target.id),
+            "username": target.username,
+            "display_name": target.display_name,
+            "relationship": relationship,
+        }
+    )
