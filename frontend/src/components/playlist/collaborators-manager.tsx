@@ -1,0 +1,143 @@
+import { UserPlus, X } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
+import {
+  useCollaborators,
+  useInviteCollaborator,
+  useRemoveCollaborator,
+} from '@/lib/hooks/queries/collaborators'
+import { useUserSearch } from '@/lib/hooks/queries/friends'
+import { useSession } from '@/lib/hooks/queries/auth'
+import { useDebounced } from '@/lib/use-debounced'
+
+/** Compact collaborator manager — lives inside the playlist's Edit panel. A row of
+ *  member chips (owner can remove; you can leave), plus an inline invite for the
+ *  owner. Deliberately small + unobtrusive. */
+export function CollaboratorsManager({
+  playlistId,
+  isOwner,
+}: {
+  playlistId: string
+  isOwner: boolean
+}) {
+  const session = useSession()
+  const myUsername = (session.data?.data as { user?: { username?: string } } | undefined)?.user
+    ?.username
+  const collaborators = useCollaborators(playlistId)
+  const remove = useRemoveCollaborator(playlistId)
+  const members = collaborators.data ?? []
+
+  return (
+    <div className="border-border/60 space-y-2 border-t pt-3">
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-medium">Collaborators</p>
+        {members.length > 0 && (
+          <span className="text-muted-foreground text-xs tabular-nums">{members.length}</span>
+        )}
+      </div>
+
+      {members.length > 0 ? (
+        <ul className="flex flex-wrap gap-1.5">
+          {members.map((c) => {
+            const isMe = c.user.username === myUsername
+            const canRemove = isOwner || isMe
+            return (
+              <li
+                key={c.id}
+                className="bg-muted/60 flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-0.5 text-xs"
+                title={c.status === 'pending' ? 'Invite pending' : undefined}
+              >
+                <Avatar className="size-5">
+                  <AvatarImage src={dicebearAvatarUrl(c.user.username)} alt="" />
+                  <AvatarFallback className="text-[9px]">
+                    {avatarInitials(c.user.username)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className={c.status === 'pending' ? 'opacity-60' : ''}>
+                  @{c.user.username}
+                  {isMe && ' (you)'}
+                  {c.status === 'pending' && ' · pending'}
+                </span>
+                {canRemove && (
+                  <button
+                    type="button"
+                    aria-label={isMe ? 'Leave playlist' : `Remove ${c.user.username}`}
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() =>
+                      remove.mutate(c.user.id, {
+                        onSuccess: () =>
+                          toast.success(isMe ? 'You left the playlist.' : `Removed @${c.user.username}.`),
+                      })
+                    }
+                  >
+                    <X className="size-3" aria-hidden />
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <p className="text-muted-foreground text-xs">
+          {isOwner ? 'Invite people to edit this playlist with you.' : 'Just you for now.'}
+        </p>
+      )}
+
+      {isOwner && <InlineInvite playlistId={playlistId} />}
+    </div>
+  )
+}
+
+function InlineInvite({ playlistId }: { playlistId: string }) {
+  const [term, setTerm] = useState('')
+  const q = useDebounced(term, 300)
+  const results = useUserSearch(q)
+  const invite = useInviteCollaborator(playlistId)
+
+  return (
+    <div className="space-y-1.5">
+      <div className="relative">
+        <UserPlus
+          className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"
+          aria-hidden
+        />
+        <Input
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          placeholder="Invite by username…"
+          aria-label="Invite a collaborator"
+          className="h-8 rounded-full pl-8 text-sm"
+        />
+      </div>
+      {q && results.data && results.data.length > 0 && (
+        <ul className="border-border/60 divide-border/60 divide-y rounded-lg border">
+          {results.data.slice(0, 5).map((u) => (
+            <li key={u.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+              <span className="truncate text-xs">@{u.username}</span>
+              <Button
+                size="sm"
+                className="h-6 rounded-full px-2.5 text-xs"
+                disabled={invite.isPending}
+                onClick={() =>
+                  invite.mutate(u.id, {
+                    onSuccess: () => {
+                      toast.success(`Invited @${u.username}.`)
+                      setTerm('')
+                    },
+                  })
+                }
+              >
+                Invite
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}

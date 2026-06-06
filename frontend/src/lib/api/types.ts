@@ -1504,6 +1504,7 @@ export interface components {
             is_public?: boolean;
             readonly is_owner: boolean;
             readonly can_edit: boolean;
+            readonly collaborator_count: number;
             /** Format: date-time */
             readonly created_at: string;
             readonly track_count: number;

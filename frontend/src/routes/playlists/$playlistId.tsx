@@ -16,8 +16,9 @@ import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
 import { AddSongs } from '@/components/playlist/add-songs'
-import { PlaylistCollaboration } from '@/components/playlist/playlist-collaboration'
+import { CollaboratorsManager } from '@/components/playlist/collaborators-manager'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,7 @@ import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { SwitchRow } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
 import type { PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
 import {
   useDeletePlaylist,
@@ -45,6 +47,7 @@ import {
   useUpdatePlaylist,
 } from '@/lib/hooks/mutations/catalog'
 import { usePlayPlaylist, useQueueTracks } from '@/lib/hooks/mutations/rooms'
+import { useSession } from '@/lib/hooks/queries/auth'
 import { useInfinitePlaylistTracks, usePlaylist } from '@/lib/hooks/queries/catalog'
 import { useRouteSearch } from '@/lib/hooks/queries/ui'
 import { useDebounced } from '@/lib/use-debounced'
@@ -61,6 +64,7 @@ export const Route = createFileRoute('/playlists/$playlistId')({
 function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const navigate = useNavigate()
+  const session = useSession()
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
   // Search value is owned by the persistent layout pill, keyed by this exact path
   // (same key the pill writes); this page reads it to drive the track query.
@@ -144,6 +148,11 @@ function PlaylistDetailPage() {
   const isOwner = playlist.is_owner
   // Collaborators can edit tracks + metadata too (delete/visibility/refresh stay owner-only).
   const canEdit = playlist.can_edit
+  // Only show per-row "added by" avatars on a genuinely collaborative playlist, and
+  // only for OTHER people (your own additions don't get an avatar).
+  const hasCollaborators = (playlist.collaborator_count ?? 0) > 0
+  const myUsername = (session.data?.data as { user?: { username?: string } } | undefined)?.user
+    ?.username
   const allSelected = items.length > 0 && items.every((i) => selected.has(i.track.id))
 
   const toggleSelect = (trackId: string) =>
@@ -241,9 +250,6 @@ function PlaylistDetailPage() {
         </div>
       )}
 
-      {/* Collaboration: members + invite/leave, and the edit history. Shown to the
-          owner and to collaborators (hidden for a public viewer who isn't a member). */}
-      {canEdit && <PlaylistCollaboration playlistId={playlistId} isOwner={isOwner} />}
 
       {/* Add songs (edit mode) — owner + collaborators grow the playlist here. */}
       {editing && <AddSongs playlistId={playlistId} />}
@@ -296,6 +302,11 @@ function PlaylistDetailPage() {
             editing={editing}
             selected={selected.has(item.track.id)}
             refreshing={refreshArtwork.isPending}
+            adderUsername={
+              hasCollaborators && item.added_by && item.added_by !== myUsername
+                ? item.added_by
+                : undefined
+            }
             onToggleSelect={() => toggleSelect(item.track.id)}
             onPlayFrom={(trackId) => playPlaylist.mutate({ playlistId, startTrackId: trackId })}
             onQueue={(trackId) =>
@@ -564,6 +575,9 @@ function EditPanel({
           </Button>
         </div>
       </form>
+
+      {/* Collaborator management lives here — compact + tucked inside the editor. */}
+      <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />
     </section>
   )
 }
@@ -573,6 +587,7 @@ function TrackRow({
   editing = false,
   selected = false,
   refreshing = false,
+  adderUsername,
   onToggleSelect,
   onPlayFrom,
   onQueue,
@@ -584,6 +599,9 @@ function TrackRow({
   editing?: boolean
   selected?: boolean
   refreshing?: boolean
+  // The collaborator who added this song (only set for OTHER people's additions on a
+  // collaborative playlist) → shown as a small avatar on the row.
+  adderUsername?: string
   onToggleSelect?: () => void
   onPlayFrom?: (trackId: string) => void
   onQueue?: (trackId: string) => void
@@ -693,11 +711,17 @@ function TrackRow({
         </div>
         <p className="text-muted-foreground truncate text-sm">
           {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
-          {item.added_by && (
-            <span className="text-muted-foreground/80"> · added by @{item.added_by}</span>
-          )}
         </p>
       </div>
+      {adderUsername && (
+        <Avatar
+          className="ring-border relative z-10 size-6 shrink-0 ring-1"
+          title={`Added by @${adderUsername}`}
+        >
+          <AvatarImage src={dicebearAvatarUrl(adderUsername)} alt={`Added by @${adderUsername}`} />
+          <AvatarFallback className="text-[9px]">{avatarInitials(adderUsername)}</AvatarFallback>
+        </Avatar>
+      )}
       <div className="relative z-10 flex items-center" onPointerDown={(e) => e.stopPropagation()}>
         <Button
           size="icon"

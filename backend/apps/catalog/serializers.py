@@ -147,6 +147,9 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
     # Whether the caller may edit tracks + metadata — the owner OR an accepted
     # collaborator. Drives the track-edit affordances (which collaborators get too).
     can_edit = serializers.SerializerMethodField()
+    # Number of accepted collaborators — the client shows per-row "added by" avatars
+    # only when a playlist is actually collaborative (>0).
+    collaborator_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Playlist
@@ -158,6 +161,7 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
             "is_public",
             "is_owner",
             "can_edit",
+            "collaborator_count",
             "created_at",
             "track_count",
             "origin",
@@ -176,6 +180,10 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
         from . import collab
 
         return collab.can_edit(obj, request.user)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_collaborator_count(self, obj):
+        return obj.collaborators.filter(status=PlaylistCollaborator.Status.ACCEPTED).count()
 
 
 class IngestSerializer(serializers.Serializer):

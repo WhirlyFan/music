@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Bell } from 'lucide-react'
 import { useState } from 'react'
 
+import { ApiError } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -93,6 +94,15 @@ function InviteActions({
   )
 }
 
+// If the request is already gone (a stale notification → 404), still consume the
+// notification so the dead buttons disappear instead of erroring on a re-click.
+const settle = (done: () => void) => ({
+  onSuccess: done,
+  onError: (e: unknown) => {
+    if (e instanceof ApiError && e.status === 404) done()
+  },
+})
+
 /** Inline Accept / Decline for a friend-request notification. */
 function FriendRequestActions({
   friendshipId,
@@ -107,8 +117,8 @@ function FriendRequestActions({
     <InviteActions
       notificationId={notificationId}
       busy={accept.isPending || decline.isPending}
-      onAccept={(done) => accept.mutate(friendshipId, { onSuccess: done })}
-      onDecline={(done) => decline.mutate(friendshipId, { onSuccess: done })}
+      onAccept={(done) => accept.mutate(friendshipId, settle(done))}
+      onDecline={(done) => decline.mutate(friendshipId, settle(done))}
     />
   )
 }
@@ -127,8 +137,8 @@ function PlaylistInviteActions({
     <InviteActions
       notificationId={notificationId}
       busy={accept.isPending || decline.isPending}
-      onAccept={(done) => accept.mutate(playlistId, { onSuccess: done })}
-      onDecline={(done) => decline.mutate(playlistId, { onSuccess: done })}
+      onAccept={(done) => accept.mutate(playlistId, settle(done))}
+      onDecline={(done) => decline.mutate(playlistId, settle(done))}
     />
   )
 }
