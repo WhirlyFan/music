@@ -39,8 +39,14 @@ export function UserAvatar({
         alt=""
         className="absolute inset-0 size-full object-cover"
       />
+      {/* Dark icon — the DiceBear "glass" gradient is bright/pastel, so a black
+          person reads far better on it than white. A faint light glow keeps it
+          legible over the occasional darker corner of the gradient. */}
       <User
-        className={cn('relative text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.55)]', icon)}
+        className={cn(
+          'relative text-black/80 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]',
+          icon,
+        )}
         aria-hidden
       />
     </span>

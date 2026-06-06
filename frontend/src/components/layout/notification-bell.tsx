@@ -187,10 +187,13 @@ export function NotificationBell() {
   const dismiss = useDismissNotification()
   const [open, setOpen] = useState(false)
   const count = unread?.count ?? 0
-  const items = notifications.data?.results ?? []
+  const items = notifications.data?.pages.flatMap((p) => p.results) ?? []
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = notifications
   // Opening no longer marks anything read — informational ones are cleared explicitly
   // (per-row ✕ or "mark all read"); actionable ones resolve via Accept/Decline.
-  const clearableUnread = items.filter((n) => !n.read_at && !isActionable(n)).map((n) => n.id)
+  // "Mark all read" clears every informational notification (all pages), so it's
+  // offered whenever there's any unread — the server skips the actionable kinds.
+  const ACTION_LIST = [...ACTION_KINDS]
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -212,17 +215,30 @@ export function NotificationBell() {
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="border-border/60 flex items-center justify-between gap-2 border-b px-3 py-2">
           <p className="text-sm font-medium">Notifications</p>
-          {clearableUnread.length > 0 && (
+          {count > 0 && (
             <button
               type="button"
               className="text-muted-foreground hover:text-foreground text-xs"
-              onClick={() => markRead.mutate(clearableUnread)}
+              onClick={() => markRead.mutate({ excludeKinds: ACTION_LIST })}
             >
               Mark all read
             </button>
           )}
         </div>
-        <div className="max-h-80 [scrollbar-width:thin] overflow-y-auto">
+        {/* ~5 rows tall (max-h-80); scrolling near the bottom loads the next page. */}
+        <div
+          className="max-h-80 [scrollbar-width:thin] overflow-y-auto"
+          onScroll={(e) => {
+            const el = e.currentTarget
+            if (
+              hasNextPage &&
+              !isFetchingNextPage &&
+              el.scrollHeight - el.scrollTop - el.clientHeight < 64
+            ) {
+              void fetchNextPage()
+            }
+          }}
+        >
           {notifications.isLoading ? (
             <p className="text-muted-foreground px-3 py-6 text-center text-sm">Loading…</p>
           ) : items.length === 0 ? (
@@ -290,6 +306,9 @@ export function NotificationBell() {
                   </li>
                 )
               })}
+              {isFetchingNextPage && (
+                <li className="text-muted-foreground px-3 py-2 text-center text-xs">Loading…</li>
+              )}
             </ul>
           )}
         </div>

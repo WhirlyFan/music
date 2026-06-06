@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import { notificationKeys } from '@/lib/hooks/keys'
@@ -12,14 +17,16 @@ export type AppNotification = {
   created_at: string
 }
 
-type NotificationPage = { count: number; results: AppNotification[] }
+type NotificationPage = { count: number; next: string | null; results: AppNotification[] }
 
-/** Recent notifications (first page). Refetched on a live `notification.new` nudge
- *  and on window focus, so the durable DB rows stay current without polling. */
+/** The caller's notifications, paginated 5/page so the bell shows ~5 and
+ *  infinite-scrolls for more. Refetched on a live `notification.new` nudge + focus. */
 export function useNotifications(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: notificationKeys.list(),
-    queryFn: () => api<NotificationPage>('/notifications/'),
+    queryFn: ({ pageParam }) => api<NotificationPage>(`/notifications/?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled,
   })
 }
@@ -33,12 +40,20 @@ export function useUnreadCount(enabled = true) {
   })
 }
 
-/** Mark notifications read — specific `ids`, or all when omitted. */
+/** Mark notifications read — specific `ids`, or all unread EXCEPT `excludeKinds`
+ *  (so "mark all read" clears informational ones across every page while leaving
+ *  actionable invites pending), or all when given nothing. */
 export function useMarkNotificationsRead() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (ids?: string[]) =>
-      api('/notifications/mark-read/', { method: 'POST', body: ids ? { ids } : {} }),
+    mutationFn: (arg?: { ids?: string[]; excludeKinds?: string[] }) =>
+      api('/notifications/mark-read/', {
+        method: 'POST',
+        body: {
+          ...(arg?.ids ? { ids: arg.ids } : {}),
+          ...(arg?.excludeKinds ? { exclude_kinds: arg.excludeKinds } : {}),
+        },
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: notificationKeys.all() }),
   })
 }

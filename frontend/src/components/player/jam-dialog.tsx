@@ -267,7 +267,7 @@ export function JamDialog() {
                           alt=""
                           className="absolute inset-0 size-full object-cover"
                         />
-                        <User className="relative size-4 text-white drop-shadow-[0_1px_1.5px_rgba(0,0,0,0.55)]" />
+                        <User className="relative size-4 text-black/80 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]" />
                       </span>
                       <span className="bg-success ring-background absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2" />
                     </div>

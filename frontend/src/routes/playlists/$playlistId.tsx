@@ -230,7 +230,7 @@ function PlaylistDetailPage() {
       />
 
       {!editing && playlist.description && (
-        <p className="text-muted-foreground max-w-2xl text-sm whitespace-pre-wrap">
+        <p className="text-muted-foreground line-clamp-3 max-w-2xl text-sm break-words whitespace-pre-wrap">
           {playlist.description}
         </p>
       )}
@@ -534,11 +534,13 @@ function EditPanel({
                 id="pl-desc"
                 value={field.state.value}
                 onChange={(e) => field.handleChange(e.target.value)}
-                placeholder="Optional"
-                maxLength={1000}
+                placeholder="A short blurb (optional)"
+                maxLength={300}
+                rows={2}
+                className="resize-none"
               />
               <p className="text-muted-foreground text-right text-xs tabular-nums">
-                {field.state.value.length}/1000
+                {field.state.value.length}/300
               </p>
             </div>
           )}
