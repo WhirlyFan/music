@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from allauth.account.adapter import get_adapter
 from django.conf import settings
-from django.core.mail import send_mail
+from django.contrib.sites.models import Site
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.utils.http import urlencode
 
@@ -65,15 +67,28 @@ def redeem_invitation(token: str, request) -> Invitation:
 def _send_invite_email(inv: Invitation, invited_by, raw_token: str) -> None:
     link = f"{settings.FRONTEND_ORIGIN}/signup?{urlencode({'invite': raw_token})}"
     inviter = getattr(invited_by, "display_name", None) or "A member"
-    send_mail(
-        subject="You're invited",
-        message=(
-            f"{inviter} invited you to join.\n\n"
-            f"Create your account: {link}\n\n"
-            f"This invite expires in {INVITE_TTL.days} days. "
-            "If you weren't expecting it, ignore this email."
-        ),
-        from_email=None,  # falls back to DEFAULT_FROM_EMAIL
-        recipient_list=[inv.email],
-        fail_silently=False,
+    site = Site.objects.get_current()
+    ctx = {
+        "current_site": site,
+        "site_name": site.name,
+        "inviter": inviter,
+        "link": link,
+        "expires_days": INVITE_TTL.days,
+    }
+    subject = f"You're invited to {site.name}"
+    text = (
+        f"{inviter} invited you to join {site.name} — paste a playlist, "
+        f"hit play, listen together.\n\n"
+        f"Create your account: {link}\n\n"
+        f"This invite expires in {INVITE_TTL.days} days. "
+        "If you weren't expecting it, ignore this email."
     )
+    html = render_to_string("account/email/invitation_message.html", ctx)
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=text,
+        from_email=None,  # falls back to DEFAULT_FROM_EMAIL
+        to=[inv.email],
+    )
+    msg.attach_alternative(html, "text/html")
+    msg.send(fail_silently=False)

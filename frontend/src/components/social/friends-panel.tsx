@@ -1,4 +1,4 @@
-import { Check, UserPlus, Users, UserX, X } from 'lucide-react'
+import { Check, Inbox, Search, UserPlus, Users, UserX, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Reveal } from '@/components/ui/reveal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { useSession } from '@/lib/hooks/queries/auth'
@@ -28,10 +29,21 @@ import {
   useUserSearch,
 } from '@/lib/hooks/queries/friends'
 import { useDebounced } from '@/lib/use-debounced'
+import { cn } from '@/lib/utils'
 
-/** The friends hub: search-to-add, incoming/outgoing requests, and your friends list.
- *  Self-contained (fetches its own data) so it can drop into Settings. */
-export function FriendsPanel() {
+export type FriendsView = 'friends' | 'requests' | 'add'
+
+/** The friends hub: a segmented Friends / Requests / Add view. Each list lives on its
+ *  own tab so they're never stacked, and searching to add happens on a dedicated tab
+ *  (so results never push the rest of the page around). The active tab is owned by the
+ *  caller (persisted in the URL by the route), so it survives refresh + Back. */
+export function FriendsPanel({
+  view,
+  onViewChange,
+}: {
+  view: FriendsView
+  onViewChange: (v: FriendsView) => void
+}) {
   const session = useSession()
   const myUsername = (session.data?.data as { user?: { username?: string } } | undefined)?.user
     ?.username
@@ -41,58 +53,143 @@ export function FriendsPanel() {
   const outgoing = requests.data?.outgoing ?? []
   const friendList = friends.data?.pages.flatMap((p) => p.results) ?? []
   const friendCount = friends.data?.pages[0]?.count ?? 0
+  const pendingCount = incoming.length + outgoing.length
 
   return (
-    <div className="space-y-6">
-      <AddFriend />
+    <div className="space-y-5">
+      <Segmented
+        value={view}
+        onChange={onViewChange}
+        options={[
+          { value: 'friends', label: 'Friends', count: friendCount || undefined, icon: Users },
+          {
+            value: 'requests',
+            label: 'Requests',
+            count: incoming.length || undefined,
+            icon: Inbox,
+          },
+          { value: 'add', label: 'Add', icon: UserPlus },
+        ]}
+      />
 
-      {incoming.length > 0 && (
-        <Section icon={UserPlus} title="Friend requests" badge={incoming.length}>
-          {incoming.map((f) => (
-            <IncomingRow key={f.id} id={f.id} user={f.requester} />
-          ))}
-        </Section>
-      )}
-
-      {outgoing.length > 0 && (
-        <Section icon={Users} title="Sent" subdued>
-          {outgoing.map((f) => (
-            <OutgoingRow key={f.id} id={f.id} user={f.addressee} />
-          ))}
-        </Section>
-      )}
-
-      <Section icon={Users} title="Friends" badge={friendCount || undefined}>
-        {friends.isLoading ? (
-          <RowSkeletons />
-        ) : friendList.length > 0 ? (
-          <div
-            className="max-h-96 overflow-y-auto [scrollbar-width:thin]"
-            onScroll={(e) => {
-              const el = e.currentTarget
-              if (
-                friends.hasNextPage &&
-                !friends.isFetchingNextPage &&
-                el.scrollHeight - el.scrollTop - el.clientHeight < 64
-              ) {
-                void friends.fetchNextPage()
-              }
-            }}
-          >
-            {friendList.map((f) => {
-              const other = f.requester.username === myUsername ? f.addressee : f.requester
-              return <FriendRow key={f.id} id={f.id} user={other} />
-            })}
-            {friends.isFetchingNextPage && (
-              <p className="text-muted-foreground px-5 py-2 text-center text-xs">Loading…</p>
+      {/* One Reveal per tab — switching collapses the old panel and expands the new one
+          (so each tab both enters and exits), and the page height eases between them
+          instead of snapping. Only one is open at a time. */}
+      <div>
+        <Reveal open={view === 'friends'}>
+          <Card>
+            {friends.isLoading ? (
+              <RowSkeletons />
+            ) : friendList.length > 0 ? (
+              <div
+                className="max-h-[28rem] [scrollbar-width:thin] overflow-y-auto"
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  if (
+                    friends.hasNextPage &&
+                    !friends.isFetchingNextPage &&
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 64
+                  ) {
+                    void friends.fetchNextPage()
+                  }
+                }}
+              >
+                {friendList.map((f) => {
+                  const other = f.requester.username === myUsername ? f.addressee : f.requester
+                  return <FriendRow key={f.id} id={f.id} user={other} />
+                })}
+                {friends.isFetchingNextPage && (
+                  <p className="text-muted-foreground px-5 py-2 text-center text-xs">Loading…</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground px-5 py-10 text-center text-sm">
+                No friends yet — switch to “Add” to send your first request.
+              </p>
             )}
-          </div>
-        ) : (
-          <p className="text-muted-foreground px-5 py-8 text-center text-sm">
-            No friends yet — search above to send your first request.
-          </p>
-        )}
-      </Section>
+          </Card>
+        </Reveal>
+
+        <Reveal open={view === 'requests'}>
+          {requests.isLoading ? (
+            <Card>
+              <RowSkeletons />
+            </Card>
+          ) : pendingCount > 0 ? (
+            // One list — incoming first, then sent. No sub-labels now that "Requests"
+            // is its own tab; the Accept/Decline vs Cancel actions tell them apart.
+            <Card>
+              {incoming.map((f) => (
+                <IncomingRow key={f.id} id={f.id} user={f.requester} />
+              ))}
+              {outgoing.map((f) => (
+                <OutgoingRow key={f.id} id={f.id} user={f.addressee} />
+              ))}
+            </Card>
+          ) : (
+            <Card>
+              <p className="text-muted-foreground px-5 py-10 text-center text-sm">
+                No pending requests.
+              </p>
+            </Card>
+          )}
+        </Reveal>
+
+        <Reveal open={view === 'add'}>
+          <AddFriend />
+        </Reveal>
+      </div>
+    </div>
+  )
+}
+
+/** App-styled segmented control — the single source for switching Friends/Requests. */
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+}: {
+  value: T
+  onChange: (v: T) => void
+  options: {
+    value: T
+    label: string
+    count?: number
+    icon: React.ComponentType<{ className?: string }>
+  }[]
+}) {
+  return (
+    <div className="bg-muted/60 inline-flex w-full gap-1 rounded-full p-1 sm:w-auto">
+      {options.map(({ value: v, label, count, icon: Icon }) => {
+        const active = v === value
+        return (
+          <button
+            key={v}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(v)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors sm:flex-none',
+              active
+                ? 'bg-card text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="size-4" aria-hidden />
+            {label}
+            {count !== undefined && (
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
+                  active ? 'bg-primary/10 text-primary' : 'bg-muted-foreground/15',
+                )}
+              >
+                {count}
+              </span>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -108,7 +205,7 @@ function AddFriend() {
   return (
     <section className="space-y-3">
       <div className="relative">
-        <UserPlus
+        <Search
           className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
           aria-hidden
         />
@@ -124,7 +221,7 @@ function AddFriend() {
         <Card>
           {/* First 25 land as you type; scrolling near the bottom loads the next page. */}
           <div
-            className="max-h-72 overflow-y-auto [scrollbar-width:thin]"
+            className="max-h-72 [scrollbar-width:thin] overflow-y-auto"
             onScroll={(e) => {
               const el = e.currentTarget
               if (
@@ -182,7 +279,12 @@ function IncomingRow({ id, user }: { id: string; user: FriendUser }) {
       user={user}
       action={
         <span className="flex gap-2">
-          <Button size="sm" className="rounded-full" disabled={busy} onClick={() => accept.mutate(id)}>
+          <Button
+            size="sm"
+            className="rounded-full"
+            disabled={busy}
+            onClick={() => accept.mutate(id)}
+          >
             <Check className="mr-1 size-4" aria-hidden />
             Accept
           </Button>
@@ -288,44 +390,6 @@ const Card = ({ children }: { children: React.ReactNode }) => (
     {children}
   </div>
 )
-
-/** Section with a gradient icon badge header + a card body — the house style. */
-function Section({
-  icon: Icon,
-  title,
-  badge,
-  subdued = false,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string }>
-  title: string
-  badge?: number
-  subdued?: boolean
-  children: React.ReactNode
-}) {
-  return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2.5">
-        <span
-          className={
-            subdued
-              ? 'bg-muted text-muted-foreground grid size-7 place-items-center rounded-lg'
-              : 'from-primary to-accent text-primary-foreground shadow-primary/30 grid size-7 place-items-center rounded-lg bg-gradient-to-br shadow-sm'
-          }
-        >
-          <Icon className="size-4" />
-        </span>
-        <h2 className="text-lg font-medium">{title}</h2>
-        {badge !== undefined && (
-          <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums">
-            {badge}
-          </span>
-        )}
-      </div>
-      <Card>{children}</Card>
-    </section>
-  )
-}
 
 function RowSkeletons() {
   return (

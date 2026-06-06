@@ -43,10 +43,7 @@ export function UserAvatar({
           person reads far better on it than white. A faint light glow keeps it
           legible over the occasional darker corner of the gradient. */}
       <User
-        className={cn(
-          'relative text-black/80 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]',
-          icon,
-        )}
+        className={cn('relative text-black/80 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]', icon)}
         aria-hidden
       />
     </span>

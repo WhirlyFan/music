@@ -152,6 +152,15 @@ export const auth = {
    */
   changeEmail: (email: string) => call('POST', '/account/email', { email }),
 
+  /**
+   * Cancel a pending email change by removing the unverified address.
+   * DELETE /account/email, body `{ email }`. allauth aborts the in-flight
+   * verification and drops the address, leaving the current (primary) email
+   * untouched. (A *new* change request already auto-replaces a pending one;
+   * this is the explicit "never mind" path.)
+   */
+  removeEmail: (email: string) => call('DELETE', '/account/email', { email }),
+
   // --- Password change (authenticated) ---
   /**
    * Change the password for the logged-in user. `current_password` is

@@ -1,0 +1,6 @@
+{% extends "account/email/base_message.html" %}
+{% block content %}
+  <p style="margin:0 0 4px;"><strong>{{ inviter }}</strong> invited you to join {{ current_site.name }} — paste a playlist, hit play, listen together.</p>
+  {% include "account/email/_button.html" with url=link label="Create your account" %}
+  <p style="margin:14px 0 0;color:#9b9ba3;font-size:12px;">This invite expires in {{ expires_days }} days. If you weren't expecting it, you can ignore this email.</p>
+{% endblock %}

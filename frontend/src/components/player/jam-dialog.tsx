@@ -355,7 +355,7 @@ function InviteFriends({ myUserId }: { myUserId: string | null }) {
         <UserPlus className="size-3.5" /> Invite friends
       </p>
       <ul
-        className="max-h-40 space-y-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]"
+        className="max-h-40 [scrollbar-width:thin] space-y-1 overflow-y-auto pr-0.5"
         onScroll={(e) => {
           const el = e.currentTarget
           if (

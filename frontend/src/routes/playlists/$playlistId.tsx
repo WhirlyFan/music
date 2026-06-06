@@ -33,7 +33,6 @@ import { toast } from 'sonner'
 import { PageHeader } from '@/components/layout/page-header'
 import { CollaboratorsManager } from '@/components/playlist/collaborators-manager'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
-import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,10 +46,12 @@ import {
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Reveal } from '@/components/ui/reveal'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import type { PaginatedPlaylistTrackList, PlaylistTrack } from '@/lib/api/models'
 import { playlistKeys } from '@/lib/hooks/keys'
 import {
@@ -274,7 +275,9 @@ function PlaylistDetailPage() {
           in edit mode (no separate metadata card) — so edit mode is mostly the track
           list. The visibility toggle, refresh + delete are compact controls here too. */}
       <header className="space-y-3">
-        <Breadcrumbs items={[{ label: 'playlists', to: '/playlists' }, { label: playlist.title }]} />
+        <Breadcrumbs
+          items={[{ label: 'playlists', to: '/playlists' }, { label: playlist.title }]}
+        />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div className="min-w-0 flex-1 space-y-2">
             {editing ? (
@@ -317,33 +320,44 @@ function PlaylistDetailPage() {
                     isPublicNow ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {isPublicNow ? <Globe className="size-3" aria-hidden /> : <Lock className="size-3" aria-hidden />}
+                  {isPublicNow ? (
+                    <Globe className="size-3" aria-hidden />
+                  ) : (
+                    <Lock className="size-3" aria-hidden />
+                  )}
                   {isPublicNow ? 'Public' : 'Private'}
                 </span>
               )}
             </div>
 
-            {editing ? (
-              <div className="max-w-xl space-y-1.5">
-                <Textarea
-                  value={draft.description}
-                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-                  placeholder="A short blurb (optional)"
-                  maxLength={200}
-                  rows={2}
-                  className="resize-none"
-                />
-                <p className="text-muted-foreground text-right text-xs tabular-nums">
-                  {draft.description.length}/200
-                </p>
-              </div>
-            ) : (
-              playlist.description && (
-                <p className="text-muted-foreground border-border max-w-prose border-l-2 pl-3 text-sm leading-relaxed break-words">
-                  {playlist.description}
-                </p>
-              )
-            )}
+            {/* Description swaps between the view blurb and the edit textarea via
+                Reveals, so it slides open/closed with the rest of the edit UI instead
+                of snapping. Both stack in one wrapper (no inner space-y) so the
+                collapsed one adds no gap. */}
+            <div>
+              <Reveal open={!editing}>
+                {playlist.description ? (
+                  <p className="text-muted-foreground border-border max-w-prose border-l-2 pl-3 text-sm leading-relaxed break-words">
+                    {playlist.description}
+                  </p>
+                ) : null}
+              </Reveal>
+              <Reveal open={editing}>
+                <div className="max-w-xl space-y-1.5">
+                  <Textarea
+                    value={draft.description}
+                    onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                    placeholder="A short blurb (optional)"
+                    maxLength={200}
+                    rows={2}
+                    className="resize-none"
+                  />
+                  <p className="text-muted-foreground text-right text-xs tabular-nums">
+                    {draft.description.length}/200
+                  </p>
+                </div>
+              </Reveal>
+            </div>
           </div>
 
           {/* The primary filled button stays in the same (rightmost) slot across
@@ -404,39 +418,50 @@ function PlaylistDetailPage() {
         </div>
       </header>
 
-      {/* Collaborators — compact, only while editing; managing songs is the primary
-          task, so this sits quietly below the header. */}
-      {editing && canEdit && <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />}
-
-      {/* Batch-select toolbar (edit mode). */}
-      {editing && (
-        <div className="bg-card/95 border-border/60 sticky top-16 z-10 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 shadow-sm backdrop-blur">
-          <button
-            type="button"
-            onClick={() =>
-              setSelected(allSelected ? new Set() : new Set(items.map((i) => i.track.id)))
-            }
-            className="text-sm font-medium"
-            disabled={items.length === 0}
-          >
-            {allSelected ? 'Deselect all' : 'Select all'}
-          </button>
-          <div className="flex items-center gap-3">
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {selected.size} selected
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-destructive hover:text-destructive disabled:text-muted-foreground"
-              disabled={selected.size === 0}
-              onClick={() => setRemoveOpen(true)}
-            >
-              <Trash2 className="mr-2 size-4" />
-              Remove
-            </Button>
+      {/* Collaborators + the batch-select toolbar are the edit-only blocks. Each is an
+          always-mounted Reveal so entering edit slides them open (pushing the track
+          list down in lockstep) and leaving edit collapses them back — no snap. Both
+          are gated on `canEdit` so viewers never mount (or fetch) them. The Reveals
+          carry `!mt-0` so they contribute no `space-y` gap while collapsed; the open
+          rhythm is restored by padding inside the clipped content. */}
+      {canEdit && (
+        <Reveal open={editing} className="!mt-0">
+          <div className="pt-6 pb-6">
+            <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />
           </div>
-        </div>
+        </Reveal>
+      )}
+
+      {canEdit && (
+        <Reveal open={editing} className="sticky top-16 z-10 !mt-0">
+          <div className="bg-card/95 border-border/60 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 shadow-sm backdrop-blur">
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(allSelected ? new Set() : new Set(items.map((i) => i.track.id)))
+              }
+              className="text-sm font-medium"
+              disabled={items.length === 0}
+            >
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground text-sm tabular-nums">
+                {selected.size} selected
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-destructive hover:text-destructive disabled:text-muted-foreground"
+                disabled={selected.size === 0}
+                onClick={() => setRemoveOpen(true)}
+              >
+                <Trash2 className="mr-2 size-4" />
+                Remove
+              </Button>
+            </div>
+          </div>
+        </Reveal>
       )}
 
       {tracks.isError && (

@@ -116,7 +116,9 @@ function EnrolledState({
         </p>
       </div>
 
-      <dl className={`${settingsCard} divide-border grid grid-cols-1 divide-y overflow-hidden text-sm`}>
+      <dl
+        className={`${settingsCard} divide-border grid grid-cols-1 divide-y overflow-hidden text-sm`}
+      >
         <div className="flex items-center justify-between p-4">
           <dt className="text-muted-foreground">Status</dt>
           <dd className="text-success inline-flex items-center gap-1">
@@ -186,7 +188,9 @@ function EnrollState({
         </p>
       </div>
 
-      <div className={`${settingsCard} flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-start`}>
+      <div
+        className={`${settingsCard} flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-start`}
+      >
         {/* White background so dark mode renders a scannable QR — high contrast
             against a light bg per the QR spec. */}
         <div className="rounded-md bg-white p-3">

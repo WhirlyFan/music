@@ -1,5 +1,5 @@
 import { useForm } from '@tanstack/react-form'
-import { Loader2, MailCheck } from 'lucide-react'
+import { Loader2, MailCheck, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -7,9 +7,10 @@ import { settingsCard } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
 import { type EmailAddress } from '@/lib/auth/guards'
-import { useChangeEmail, useChangePassword } from '@/lib/hooks/mutations/auth'
+import { useCancelEmailChange, useChangeEmail, useChangePassword } from '@/lib/hooks/mutations/auth'
 import { useEmails } from '@/lib/hooks/queries/auth'
 
 const emailSchema = z.object({ email: z.string().email('Enter a valid email address') })
@@ -19,6 +20,7 @@ const emailSchema = z.object({ email: z.string().email('Enter a valid email addr
 export function ChangeEmailForm() {
   const emails = useEmails()
   const change = useChangeEmail()
+  const cancel = useCancelEmailChange()
   const list = (emails.data?.data as EmailAddress[] | undefined) ?? []
   const primary = list.find((e) => e.primary)
   const pending = list.find((e) => !e.primary && !e.verified)
@@ -29,6 +31,7 @@ export function ChangeEmailForm() {
       if (change.isPending) return
       const res = await change.mutateAsync(value.email.trim())
       if (res.status === 200 || res.status === 201) {
+        // A new request auto-replaces any prior pending address (ACCOUNT_CHANGE_EMAIL).
         toast.success('Verification sent to your new address.')
         form.reset()
         return
@@ -49,16 +52,46 @@ export function ChangeEmailForm() {
           click it.
         </p>
       </div>
-      <dl className={`${settingsCard} divide-border grid grid-cols-1 divide-y overflow-hidden text-sm`}>
+      <dl
+        className={`${settingsCard} divide-border grid grid-cols-1 divide-y overflow-hidden text-sm`}
+      >
         <div className="flex items-center justify-between gap-3 p-4">
           <dt className="text-muted-foreground">Current</dt>
-          <dd className="truncate font-medium">{primary?.email ?? '—'}</dd>
+          <dd className="truncate font-medium">
+            {emails.isPending ? <Skeleton className="h-4 w-40" /> : (primary?.email ?? '—')}
+          </dd>
         </div>
         {pending && (
           <div className="flex items-center justify-between gap-3 p-4">
             <dt className="text-muted-foreground">Pending (unverified)</dt>
-            <dd className="text-warning inline-flex items-center gap-1">
-              <MailCheck className="size-4" aria-hidden /> {pending.email}
+            <dd className="flex min-w-0 items-center gap-2">
+              <span className="text-warning inline-flex min-w-0 items-center gap-1">
+                <MailCheck className="size-4 shrink-0" aria-hidden />
+                <span className="truncate">{pending.email}</span>
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-destructive h-7 shrink-0 rounded-full px-2"
+                disabled={cancel.isPending}
+                onClick={() =>
+                  cancel.mutate(pending.email, {
+                    onSuccess: () => toast.success('Pending email change cancelled.'),
+                    onError: () => toast.error('Couldn’t cancel the email change.'),
+                  })
+                }
+                aria-label="Cancel pending email change"
+              >
+                {cancel.isPending ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <>
+                    <X className="mr-1 size-4" aria-hidden />
+                    Cancel
+                  </>
+                )}
+              </Button>
             </dd>
           </div>
         )}
@@ -135,12 +168,21 @@ export function ChangePasswordForm() {
   })
   const parsed = parseAllAuthErrors(change.data)
 
-  const fields: { name: 'current' | 'password' | 'confirm'; label: string; auto: string; key?: string }[] =
-    [
-      { name: 'current', label: 'Current password', auto: 'current-password', key: 'current_password' },
-      { name: 'password', label: 'New password', auto: 'new-password', key: 'new_password' },
-      { name: 'confirm', label: 'Confirm new password', auto: 'new-password' },
-    ]
+  const fields: {
+    name: 'current' | 'password' | 'confirm'
+    label: string
+    auto: string
+    key?: string
+  }[] = [
+    {
+      name: 'current',
+      label: 'Current password',
+      auto: 'current-password',
+      key: 'current_password',
+    },
+    { name: 'password', label: 'New password', auto: 'new-password', key: 'new_password' },
+    { name: 'confirm', label: 'Confirm new password', auto: 'new-password' },
+  ]
 
   return (
     <div className="space-y-3">

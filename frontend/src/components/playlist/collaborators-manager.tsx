@@ -5,13 +5,13 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { useSession } from '@/lib/hooks/queries/auth'
 import {
   useCollaborators,
   useInviteCollaborator,
   useRemoveCollaborator,
 } from '@/lib/hooks/queries/collaborators'
 import { useUserSearch } from '@/lib/hooks/queries/friends'
-import { useSession } from '@/lib/hooks/queries/auth'
 import { useDebounced } from '@/lib/use-debounced'
 
 /** Compact collaborator manager — lives inside the playlist's Edit panel. A row of
@@ -55,7 +55,7 @@ export function CollaboratorsManager({
 
       {members.length > 0 ? (
         <ul
-          className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto [scrollbar-width:thin]"
+          className="flex max-h-40 [scrollbar-width:thin] flex-wrap gap-1.5 overflow-y-auto"
           onScroll={(e) => {
             const el = e.currentTarget
             if (
@@ -90,7 +90,9 @@ export function CollaboratorsManager({
                     onClick={() =>
                       remove.mutate(c.user.id, {
                         onSuccess: () =>
-                          toast.success(isMe ? 'You left the playlist.' : `Removed @${c.user.username}.`),
+                          toast.success(
+                            isMe ? 'You left the playlist.' : `Removed @${c.user.username}.`,
+                          ),
                       })
                     }
                   >
@@ -137,7 +139,7 @@ function InlineInvite({ playlistId }: { playlistId: string }) {
       </div>
       {q && people.length > 0 && (
         <ul
-          className="border-border/60 divide-border/60 max-h-44 divide-y overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+          className="border-border/60 divide-border/60 max-h-44 [scrollbar-width:thin] divide-y overflow-y-auto rounded-lg border"
           onScroll={(e) => {
             const el = e.currentTarget
             if (

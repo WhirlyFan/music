@@ -1,0 +1,11 @@
+{% extends "account/email/base_message.html" %}
+{% block content %}
+  <p style="margin:0 0 4px;">Confirm this email address so we can use it for your {{ current_site.name }} account.</p>
+  {% if code %}
+    <p style="margin:16px 0 6px;color:#52525b;">Enter this verification code in the browser window you have open:</p>
+    <p style="margin:0;font-size:26px;font-weight:700;letter-spacing:6px;color:#18181b;">{{ code }}</p>
+  {% else %}
+    {% include "account/email/_button.html" with url=activate_url label="Confirm email" %}
+  {% endif %}
+  <p style="margin:16px 0 0;color:#9b9ba3;font-size:12px;">If this wasn't you, you can safely ignore this email.</p>
+{% endblock %}

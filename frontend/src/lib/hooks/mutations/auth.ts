@@ -126,6 +126,18 @@ export function useChangeEmail() {
 }
 
 /**
+ * Cancel a pending (unverified) email change by removing that address. The
+ * email list is invalidated so the "Pending" row disappears.
+ */
+export function useCancelEmailChange() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (email: string) => auth.removeEmail(email),
+    onSuccess: () => qc.invalidateQueries({ queryKey: emailKeys.all() }),
+  })
+}
+
+/**
  * Change the logged-in user's password. Requires the current password.
  * allauth keeps the session alive on success — no re-login needed.
  */

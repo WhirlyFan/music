@@ -15,8 +15,13 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ImportRouteImport } from './routes/import'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as PlaylistsIndexRouteImport } from './routes/playlists/index'
 import { Route as UUsernameRouteImport } from './routes/u/$username'
+import { Route as SettingsSecurityRouteImport } from './routes/settings/security'
+import { Route as SettingsProfileRouteImport } from './routes/settings/profile'
+import { Route as SettingsFriendsRouteImport } from './routes/settings/friends'
+import { Route as SettingsAccountRouteImport } from './routes/settings/account'
 import { Route as PlaylistsPlaylistIdRouteImport } from './routes/playlists/$playlistId'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
 import { Route as AccountVerifyEmailRouteImport } from './routes/account/verify-email'
@@ -60,6 +65,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRoute,
+} as any)
 const PlaylistsIndexRoute = PlaylistsIndexRouteImport.update({
   id: '/playlists/',
   path: '/playlists/',
@@ -69,6 +79,26 @@ const UUsernameRoute = UUsernameRouteImport.update({
   id: '/u/$username',
   path: '/u/$username',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsSecurityRoute = SettingsSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsProfileRoute = SettingsProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsFriendsRoute = SettingsFriendsRouteImport.update({
+  id: '/friends',
+  path: '/friends',
+  getParentRoute: () => SettingsRoute,
+} as any)
+const SettingsAccountRoute = SettingsAccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => SettingsRoute,
 } as any)
 const PlaylistsPlaylistIdRoute = PlaylistsPlaylistIdRouteImport.update({
   id: '/playlists/$playlistId',
@@ -137,14 +167,19 @@ export interface FileRoutesByFullPath {
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/signup': typeof SignupRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/settings/account': typeof SettingsAccountRoute
+  '/settings/friends': typeof SettingsFriendsRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/security': typeof SettingsSecurityRoute
   '/u/$username': typeof UUsernameRoute
   '/playlists/': typeof PlaylistsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -159,12 +194,16 @@ export interface FileRoutesByTo {
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/settings/account': typeof SettingsAccountRoute
+  '/settings/friends': typeof SettingsFriendsRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/security': typeof SettingsSecurityRoute
   '/u/$username': typeof UUsernameRoute
   '/playlists': typeof PlaylistsIndexRoute
+  '/settings': typeof SettingsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -180,14 +219,19 @@ export interface FileRoutesById {
   '/import': typeof ImportRoute
   '/login': typeof LoginRoute
   '/search': typeof SearchRoute
-  '/settings': typeof SettingsRoute
+  '/settings': typeof SettingsRouteWithChildren
   '/signup': typeof SignupRoute
   '/account/mfa': typeof AccountMfaRouteWithChildren
   '/account/verify-email': typeof AccountVerifyEmailRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
   '/playlists/$playlistId': typeof PlaylistsPlaylistIdRoute
+  '/settings/account': typeof SettingsAccountRoute
+  '/settings/friends': typeof SettingsFriendsRoute
+  '/settings/profile': typeof SettingsProfileRoute
+  '/settings/security': typeof SettingsSecurityRoute
   '/u/$username': typeof UUsernameRoute
   '/playlists/': typeof PlaylistsIndexRoute
+  '/settings/': typeof SettingsIndexRoute
   '/account/mfa/recovery-codes': typeof AccountMfaRecoveryCodesRoute
   '/account/mfa/totp': typeof AccountMfaTotpRoute
   '/account/mfa/webauthn': typeof AccountMfaWebauthnRoute
@@ -210,8 +254,13 @@ export interface FileRouteTypes {
     | '/account/verify-email'
     | '/auth/callback'
     | '/playlists/$playlistId'
+    | '/settings/account'
+    | '/settings/friends'
+    | '/settings/profile'
+    | '/settings/security'
     | '/u/$username'
     | '/playlists/'
+    | '/settings/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -226,12 +275,16 @@ export interface FileRouteTypes {
     | '/import'
     | '/login'
     | '/search'
-    | '/settings'
     | '/signup'
     | '/auth/callback'
     | '/playlists/$playlistId'
+    | '/settings/account'
+    | '/settings/friends'
+    | '/settings/profile'
+    | '/settings/security'
     | '/u/$username'
     | '/playlists'
+    | '/settings'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -252,8 +305,13 @@ export interface FileRouteTypes {
     | '/account/verify-email'
     | '/auth/callback'
     | '/playlists/$playlistId'
+    | '/settings/account'
+    | '/settings/friends'
+    | '/settings/profile'
+    | '/settings/security'
     | '/u/$username'
     | '/playlists/'
+    | '/settings/'
     | '/account/mfa/recovery-codes'
     | '/account/mfa/totp'
     | '/account/mfa/webauthn'
@@ -269,7 +327,7 @@ export interface RootRouteChildren {
   ImportRoute: typeof ImportRoute
   LoginRoute: typeof LoginRoute
   SearchRoute: typeof SearchRoute
-  SettingsRoute: typeof SettingsRoute
+  SettingsRoute: typeof SettingsRouteWithChildren
   SignupRoute: typeof SignupRoute
   AccountMfaRoute: typeof AccountMfaRouteWithChildren
   AccountVerifyEmailRoute: typeof AccountVerifyEmailRouteWithChildren
@@ -325,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRoute
+    }
     '/playlists/': {
       id: '/playlists/'
       path: '/playlists'
@@ -338,6 +403,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/u/$username'
       preLoaderRoute: typeof UUsernameRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/settings/security': {
+      id: '/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof SettingsSecurityRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/profile': {
+      id: '/settings/profile'
+      path: '/profile'
+      fullPath: '/settings/profile'
+      preLoaderRoute: typeof SettingsProfileRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/friends': {
+      id: '/settings/friends'
+      path: '/friends'
+      fullPath: '/settings/friends'
+      preLoaderRoute: typeof SettingsFriendsRouteImport
+      parentRoute: typeof SettingsRoute
+    }
+    '/settings/account': {
+      id: '/settings/account'
+      path: '/account'
+      fullPath: '/settings/account'
+      preLoaderRoute: typeof SettingsAccountRouteImport
+      parentRoute: typeof SettingsRoute
     }
     '/playlists/$playlistId': {
       id: '/playlists/$playlistId'
@@ -426,6 +519,26 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SettingsRouteChildren {
+  SettingsAccountRoute: typeof SettingsAccountRoute
+  SettingsFriendsRoute: typeof SettingsFriendsRoute
+  SettingsProfileRoute: typeof SettingsProfileRoute
+  SettingsSecurityRoute: typeof SettingsSecurityRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteChildren: SettingsRouteChildren = {
+  SettingsAccountRoute: SettingsAccountRoute,
+  SettingsFriendsRoute: SettingsFriendsRoute,
+  SettingsProfileRoute: SettingsProfileRoute,
+  SettingsSecurityRoute: SettingsSecurityRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
+  SettingsRouteChildren,
+)
+
 interface AccountMfaRouteChildren {
   AccountMfaRecoveryCodesRoute: typeof AccountMfaRecoveryCodesRoute
   AccountMfaTotpRoute: typeof AccountMfaTotpRoute
@@ -462,7 +575,7 @@ const rootRouteChildren: RootRouteChildren = {
   ImportRoute: ImportRoute,
   LoginRoute: LoginRoute,
   SearchRoute: SearchRoute,
-  SettingsRoute: SettingsRoute,
+  SettingsRoute: SettingsRouteWithChildren,
   SignupRoute: SignupRoute,
   AccountMfaRoute: AccountMfaRouteWithChildren,
   AccountVerifyEmailRoute: AccountVerifyEmailRouteWithChildren,

@@ -1,0 +1,6 @@
+{% extends "account/email/base_message.html" %}
+{% block content %}
+  <p style="margin:0 0 4px;">Someone tried to sign up for {{ current_site.name }} with <strong>{{ email }}</strong>, but an account with that email already exists.</p>
+  <p style="margin:0 0 4px;">If that was you and you've forgotten your password, you can reset it below.</p>
+  {% include "account/email/_button.html" with url=password_reset_url label="Reset password" %}
+{% endblock %}

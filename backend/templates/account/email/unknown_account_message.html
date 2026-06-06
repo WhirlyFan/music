@@ -1,0 +1,6 @@
+{% extends "account/email/base_message.html" %}
+{% block content %}
+  <p style="margin:0 0 4px;">Someone tried to access a {{ current_site.name }} account for <strong>{{ email }}</strong>, but we don't have one on record.</p>
+  <p style="margin:0 0 4px;">If that was you, you can create an account below.</p>
+  {% include "account/email/_button.html" with url=signup_url label="Create account" %}
+{% endblock %}

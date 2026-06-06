@@ -2,16 +2,16 @@ import { Link } from '@tanstack/react-router'
 import { Bell, X } from 'lucide-react'
 import { useState } from 'react'
 
-import { ApiError } from '@/lib/api/client'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ApiError } from '@/lib/api/client'
+import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import { useAcceptCollabInvite, useDeclineCollabInvite } from '@/lib/hooks/queries/collaborators'
 import { useAcceptFriend, useDeclineFriend } from '@/lib/hooks/queries/friends'
-import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import {
   type AppNotification,
   useDismissNotification,
@@ -40,9 +40,7 @@ function describe(n: AppNotification): string {
     case 'jam_invite':
       return `${who} invited you to a jam`
     case 'welcome':
-      return n.actor_username
-        ? `${who} invited you to music — welcome! 🎵`
-        : 'Welcome to music! 🎵'
+      return n.actor_username ? `${who} invited you to music — welcome! 🎵` : 'Welcome to music! 🎵'
     default:
       return 'New notification'
   }

@@ -19,7 +19,13 @@ import { useAddTrackToPlaylist } from '@/lib/hooks/queries/collaborators'
  * its own song search). The playlists query only runs when the menu is opened (the
  * list lives in a child that mounts on open) and shares the wall's cache key.
  */
-export function AddToPlaylistButton({ trackId, trackTitle }: { trackId: string; trackTitle: string }) {
+export function AddToPlaylistButton({
+  trackId,
+  trackTitle,
+}: {
+  trackId: string
+  trackTitle: string
+}) {
   const add = useAddTrackToPlaylist()
   return (
     <DropdownMenu>
@@ -64,7 +70,7 @@ function PickerList({ onPick }: { onPick: (playlistId: string, title: string) =>
     return <p className="text-muted-foreground px-2 py-3 text-center text-sm">No playlists yet.</p>
   }
   return (
-    <div className="max-h-64 overflow-y-auto [scrollbar-width:thin]">
+    <div className="max-h-64 [scrollbar-width:thin] overflow-y-auto">
       {playlists.map((p) => (
         <DropdownMenuItem key={p.id} onSelect={() => onPick(p.id, p.title)}>
           <span className="truncate">{p.title}</span>
