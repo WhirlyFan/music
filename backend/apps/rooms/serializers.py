@@ -35,6 +35,9 @@ class RoomSerializer(serializers.ModelSerializer):
         source="playback.current_item_id", read_only=True, allow_null=True
     )
     is_playing = serializers.BooleanField(source="playback.is_playing", read_only=True)
+    # Synced start: true while a shared room waits for the server cache to warm
+    # before everyone starts together. Clients show "Starting…" and don't play.
+    pending_start = serializers.BooleanField(source="playback.pending_start", read_only=True)
     position_ms = serializers.IntegerField(source="playback.position_ms", read_only=True)
     context_label = serializers.CharField(source="playback.context_label", read_only=True)
     queue = serializers.SerializerMethodField()
@@ -63,6 +66,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "current",
             "current_item_id",
             "is_playing",
+            "pending_start",
             "position_ms",
             "context_label",
             "queue",

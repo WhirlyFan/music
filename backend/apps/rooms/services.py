@@ -18,8 +18,11 @@ import random
 import secrets
 
 from django.db import transaction
-from django.db.models import Max, Min
+from django.db.models import F, Max, Min
 from django.utils import timezone
+
+from apps.catalog import streaming
+from apps.catalog.models import PlaybackSource
 
 from .models import PlaybackState, QueueItem, Room, RoomMember
 
@@ -48,7 +51,47 @@ def set_position(room: Room, position_ms: int, is_playing: bool) -> None:
         position_ms=max(0, position_ms),
         is_playing=is_playing,
         playing_since=timezone.now() if is_playing else None,
+        pending_start=False,
     )
+
+
+def on_audio_ready(video_id: str) -> None:
+    """A track's audio finished caching — start any shared room that was waiting
+    on it (synced start). Called from the cache-warm worker thread; idempotent
+    (only flips rooms still pending). Local imports avoid a snapshot→serializers→
+    services import cycle."""
+    from . import broadcast, snapshot
+
+    room_ids = (
+        PlaybackState.objects.filter(
+            pending_start=True,
+            room__is_shared=True,
+            current_item__track__playback_sources__locator=video_id,
+            current_item__track__playback_sources__locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
+            current_item__track__playback_sources__status=PlaybackSource.Status.ACTIVE,
+        )
+        .values_list("room_id", flat=True)
+        .distinct()
+    )
+    for room_id in room_ids:
+        updated = PlaybackState.objects.filter(room_id=room_id, pending_start=True).update(
+            is_playing=True,
+            pending_start=False,
+            playing_since=timezone.now(),
+            generation=F("generation") + 1,
+        )
+        if updated:
+            broadcast.publish(room_id, snapshot.serialize_room(room_id))
+
+
+def prewarm_upcoming(room: Room, count: int = 2) -> None:
+    """Warm the next few tracks' audio so advancing the jam starts instantly
+    (no 'Starting…' wait). Each warm is a background no-op if already cached."""
+    up = upcoming(room)
+    for item in (up["queue"] + up["context"])[:count]:
+        vid = _video_id(item.track)
+        if vid and not streaming.is_cached(vid):
+            streaming.warm_video(vid)
 
 
 # --- Jam (sharing / membership) ---------------------------------------------
@@ -166,13 +209,36 @@ def _queue(room: Room):
     return room.items.filter(kind=QUEUE)
 
 
+def _video_id(track) -> str | None:
+    """The active YouTube video id for a track, or None if it isn't matched yet."""
+    src = track.playback_sources.filter(
+        status=PlaybackSource.Status.ACTIVE,
+        locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
+    ).first()
+    return src.locator if src else None
+
+
 def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None) -> None:
     playback.current_item = item
     playback.position_ms = 0
-    playback.is_playing = item is not None
-    # Anchor the server clock at the track's start (None when stopped) so every
-    # client computes the live position as position_ms + (now - playing_since).
-    playback.playing_since = timezone.now() if item is not None else None
+
+    # Synced start: in a SHARED room, a freshly-chosen track that isn't cached yet
+    # waits (pending_start) while its audio warms the server cache, then everyone
+    # starts together from disk. Solo rooms (and already-cached tracks) start now.
+    pending = False
+    if item is not None and playback.room.is_shared:
+        vid = _video_id(item.track)
+        if vid and not streaming.is_cached(vid):
+            pending = True
+            # Spawn the warm AFTER commit, so the cache-ready signal sees the
+            # committed pending_start row (no race with this transaction).
+            transaction.on_commit(lambda v=vid: streaming.warm_video(v))
+
+    playback.is_playing = item is not None and not pending
+    playback.pending_start = pending
+    # Anchor the server clock at the track's start (None when stopped/pending) so
+    # every client computes the live position as position_ms + (now - playing_since).
+    playback.playing_since = timezone.now() if playback.is_playing else None
     if item is not None and item.kind == CONTEXT:
         playback.context_pos = item.position  # advancing through the context moves the pointer
     if label is not None:
@@ -185,6 +251,7 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
             "position_ms",
             "is_playing",
             "playing_since",
+            "pending_start",
             "updated_at",
         ]
     )
@@ -224,7 +291,10 @@ def play_now(room: Room, track, *, added_by=None) -> QueueItem:
         playback.position_ms = 0
         playback.is_playing = True
         playback.playing_since = timezone.now()
-        playback.save(update_fields=["position_ms", "is_playing", "playing_since", "updated_at"])
+        playback.pending_start = False
+        playback.save(
+            update_fields=["position_ms", "is_playing", "playing_since", "pending_start", "updated_at"]
+        )
         return cur
     _ctx(room).delete()
     row = QueueItem.objects.create(
@@ -283,10 +353,11 @@ def next_track(room: Room):
         _set_current(playback, nxt_ctx)
         return nxt_ctx.track
 
-    if playback.is_playing:
+    if playback.is_playing or playback.pending_start:
         playback.is_playing = False
+        playback.pending_start = False
         playback.playing_since = None
-        playback.save(update_fields=["is_playing", "playing_since", "updated_at"])
+        playback.save(update_fields=["is_playing", "pending_start", "playing_since", "updated_at"])
     return None
 
 
@@ -321,7 +392,8 @@ def previous_track(room: Room):
     # at the start of the context — restart the current track
     playback.position_ms = 0
     playback.playing_since = timezone.now() if playback.is_playing else None
-    playback.save(update_fields=["position_ms", "playing_since", "updated_at"])
+    playback.pending_start = False
+    playback.save(update_fields=["position_ms", "playing_since", "pending_start", "updated_at"])
     return cur.track
 
 
@@ -382,6 +454,7 @@ def clear(room: Room) -> None:
         context_pos=None,
         context_label="",
         playing_since=None,
+        pending_start=False,
     )
     room.items.all().delete()
 

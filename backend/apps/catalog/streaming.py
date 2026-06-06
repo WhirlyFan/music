@@ -97,22 +97,46 @@ def cached_content_type(video_id: str) -> str:
         return "audio/mp4"
 
 
+def is_cached(video_id: str) -> bool:
+    return (_cache_dir() / video_id).exists()
+
+
 def warm_cache(video_id: str, url: str, headers: dict) -> None:
     """Populate the disk cache for a video in the background — one full fetch from
-    YouTube; everyone else then reads disk. No-op if already cached or warming."""
+    YouTube; everyone else then reads disk. No-op if already cached or warming.
+    Use when the resolved URL is already in hand (the /stream/ live-proxy path)."""
+    _spawn_fill(video_id, url, dict(headers))
+
+
+def warm_video(video_id: str) -> None:
+    """Like warm_cache, but resolves the URL inside the worker thread (so the
+    caller — e.g. a request thread gating a jam start — never blocks on yt-dlp).
+    If the video is already cached, fire the ready signal immediately so a room
+    that's waiting on it can start."""
+    if is_cached(video_id):
+        _notify_ready(video_id)
+        return
+    _spawn_fill(video_id, None, None)
+
+
+def _spawn_fill(video_id: str, url: str | None, headers: dict | None) -> None:
     with _warming_lock:
-        if video_id in _warming or (_cache_dir() / video_id).exists():
+        if video_id in _warming or is_cached(video_id):
             return
         _warming.add(video_id)
-    threading.Thread(target=_fill, args=(video_id, url, dict(headers)), daemon=True).start()
+    threading.Thread(target=_fill, args=(video_id, url, headers), daemon=True).start()
 
 
-def _fill(video_id: str, url: str, headers: dict) -> None:
+def _fill(video_id: str, url: str | None, headers: dict | None) -> None:
     d = _cache_dir()
     tmp = d / f"{video_id}.{secrets.token_hex(4)}.tmp"
     try:
+        if url is None:  # resolve here (warm_video path) — keep yt-dlp off the request thread
+            audio = resolved_audio(video_id)
+            url = audio["url"]
+            headers = dict(audio.get("http_headers") or {})
         # Full file (drop any Range) so we can serve arbitrary ranges from disk.
-        h = {k: v for k, v in headers.items() if k.lower() != "range"}
+        h = {k: v for k, v in (headers or {}).items() if k.lower() != "range"}
         with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=60) as up:
             ct = up.headers.get("Content-Type", "audio/mp4")
             with open(tmp, "wb") as f:
@@ -130,6 +154,20 @@ def _fill(video_id: str, url: str, headers: dict) -> None:
     finally:
         with _warming_lock:
             _warming.discard(video_id)
+        # Always signal — on success a waiting jam starts from disk; on failure it
+        # starts anyway and falls back to the live proxy (never stuck on "Starting…").
+        _notify_ready(video_id)
+
+
+def _notify_ready(video_id: str) -> None:
+    """Tell the rooms layer this video's audio is ready, so any jam waiting on it
+    can start together. Local import avoids a catalog↔rooms import cycle."""
+    try:
+        from apps.rooms.services import on_audio_ready
+
+        on_audio_ready(video_id)
+    except Exception:  # noqa: BLE001 — notification is best-effort
+        log.warning("audio-ready notify failed for %s", video_id, exc_info=True)
 
 
 def _evict(d: Path) -> None:

@@ -187,9 +187,10 @@ export function NowPlayingBar() {
 
   if (!authed || !track) return null
 
-  // Spinner while we're resolving the source ("fetching details") or buffering —
-  // derived, so no effect calls setState. Covers the gap with no mis-click.
-  const loading = matchTrack.isPending || buffering
+  // Spinner while we're resolving the source, buffering, or — in a jam — waiting
+  // for the server cache to warm so everyone starts together (pending_start).
+  // Derived, so no effect calls setState. Covers the gap with no mis-click.
+  const loading = matchTrack.isPending || buffering || (room?.pending_start ?? false)
 
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const context = room?.context ?? [] // the FULL playlist/album (stable list)
@@ -410,7 +411,9 @@ export function NowPlayingBar() {
           </button>
           {/* The seek bar is too cramped in the compact pill on phones — hide it
               there and let the full-screen view handle seeking (tap the artwork). */}
-          {audioSrc ? (
+          {room?.pending_start ? (
+            <p className="text-muted-foreground mt-1 text-xs">Starting…</p>
+          ) : audioSrc ? (
             <div className="mt-1 hidden sm:block">
               <SeekBar currentTime={currentTime} duration={duration} onSeek={seek} />
             </div>

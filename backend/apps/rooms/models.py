@@ -141,6 +141,11 @@ class PlaybackState(BaseModel):
     # client drops frames older than the latest generation it has seen.
     playing_since = models.DateTimeField(null=True, blank=True)
     generation = models.IntegerField(default=0)
+    # Synced start: in a shared room a freshly-chosen track waits here
+    # (is_playing=false, no clock) while its audio warms the server cache, so all
+    # members can fetch from disk and start together. Flips to is_playing on the
+    # cache-ready signal. Always false in a solo room (starts immediately).
+    pending_start = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return f"Playback({self.room_id}, item={self.current_item_id}, playing={self.is_playing})"

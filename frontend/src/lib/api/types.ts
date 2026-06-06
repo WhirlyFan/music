@@ -931,6 +931,7 @@ export interface components {
             /** Format: uuid */
             readonly current_item_id: string | null;
             readonly is_playing: boolean;
+            readonly pending_start: boolean;
             readonly position_ms: number;
             readonly context_label: string;
             readonly queue: components["schemas"]["QueueItem"][];
