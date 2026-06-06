@@ -43,7 +43,20 @@ class RoomSerializer(serializers.ModelSerializer):
     position_ms = serializers.IntegerField(source="playback.position_ms", read_only=True)
     context_label = serializers.CharField(source="playback.context_label", read_only=True)
     queue = serializers.SerializerMethodField()
-    context = serializers.SerializerMethodField()
+    # The full context (the played-from playlist) is NOT inlined — for a 1000-track
+    # list it would re-ship on every broadcast frame. Instead the frame carries
+    # metadata + a small window; the full list is the paginated /rooms/context/
+    # endpoint, fetched once and cached client-side.
+    context_count = serializers.SerializerMethodField()
+    # Items still ahead of the pointer — exact (gap-safe), drives the Next button.
+    context_ahead = serializers.SerializerMethodField()
+    context_pos = serializers.IntegerField(
+        source="playback.context_pos", read_only=True, allow_null=True
+    )
+    context_window = serializers.SerializerMethodField()
+    # Changes only when the context list's membership/order changes, so a jam guest
+    # refetches the full list on play/shuffle/remove but not on play/pause/seek.
+    context_version = serializers.SerializerMethodField()
 
     # --- Jam (sharing) ---
     # User PK (UUIDv7). Clients compare it to the session user's id to tell host
@@ -75,7 +88,11 @@ class RoomSerializer(serializers.ModelSerializer):
             "position_ms",
             "context_label",
             "queue",
-            "context",
+            "context_count",
+            "context_ahead",
+            "context_pos",
+            "context_window",
+            "context_version",
             "host_id",
             "code",
             "is_shared",
@@ -97,16 +114,23 @@ class RoomSerializer(serializers.ModelSerializer):
         # The ephemeral user queue (excluding the now-playing item).
         return QueueItemSerializer(services.upcoming(room)["queue"], many=True).data
 
+    @extend_schema_field(serializers.IntegerField())
+    def get_context_count(self, room):
+        return services.context_count(room)
+
+    @extend_schema_field(serializers.IntegerField())
+    def get_context_ahead(self, room):
+        return services.context_ahead(room)
+
     @extend_schema_field(QueueItemSerializer(many=True))
-    def get_context(self, room):
-        # The FULL context (the whole playlist/album), in order — the client shows
-        # it as a stable list and highlights `current_item_id`. Already-played
-        # tracks stay visible; clicking just moves the position.
-        rows = sorted(
-            (i for i in room.items.all() if i.kind == QueueItem.Kind.CONTEXT),
-            key=lambda i: i.position,
-        )
-        return QueueItemSerializer(rows, many=True).data
+    def get_context_window(self, room):
+        # A small head (current + lookahead) for the panel's first paint; the full
+        # list is GET /rooms/context/ (paginated, cached client-side).
+        return QueueItemSerializer(services.context_window(room), many=True).data
+
+    @extend_schema_field(serializers.CharField())
+    def get_context_version(self, room):
+        return services.context_version(room)
 
     @extend_schema_field(serializers.DateTimeField())
     def get_server_time(self, room):

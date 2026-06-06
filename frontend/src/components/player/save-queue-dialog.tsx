@@ -1,5 +1,5 @@
 import { ListPlus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
@@ -11,59 +11,71 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import type { Room } from '@/lib/api/models'
 import { isSessionAuthenticated } from '@/lib/auth/guards'
 import { useSaveQueueAsPlaylist } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
-import { useRoom } from '@/lib/hooks/queries/rooms'
+import { useRoom, useRoomContext } from '@/lib/hooks/queries/rooms'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
-/** The track ids lined up to play, in order: now-playing, then the explicit queue,
- *  then the context remaining after the current item. Mirrors the server's
- *  save-as-playlist ordering so the snapshot matches what it would otherwise save. */
-function linedUpTrackIds(room: Room | undefined): string[] {
-  if (!room) return []
-  const ids: string[] = []
-  if (room.current?.id) ids.push(room.current.id)
-  for (const i of room.queue ?? []) ids.push(i.track.id)
-  const context = room.context ?? []
-  const ctxIdx = context.findIndex((i) => i.id === room.current_item_id)
-  const after = ctxIdx >= 0 ? context.slice(ctxIdx + 1) : context
-  for (const i of after) ids.push(i.track.id)
-  return ids
-}
+type Head = { currentId: string | null; currentItemId: string | null; queueIds: string[] }
 
 /** Save what's lined up (now-playing + queue + remaining context) as a new
- *  playlist. Opened from the queue panel or the FAB (open state in the store). */
+ *  playlist. Opened from the queue panel or the FAB (open state in the store).
+ *
+ *  The played-from context can be huge and isn't in the room frame, so we pull it
+ *  from the paginated context query (loading every page while the dialog is open).
+ *  The head (now-playing + queue + the pointer) is frozen the moment the dialog
+ *  opens, so a track ending mid-dialog doesn't change what gets saved; the server
+ *  receives the resolved list verbatim. */
 export function SaveQueueDialog() {
   const open = usePlayerUiStore((s) => s.saveQueueOpen)
   const setOpen = usePlayerUiStore((s) => s.setSaveQueueOpen)
   const { data: session } = useSession()
-  const { data: room } = useRoom(isSessionAuthenticated(session))
+  const authed = isSessionAuthenticated(session)
+  const { data: room } = useRoom(authed)
+  const ctx = useRoomContext(authed && open)
   const save = useSaveQueueAsPlaylist()
   const [name, setName] = useState('')
-  // A snapshot of the lined-up track ids, frozen when the dialog opens — so if a
-  // song ends while the dialog is open we still save what was playing then.
-  const [snapshot, setSnapshot] = useState<string[]>([])
+  // The head, frozen at open (the big context list is stable during playback, so we
+  // read it from the query and slice by the frozen pointer).
+  const [head, setHead] = useState<Head>({ currentId: null, currentItemId: null, queueIds: [] })
 
-  // On open: default the name to where the queue is playing from, and freeze the
-  // lined-up tracks (now-playing → queue → context after the current item, in play
-  // order). Adjusted during render (not an effect) per the React "reset on prop
-  // change" pattern, so it doesn't cascade renders.
+  // On open: default the name + freeze the head. Adjusted during render (not an
+  // effect) per the React "reset on prop change" pattern, so it doesn't cascade.
   const [wasOpen, setWasOpen] = useState(false)
   if (open !== wasOpen) {
     setWasOpen(open)
     if (open) {
       setName(room?.context_label ?? '')
-      setSnapshot(linedUpTrackIds(room))
+      setHead({
+        currentId: room?.current?.id ?? null,
+        currentItemId: room?.current_item_id ?? null,
+        queueIds: (room?.queue ?? []).map((i) => i.track.id),
+      })
     }
+  }
+
+  // Eagerly page through the whole context while open, so the snapshot is complete.
+  useEffect(() => {
+    if (open && ctx.hasNextPage && !ctx.isFetchingNextPage) void ctx.fetchNextPage()
+  }, [open, ctx.hasNextPage, ctx.isFetchingNextPage, ctx])
+
+  const ready = !ctx.isLoading && !ctx.hasNextPage // full context loaded → snapshot is complete
+
+  const trackIds = () => {
+    const full = ctx.data?.pages.flatMap((p) => p.results) ?? []
+    const idx = full.findIndex((i) => i.id === head.currentItemId)
+    const after = idx >= 0 ? full.slice(idx + 1) : full // context remaining after the current item
+    return [head.currentId, ...head.queueIds, ...after.map((i) => i.track.id)].filter(
+      (id): id is string => !!id,
+    )
   }
 
   const submit = () => {
     const title = name.trim()
-    if (!title) return
+    if (!title || !ready) return
     save.mutate(
-      { title, trackIds: snapshot },
+      { title, trackIds: trackIds() },
       {
         onSuccess: () => {
           toast.success('Saved to your playlists.')
@@ -109,9 +121,9 @@ export function SaveQueueDialog() {
             type="submit"
             variant="shadow"
             className="w-full"
-            disabled={!name.trim() || save.isPending}
+            disabled={!name.trim() || !ready || save.isPending}
           >
-            {save.isPending ? 'Saving…' : 'Save playlist'}
+            {save.isPending ? 'Saving…' : ready ? 'Save playlist' : 'Preparing…'}
           </Button>
         </form>
       </DialogContent>

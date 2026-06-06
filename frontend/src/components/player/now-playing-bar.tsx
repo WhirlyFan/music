@@ -31,7 +31,7 @@ import {
   useSyncPlayback,
 } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
-import { useRoom } from '@/lib/hooks/queries/rooms'
+import { type ContextPage, useRoom, useRoomContext } from '@/lib/hooks/queries/rooms'
 import { useRoomSocket } from '@/lib/hooks/useRoomSocket'
 import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
@@ -84,6 +84,10 @@ export function NowPlayingBar() {
   // Zustand client store (shared with the playlists search pill + FAB).
   const [expanded, setExpanded] = useNowPlayingOpen()
   const [queueOpen, setQueueOpen] = useQueueOpen()
+  // The played-from list can be 1000+ tracks, so it's NOT in the room frame — it's
+  // a separate paginated query, fetched only while the queue panel is open and
+  // cached (playback ticks never refetch it).
+  const contextQuery = useRoomContext(authed && queueOpen)
   const setJamOpen = usePlayerUiStore((s) => s.setJamOpen)
   const setSaveQueueOpen = usePlayerUiStore((s) => s.setSaveQueueOpen)
   const queueHeight = usePlayerUiStore((s) => s.queueHeight)
@@ -206,13 +210,16 @@ export function NowPlayingBar() {
   const loading = matchTrack.isPending || buffering || (room?.pending_start ?? false)
 
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
-  const context = room?.context ?? [] // the FULL playlist/album (stable list)
   const contextLabel = room?.context_label ?? ''
-  // The list includes already-played tracks, so "upcoming" is only what's after
-  // the current position (plus the user queue, which plays first).
-  const ctxIdx = context.findIndex((i) => i.id === itemId)
-  const contextAhead = ctxIdx >= 0 ? context.length - ctxIdx - 1 : context.length
-  const upcoming = queue.length + contextAhead
+  // The full context comes from the paginated query (while the panel is open);
+  // seed the first paint from the small window the frame carries so it isn't empty
+  // before page 1 lands.
+  const loadedContext = contextQuery.data?.pages.flatMap((p: ContextPage) => p.results) ?? []
+  const context = loadedContext.length ? loadedContext : (room?.context_window ?? [])
+  const contextCount = room?.context_count ?? 0
+  // Counts come from the frame's metadata (exact, gap-safe) — NOT the loaded slice,
+  // which may be only the first page of a long list.
+  const upcoming = queue.length + (room?.context_ahead ?? 0)
 
   function togglePlay() {
     if (!canDrive) return // guests follow the host
@@ -301,8 +308,21 @@ export function NowPlayingBar() {
           </div>
 
           {/* Scroll region — only the songs scroll; thin, transparent-track scrollbar
-              (thumb only), capped so a long queue can't run off-screen. */}
-          <div className="max-h-56 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] overflow-y-auto px-4 py-2 sm:max-h-72">
+              (thumb only), capped so a long queue can't run off-screen. Pages in more
+              of a long context as you near the bottom. */}
+          <div
+            onScroll={(e) => {
+              const el = e.currentTarget
+              if (
+                contextQuery.hasNextPage &&
+                !contextQuery.isFetchingNextPage &&
+                el.scrollHeight - el.scrollTop - el.clientHeight < 64
+              ) {
+                void contextQuery.fetchNextPage()
+              }
+            }}
+            className="max-h-56 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] overflow-y-auto px-4 py-2 sm:max-h-72"
+          >
             {queue.length > 0 && (
               <QueueSection
                 label="Next in queue"
@@ -321,6 +341,9 @@ export function NowPlayingBar() {
               emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
               readOnly={!canEditQueue}
             />
+            {contextQuery.isFetchingNextPage && (
+              <p className="text-muted-foreground py-1 text-center text-xs">Loading…</p>
+            )}
           </div>
         </div>
       </div>
@@ -414,7 +437,7 @@ export function NowPlayingBar() {
           variant="ghost"
           onClick={() => shuffle.mutate()}
           aria-label="Shuffle"
-          disabled={context.length < 2 || !canEditQueue}
+          disabled={contextCount < 2 || !canEditQueue}
         >
           <Shuffle className="size-4" />
         </Button>

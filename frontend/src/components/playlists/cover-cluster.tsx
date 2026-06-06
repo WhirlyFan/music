@@ -563,11 +563,6 @@ function CoverTile({ item, onDelete }: { item?: CoverItem; onDelete?: (id: strin
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link to="/playlists/$playlistId" params={{ playlistId: item.id }}>
-                  Open / edit
-                </Link>
-              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onSelect={() => setConfirmOpen(true)}

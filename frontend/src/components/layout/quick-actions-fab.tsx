@@ -46,7 +46,7 @@ export function QuickActionsFab() {
   const isDark = resolvedTheme === 'dark'
   const ThemeIcon = isDark ? Moon : Sun
 
-  const hasQueue = (room?.context?.length ?? 0) > 0
+  const hasQueue = (room?.context_count ?? 0) > 0
   const items: GooeyItem[] = [
     {
       icon: <Radio className="size-5" />,

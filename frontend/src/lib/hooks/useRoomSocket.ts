@@ -31,12 +31,14 @@ export function useRoomSocket(
 ) {
   const qc = useQueryClient()
   const lastGen = useRef(0)
+  const lastContextVersion = useRef<string | null>(null)
 
   useEffect(() => {
     if (!enabled || !roomId || !WS_ORIGIN) return
     // New room → fresh generation series; don't let a previous room's counter
     // suppress this one's frames.
     lastGen.current = 0
+    lastContextVersion.current = null
 
     let ws: WebSocket | null = null
     let closed = false
@@ -66,6 +68,14 @@ export function useRoomSocket(
         if (gen < lastGen.current) return // older than what we've already applied
         lastGen.current = gen
         qc.setQueryData(roomKeys.me(), msg.room)
+        // The context LIST (not just the head) changed — host shuffled / played a
+        // new playlist — so refetch the cached full list. Skipped on play/pause/seek
+        // frames, which carry an unchanged context_version.
+        const cv = msg.room.context_version ?? null
+        if (cv !== null && lastContextVersion.current !== null && cv !== lastContextVersion.current) {
+          void qc.invalidateQueries({ queryKey: roomKeys.context() })
+        }
+        lastContextVersion.current = cv
         // The jam I'm a guest in just ended (host unshared) → fall back too.
         if (myUserId && msg.room.host_id !== myUserId && !msg.room.is_shared) {
           void qc.invalidateQueries({ queryKey: roomKeys.me() })

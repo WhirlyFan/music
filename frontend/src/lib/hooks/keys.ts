@@ -52,6 +52,7 @@ export const roomKeys = {
   all: () => ['room'] as const,
   me: () => ['room', 'me'] as const,
   members: () => ['room', 'members'] as const,
+  context: () => ['room', 'context'] as const,
 }
 
 export const searchKeys = {

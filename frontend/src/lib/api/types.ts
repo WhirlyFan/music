@@ -1004,7 +1004,16 @@ export interface components {
             readonly position_ms: number;
             readonly context_label: string;
             readonly queue: components["schemas"]["QueueItem"][];
-            readonly context: components["schemas"]["QueueItem"][];
+            /** Total context (played-from list) size; full list via GET /rooms/context/. */
+            readonly context_count: number;
+            /** Context items still ahead of the pointer (drives the Next button). */
+            readonly context_ahead: number;
+            /** Pointer index into the context (position of the current context track). */
+            readonly context_pos: number | null;
+            /** Small head (current + lookahead) for the panel's first paint. */
+            readonly context_window: components["schemas"]["QueueItem"][];
+            /** Changes only when the context list's membership/order changes. */
+            readonly context_version: string;
             /** Format: uuid */
             readonly host_id: string;
             code?: string;

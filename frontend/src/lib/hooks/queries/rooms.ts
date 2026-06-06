@@ -1,12 +1,13 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
-import type { Room, RoomMember } from '@/lib/api/models'
+import type { QueueItem, Room, RoomMember } from '@/lib/api/models'
 import { roomKeys } from '@/lib/hooks/keys'
 
 // The members endpoint paginates (DRF), but its schema comes through as a plain
 // array, so type the page shape here.
 type MembersPage = { next: string | null; results: RoomMember[] }
+export type ContextPage = { next: string | null; results: QueueItem[] }
 
 /** The room the user is actively in — the jam they've joined as a guest, else
  *  their own room. Source of truth for the player; rehydrates on load so
@@ -29,5 +30,21 @@ export function useJamMembers(enabled = true) {
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled,
+  })
+}
+
+/** The FULL context (the played-from list) for the room you're in — paginated,
+ *  kept off the broadcast frames. Fetched once and cached with a long staleTime,
+ *  so playback ticks (play/pause/seek/skip) never refetch it; it's invalidated
+ *  only when the context list actually changes (play/shuffle/remove/clear, and a
+ *  jam guest on a context_version change). */
+export function useRoomContext(enabled = true) {
+  return useInfiniteQuery({
+    queryKey: roomKeys.context(),
+    queryFn: ({ pageParam }) => api<ContextPage>(`/rooms/context/?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
+    enabled,
+    staleTime: 5 * 60 * 1000,
   })
 }

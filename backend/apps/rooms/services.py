@@ -14,6 +14,7 @@ Play order: user queue first, then the context resumes after `context_pos`.
 
 from __future__ import annotations
 
+import hashlib
 import random
 import secrets
 
@@ -553,6 +554,52 @@ def upcoming(room: Room) -> dict:
         (i for i in items if i.kind == CONTEXT and i.position > pos), key=lambda i: i.position
     )
     return {"queue": queue, "context": context}
+
+
+# How many context items to inline in the room snapshot (current + lookahead). The
+# FULL context list is served separately by the paginated /rooms/context/ endpoint,
+# so the broadcast frame stays small even for a 1000-track playlist; this window is
+# just enough for the queue panel's first paint before that query resolves.
+CONTEXT_WINDOW = 20
+
+
+def _ctx_sorted(room: Room) -> list[QueueItem]:
+    return sorted((i for i in room.items.all() if i.kind == CONTEXT), key=lambda i: i.position)
+
+
+def context_window(room: Room, *, size: int = CONTEXT_WINDOW) -> list[QueueItem]:
+    """The current context track + the next (size-1), from the prefetched items.
+    A small head so the panel paints immediately; the full list comes from the
+    paginated endpoint."""
+    playback = getattr(room, "playback", None)
+    pos = playback.context_pos if (playback and playback.context_pos is not None) else -1
+    ctx = _ctx_sorted(room)
+    if pos < 0:
+        return ctx[:size]
+    return [i for i in ctx if i.position >= pos][:size]
+
+
+def context_count(room: Room) -> int:
+    """Total CONTEXT rows (the whole playing-from list), from prefetched items."""
+    return sum(1 for i in room.items.all() if i.kind == CONTEXT)
+
+
+def context_ahead(room: Room) -> int:
+    """How many CONTEXT items are still ahead of the pointer (drives the client's
+    Next-button enable + upcoming count). Exact even when positions have gaps
+    (e.g. after a remove), unlike deriving it from count − pos."""
+    playback = getattr(room, "playback", None)
+    pos = playback.context_pos if (playback and playback.context_pos is not None) else -1
+    return sum(1 for i in room.items.all() if i.kind == CONTEXT and i.position > pos)
+
+
+def context_version(room: Room) -> str:
+    """A short token that changes iff the CONTEXT list's membership/order changes
+    (play, play_now, play_playlist, shuffle, remove, clear) — but NOT on
+    play/pause/seek/skip (those touch only PlaybackState). Lets a jam guest refetch
+    the full context list only when it actually changed."""
+    pairs = sorted((str(i.id), i.position) for i in room.items.all() if i.kind == CONTEXT)
+    return hashlib.md5(repr(pairs).encode()).hexdigest()[:12]  # noqa: S324 — not a security digest
 
 
 @transaction.atomic

@@ -13,7 +13,7 @@ from apps.catalog.models import Playlist, Track
 from apps.catalog.serializers import PlaylistSerializer
 
 from . import broadcast, services, snapshot
-from .models import PlaybackState
+from .models import PlaybackState, QueueItem
 from .serializers import (
     GuestControlSerializer,
     JoinRoomSerializer,
@@ -22,6 +22,7 @@ from .serializers import (
     PlayPlaylistSerializer,
     PlaySerializer,
     QueueItemRefSerializer,
+    QueueItemSerializer,
     QueueSerializer,
     RoomMemberSerializer,
     RoomSerializer,
@@ -113,6 +114,25 @@ class RoomViewSet(viewsets.ViewSet):
         paginator.page_size = 30
         page = paginator.paginate_queryset(qs, request, view=self)
         return paginator.get_paginated_response(RoomMemberSerializer(page, many=True).data)
+
+    @extend_schema(responses=QueueItemSerializer(many=True))
+    @action(detail=False, methods=["get"])
+    def context(self, request):
+        """Paginated FULL context (the played-from list) for the room the user is
+        in, ordered by position. Kept off the broadcast frames (which carry only
+        a small window + count); fetched once and cached, refetched only when
+        context_version changes. Resolves the jam (guest → host's room)."""
+        room = services.current_room(request.user)
+        qs = (
+            room.items.filter(kind=QueueItem.Kind.CONTEXT)
+            .select_related("track")
+            .prefetch_related("track__playback_sources")
+            .order_by("position")
+        )
+        paginator = PageNumberPagination()
+        paginator.page_size = 50
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response(QueueItemSerializer(page, many=True).data)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

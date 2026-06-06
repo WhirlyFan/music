@@ -9,33 +9,46 @@ import { playlistKeys, roomKeys } from '@/lib/hooks/keys'
 // The player reconciles the <audio> element to whatever lands in this cache
 // (server is_playing + position), so a mutation's own response drives playback
 // just like a broadcast frame does — no separate "autoplay intent" flag needed.
-function useRoomMutation<TArgs = void>(fn: (args: TArgs) => Promise<Room>) {
+// `invalidatesContext` marks mutations that change the played-from list itself
+// (play / shuffle / remove / clear) — they also bust the cached context query so
+// the panel refetches. Playback-only ops (next/prev/jump/seek/pause) leave it be.
+function useRoomMutation<TArgs = void>(
+  fn: (args: TArgs) => Promise<Room>,
+  { invalidatesContext = false }: { invalidatesContext?: boolean } = {},
+) {
   const qc = useQueryClient()
   return useMutation<Room, Error, TArgs>({
     mutationFn: fn,
-    onSuccess: (room) => qc.setQueryData(roomKeys.me(), room),
+    onSuccess: (room) => {
+      qc.setQueryData(roomKeys.me(), room)
+      if (invalidatesContext) void qc.invalidateQueries({ queryKey: roomKeys.context() })
+    },
   })
 }
 
 /** Play one song now (clicking a track): inserts it at the cursor and plays it —
  *  does NOT pull in the surrounding list. */
 export function usePlayNow() {
-  return useRoomMutation((trackId: string) =>
-    api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } }),
+  return useRoomMutation(
+    (trackId: string) =>
+      api<Room>('/rooms/play-now/', { method: 'POST', body: { track_id: trackId } }),
+    { invalidatesContext: true },
   )
 }
 
 /** Replace the context with a list and play from `startIndex` (Play playlist / all). */
 export function usePlay() {
-  return useRoomMutation((args: { trackIds: string[]; startIndex?: number; label?: string }) =>
-    api<Room>('/rooms/play/', {
-      method: 'POST',
-      body: {
-        track_ids: args.trackIds,
-        start_index: args.startIndex ?? 0,
-        label: args.label ?? '',
-      },
-    }),
+  return useRoomMutation(
+    (args: { trackIds: string[]; startIndex?: number; label?: string }) =>
+      api<Room>('/rooms/play/', {
+        method: 'POST',
+        body: {
+          track_ids: args.trackIds,
+          start_index: args.startIndex ?? 0,
+          label: args.label ?? '',
+        },
+      }),
+    { invalidatesContext: true },
   )
 }
 
@@ -44,11 +57,13 @@ export function usePlay() {
  * `startTrackId` when given (clicking a song row plays the playlist from there).
  */
 export function usePlayPlaylist() {
-  return useRoomMutation((args: { playlistId: string; startTrackId?: string }) =>
-    api<Room>('/rooms/play-playlist/', {
-      method: 'POST',
-      body: { playlist_id: args.playlistId, start_track_id: args.startTrackId },
-    }),
+  return useRoomMutation(
+    (args: { playlistId: string; startTrackId?: string }) =>
+      api<Room>('/rooms/play-playlist/', {
+        method: 'POST',
+        body: { playlist_id: args.playlistId, start_track_id: args.startTrackId },
+      }),
+    { invalidatesContext: true },
   )
 }
 
@@ -81,19 +96,25 @@ export function useJump() {
 
 /** Remove a single queue item. */
 export function useRemoveItem() {
-  return useRoomMutation((itemId: string) =>
-    api<Room>('/rooms/remove/', { method: 'POST', body: { item_id: itemId } }),
+  return useRoomMutation(
+    (itemId: string) =>
+      api<Room>('/rooms/remove/', { method: 'POST', body: { item_id: itemId } }),
+    { invalidatesContext: true },
   )
 }
 
 /** Shuffle the whole context and play from the top (Spotify-style). */
 export function useShuffle() {
-  return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }))
+  return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }), {
+    invalidatesContext: true,
+  })
 }
 
 /** Empty the queue and stop playback. */
 export function useClearQueue() {
-  return useRoomMutation(() => api<Room>('/rooms/clear/', { method: 'POST' }))
+  return useRoomMutation(() => api<Room>('/rooms/clear/', { method: 'POST' }), {
+    invalidatesContext: true,
+  })
 }
 
 /**
