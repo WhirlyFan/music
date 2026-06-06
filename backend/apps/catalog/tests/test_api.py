@@ -751,3 +751,33 @@ def test_spotify_404_explains_editorial(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", raise_404)
     with pytest.raises(spotify.SpotifyError, match="editorial"):
         spotify._get("/playlists/x", "tok")
+
+
+@pytest.mark.django_db
+def test_public_playlist_is_readable_by_others_private_is_not():
+    from allauth.account.models import EmailAddress
+
+    from apps.catalog.tests.factories import PlaylistTrackFactory
+
+    owner = UserFactory()
+    other = UserFactory()
+    for u in (owner, other):
+        EmailAddress.objects.update_or_create(
+            user=u, email=u.email, defaults={"verified": True, "primary": True}
+        )
+    pub = PlaylistFactory(created_by=owner, is_public=True)
+    PlaylistTrackFactory(playlist=pub, track=TrackFactory(), position=0)
+    priv = PlaylistFactory(created_by=owner, is_public=False)
+
+    api = APIClient()
+    api.force_authenticate(other)
+    # Public playlist: retrievable by a non-owner, flagged is_owner=False, tracks load.
+    r = api.get(f"/api/v1/catalog/playlists/{pub.id}/")
+    assert r.status_code == 200 and r.data["is_owner"] is False
+    assert api.get(f"/api/v1/catalog/playlists/{pub.id}/tracks/").data["count"] == 1
+    # Private playlist owned by someone else: not visible.
+    assert api.get(f"/api/v1/catalog/playlists/{priv.id}/").status_code == 404
+
+    owner_api = APIClient()
+    owner_api.force_authenticate(owner)
+    assert owner_api.get(f"/api/v1/catalog/playlists/{pub.id}/").data["is_owner"] is True

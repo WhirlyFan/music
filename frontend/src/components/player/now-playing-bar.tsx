@@ -140,10 +140,11 @@ export function NowPlayingBar() {
   // Reconcile the <audio> element to the server's authoritative playback state.
   // The room cache — seeded by our own mutations AND by broadcast frames from
   // anyone in the jam — is the source of truth for play/pause + position; this
-  // effect makes the local element follow it. That's also why a deliberate
-  // play/next/jump autoplays (the action sets server is_playing=true) while a
-  // track merely restored on page load does NOT: we skip the first hydration,
-  // and browsers block gesture-less autoplay anyway. While the source is still
+  // effect makes the local element follow it. On the first hydration (e.g. a page
+  // refresh) we restore the live position AND resume per the server's is_playing,
+  // so a refreshed playing track keeps playing instead of showing "playing" while
+  // parked. The browser may still block gesture-less autoplay → it stays paused and
+  // the Play button reads correctly; one tap resumes. While the source is still
   // resolving/buffering, `loading` shows a spinner so there's no mis-click gap.
   const hydrated = useRef(false)
   const followedItem = useRef<string | null>(null)
@@ -154,7 +155,10 @@ export function NowPlayingBar() {
     if (!hydrated.current) {
       hydrated.current = true
       followedItem.current = itemId
-      return // don't autoplay a track restored on load
+      const t = intendedSeconds(room)
+      if (Number.isFinite(t)) el.currentTime = t
+      if (serverPlaying) void el.play().catch(() => {})
+      return
     }
 
     const newItem = followedItem.current !== itemId
@@ -181,6 +185,19 @@ export function NowPlayingBar() {
     if (el) el.volume = volume
     localStorage.setItem('player:volume', String(volume))
   }, [volume, itemId, audioSrc])
+
+  // Stuck-at-end watchdog: if we're parked at the end while the server still thinks
+  // we're playing (the track ended while disconnected/backgrounded, so `onEnded`
+  // never fired), advance. Controller only — guests follow the host's broadcast.
+  useEffect(() => {
+    if (!audioSrc || !canDrive) return
+    const id = setInterval(() => {
+      const el = audioRef.current
+      if (!el || !el.duration || !(room?.is_playing ?? false)) return
+      if (el.paused && el.currentTime >= el.duration - 0.75) next.mutate()
+    }, 3000)
+    return () => clearInterval(id)
+  }, [audioSrc, canDrive, room?.is_playing, next])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)

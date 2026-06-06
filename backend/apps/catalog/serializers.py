@@ -96,6 +96,9 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
     # The SourcePlaylist this was imported from (null for from-scratch playlists) —
     # presence enables the "Refresh from source" action.
     origin = serializers.UUIDField(source="origin_id", read_only=True, allow_null=True)
+    # Whether the caller owns this playlist — false when viewing someone else's
+    # PUBLIC playlist, so the client hides edit/delete/refresh.
+    is_owner = serializers.SerializerMethodField()
 
     class Meta:
         model = Playlist
@@ -105,10 +108,16 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
             "description",
             "artwork_url",
             "is_public",
+            "is_owner",
             "created_at",
             "track_count",
             "origin",
         ]
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_owner(self, obj):
+        request = self.context.get("request")
+        return bool(request and obj.created_by_id == getattr(request.user, "id", None))
 
 
 class IngestSerializer(serializers.Serializer):

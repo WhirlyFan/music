@@ -165,32 +165,34 @@ function PlaylistDetailPage() {
             >
               Play
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Playlist actions">
-                  <MoreVertical className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setEditing((v) => !v)}>
-                  <Pencil className="mr-2 size-4" />
-                  {editing ? 'Done editing' : 'Edit'}
-                </DropdownMenuItem>
-                {playlist.origin && (
-                  <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
-                    <RefreshCw className="mr-2 size-4" />
-                    Refresh from source
+            {playlist.is_owner && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Playlist actions">
+                    <MoreVertical className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setEditing((v) => !v)}>
+                    <Pencil className="mr-2 size-4" />
+                    {editing ? 'Done editing' : 'Edit'}
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => setDeleteOpen(true)}
-                >
-                  <Trash2 className="mr-2 size-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {playlist.origin && (
+                    <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
+                      <RefreshCw className="mr-2 size-4" />
+                      Refresh from source
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="mr-2 size-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         }
       />

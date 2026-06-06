@@ -105,14 +105,16 @@ class PlaylistViewSet(
     search_fields = ["title"]
 
     def get_queryset(self):
-        qs = (
-            Playlist.objects.filter(created_by=self.request.user)
-            .annotate(track_count=Count("items", distinct=True))
-            .order_by("-created_at")
-        )
+        qs = Playlist.objects.annotate(track_count=Count("items", distinct=True))
+        # Read actions may target a PUBLIC playlist owned by someone else (RLS's
+        # public_readable_policy permits the row); mutations stay owner-only.
+        if self.action in ("retrieve", "tracks"):
+            qs = qs.filter(Q(created_by=self.request.user) | Q(is_public=True))
+        else:
+            qs = qs.filter(created_by=self.request.user)
         if self.action == "retrieve":
             qs = qs.prefetch_related(*_DETAIL_PREFETCH)
-        return qs
+        return qs.order_by("-created_at")
 
     def get_serializer_class(self):
         if self.action in ("update", "partial_update"):
@@ -146,7 +148,7 @@ class PlaylistViewSet(
         except (UnsupportedSourceError, SpotifyError) as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
-        return Response(PlaylistDetailSerializer(playlist).data)
+        return Response(PlaylistDetailSerializer(playlist, context={"request": request}).data)
 
     @extend_schema(responses=PlaylistTrackSerializer(many=True))
     @action(detail=True, methods=["get"])

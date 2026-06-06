@@ -28,6 +28,16 @@ import { useSession } from '@/lib/hooks/queries/auth'
 import { useJamMembers, useRoom } from '@/lib/hooks/queries/rooms'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
+/** Normalize jam-code input to a 6-char code. Accepts a raw code OR a pasted join
+ *  link (…/?jam=ABC123) — so pasting the whole share URL fills the code. */
+function parseJamCode(raw: string): string {
+  const m = raw.match(/[?&]jam=([A-Za-z0-9]{1,6})/i)
+  return (m ? m[1] : raw)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 6)
+}
+
 /**
  * The single Jam modal — opened from the player's Jam button, the FAB, or the
  * account menu (open state in the player-ui store). Self-contained: it reads the
@@ -128,14 +138,7 @@ export function JamDialog() {
           >
             <input
               value={joinCode}
-              onChange={(e) =>
-                setJoinCode(
-                  e.target.value
-                    .toUpperCase()
-                    .replace(/[^A-Z0-9]/g, '')
-                    .slice(0, 6),
-                )
-              }
+              onChange={(e) => setJoinCode(parseJamCode(e.target.value))}
               placeholder="ABC123"
               aria-label="Jam code"
               autoComplete="off"

@@ -947,6 +947,7 @@ export interface components {
             /** Format: uri */
             artwork_url?: string;
             is_public?: boolean;
+            readonly is_owner: boolean;
             /** Format: date-time */
             readonly created_at: string;
             readonly track_count: number;

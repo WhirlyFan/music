@@ -43,12 +43,22 @@ export function useRoomSocket(
     let ws: WebSocket | null = null
     let closed = false
     let backoff = 1000
+    let connectedOnce = false
     let retry: ReturnType<typeof setTimeout> | undefined
 
     const connect = () => {
       ws = new WebSocket(`${WS_ORIGIN}/ws/rooms/${roomId}/`)
       ws.onopen = () => {
         backoff = 1000
+        // On a RE-connect we missed every broadcast while the socket was down, so
+        // our cached room is stale (this is the "refreshed and the song was stuck"
+        // case). Refetch the authoritative state to catch up. (Skipped on the first
+        // connect — useRoom just fetched.)
+        if (connectedOnce) {
+          void qc.invalidateQueries({ queryKey: roomKeys.me() })
+          void qc.invalidateQueries({ queryKey: roomKeys.context() })
+        }
+        connectedOnce = true
       }
       ws.onmessage = (e) => {
         let msg: { type?: string; room?: Room; generation?: number }
