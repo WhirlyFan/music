@@ -1,5 +1,6 @@
 import { ListPlus } from 'lucide-react'
 
+import { AddToPlaylistButton } from '@/components/track/add-to-playlist-button'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { Skeleton, SkeletonText, useSkeletonZone } from '@/components/ui/skeleton'
@@ -52,7 +53,11 @@ export function SongRow({
           {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
         </p>
       </div>
-      <div className="relative z-10 flex items-center" onPointerDown={(e) => e.stopPropagation()}>
+      <div
+        className="relative z-10 flex items-center gap-0.5"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <AddToPlaylistButton trackId={track.id} trackTitle={track.title} />
         <Button
           size="icon"
           variant="ghost"

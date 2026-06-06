@@ -72,16 +72,17 @@ function useInviteResponse(verb: 'collab-accept' | 'collab-decline') {
 export const useAcceptCollabInvite = () => useInviteResponse('collab-accept')
 export const useDeclineCollabInvite = () => useInviteResponse('collab-decline')
 
-/** Append tracks to a playlist (owner or accepted collaborator). */
-export function useAddTracksToPlaylist(playlistId: string) {
+/** Add a track to a chosen playlist (owner or accepted collaborator) — the playlist
+ *  id is passed per call, so one hook serves a "pick a playlist" menu over many rows. */
+export function useAddTrackToPlaylist() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (trackIds: string[]) =>
+    mutationFn: ({ playlistId, trackId }: { playlistId: string; trackId: string }) =>
       api<{ added: number }>(`/catalog/playlists/${playlistId}/add-tracks/`, {
         method: 'POST',
-        body: { track_ids: trackIds },
+        body: { track_ids: [trackId] },
       }),
-    onSuccess: () => {
+    onSuccess: (_data, { playlistId }) => {
       void qc.invalidateQueries({ queryKey: playlistKeys.tracks(playlistId) })
       void qc.invalidateQueries({ queryKey: playlistKeys.activity(playlistId) })
       void qc.invalidateQueries({ queryKey: playlistKeys.all() })

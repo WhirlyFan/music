@@ -15,7 +15,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
-import { AddSongs } from '@/components/playlist/add-songs'
 import { CollaboratorsManager } from '@/components/playlist/collaborators-manager'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -260,10 +259,6 @@ function PlaylistDetailPage() {
           </div>
         </div>
       )}
-
-
-      {/* Add songs (edit mode) — owner + collaborators grow the playlist here. */}
-      {editing && <AddSongs playlistId={playlistId} />}
 
       {/* Batch-select toolbar (edit mode). */}
       {editing && (
