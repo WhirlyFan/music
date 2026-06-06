@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, F
 from django.http import Http404
@@ -11,6 +12,8 @@ from rest_framework.response import Response
 
 from apps.catalog.models import Playlist, Track
 from apps.catalog.serializers import PlaylistSerializer
+from apps.notifications.events import emit
+from apps.notifications.models import Notification
 
 from . import broadcast, services, snapshot
 from .models import PlaybackState, QueueItem
@@ -29,6 +32,8 @@ from .serializers import (
     SaveAsPlaylistSerializer,
     SyncPositionSerializer,
 )
+
+User = get_user_model()
 
 
 def _ordered_tracks(track_ids):
@@ -192,6 +197,29 @@ class RoomViewSet(viewsets.ViewSet):
         for prev in left_rooms:
             self._broadcast_room(prev)
         return resp
+
+    @extend_schema(request=KickMemberSerializer, responses=None)
+    @action(detail=False, methods=["post"], url_path="invite-to-jam")
+    def invite_to_jam(self, request):
+        """Invite a user to the caller's jam (through the events architecture). Shares
+        the room first if it isn't a jam yet, then sends the invitee a JAM_INVITE
+        notification carrying the join code — their Accept joins."""
+        s = KickMemberSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        invitee = get_object_or_404(User, pk=s.validated_data["user_id"])
+        if invitee.id == request.user.id:
+            raise ValidationError("You can't invite yourself.")
+        room = services.get_active_room(request.user)
+        services.share_room(room)  # inviting starts the jam if it wasn't shared yet
+        emit(
+            Notification.Kind.JAM_INVITE,
+            recipient=invitee,
+            actor=request.user,
+            code=room.code,
+            room_id=str(room.id),
+        )
+        self._broadcast_room(room)  # the host became a member on share → refresh roster
+        return Response(status=204)
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

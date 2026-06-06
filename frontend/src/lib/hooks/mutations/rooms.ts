@@ -157,6 +157,16 @@ export function useJoinRoom() {
   )
 }
 
+/** Invite a user (by id) to the caller's jam — shares the room if needed and sends
+ *  them a JAM_INVITE notification (events architecture). No room state changes here
+ *  for the caller beyond the share, so it isn't a useRoomMutation. */
+export function useInviteToJam() {
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api('/rooms/invite-to-jam/', { method: 'POST', body: { user_id: userId } }),
+  })
+}
+
 /** Leave the jam I'm in (guest). Resolves back to my own room. */
 export function useLeaveRoom() {
   return useRoomMutation(() => api<Room>('/rooms/leave/', { method: 'POST' }))

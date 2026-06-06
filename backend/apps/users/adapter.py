@@ -45,11 +45,24 @@ def _unique_handle(first_name: str) -> str:
     return f"user_{secrets.token_hex(6)}"
 
 
-def _accept_invite(email: str) -> None:
-    """Consume the matching pending invite so the link can't be reused."""
-    Invitation.objects.filter(email__iexact=email, accepted_at__isnull=True).update(
+def _on_signup(user) -> None:
+    """Consume the matching pending invite (so the link can't be reused) and welcome
+    the new user — a notification they'll see on first load, crediting whoever invited
+    them to the platform (system welcome if there was no inviter)."""
+    from apps.notifications.events import emit
+    from apps.notifications.models import Notification
+
+    invite = (
+        Invitation.objects.filter(email__iexact=user.email, accepted_at__isnull=True)
+        .select_related("invited_by")
+        .order_by("-created_at")
+        .first()
+    )
+    inviter = invite.invited_by if invite else None
+    Invitation.objects.filter(email__iexact=user.email, accepted_at__isnull=True).update(
         accepted_at=timezone.now()
     )
+    emit(Notification.Kind.WELCOME, recipient=user, actor=inviter)
 
 
 class AccountAdapter(DefaultAccountAdapter):
@@ -69,7 +82,7 @@ class AccountAdapter(DefaultAccountAdapter):
 
     def save_user(self, request, user, form, commit=True):
         user = super().save_user(request, user, form, commit=commit)
-        _accept_invite(user.email)
+        _on_signup(user)
         return user
 
 
@@ -100,7 +113,7 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
 
     def save_user(self, request, sociallogin, form=None):
         user = super().save_user(request, sociallogin, form=form)
-        _accept_invite(user.email)
+        _on_signup(user)
         return user
 
     def on_authentication_error(

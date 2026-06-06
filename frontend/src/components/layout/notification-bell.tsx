@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAcceptCollabInvite, useDeclineCollabInvite } from '@/lib/hooks/queries/collaborators'
 import { useAcceptFriend, useDeclineFriend } from '@/lib/hooks/queries/friends'
+import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import {
   type AppNotification,
   useDismissNotification,
@@ -36,6 +37,12 @@ function describe(n: AppNotification): string {
       return `${who} joined “${title(n)}”`
     case 'playlist_tracks':
       return `${who} ${summary(n) || `updated “${title(n)}”`}`
+    case 'jam_invite':
+      return `${who} invited you to a jam`
+    case 'welcome':
+      return n.actor_username
+        ? `${who} invited you to music — welcome! 🎵`
+        : 'Welcome to music! 🎵'
     default:
       return 'New notification'
   }
@@ -48,7 +55,7 @@ const summary = (n: AppNotification) =>
 
 // Notifications that require a response (inline Accept/Decline). Everything else is
 // informational — independently dismissable and cleared by "mark all read".
-const ACTION_KINDS = new Set(['friend_request', 'playlist_invite'])
+const ACTION_KINDS = new Set(['friend_request', 'playlist_invite', 'jam_invite'])
 const isActionable = (n: AppNotification) => ACTION_KINDS.has(n.kind)
 
 /** Playlist notifications deep-link to the playlist; others don't link. */
@@ -124,6 +131,19 @@ function FriendRequestActions({
       busy={accept.isPending || decline.isPending}
       onAccept={(done) => accept.mutate(friendshipId, settle(done))}
       onDecline={(done) => decline.mutate(friendshipId, settle(done))}
+    />
+  )
+}
+
+/** Inline Accept / Decline for a jam invite — Accept joins the jam by its code. */
+function JamInviteActions({ code, notificationId }: { code: string; notificationId: string }) {
+  const join = useJoinRoom()
+  return (
+    <InviteActions
+      notificationId={notificationId}
+      busy={join.isPending}
+      onAccept={(done) => join.mutate(code, settle(done))}
+      onDecline={(done) => done()} // nothing to undo server-side — just consume it
     />
   )
 }
@@ -249,6 +269,9 @@ export function NotificationBell() {
                         )}
                       {n.kind === 'playlist_invite' && pid && (
                         <PlaylistInviteActions playlistId={pid} notificationId={n.id} />
+                      )}
+                      {n.kind === 'jam_invite' && typeof n.payload.code === 'string' && (
+                        <JamInviteActions code={n.payload.code} notificationId={n.id} />
                       )}
                     </span>
                     {/* Informational notifications can be dismissed independently;

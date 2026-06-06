@@ -19,6 +19,8 @@ class Notification(BaseModel):
         PLAYLIST_INVITE = "playlist_invite", "Invited you to collaborate"
         PLAYLIST_INVITE_ACCEPT = "playlist_invite_accept", "Joined your playlist"
         PLAYLIST_TRACKS = "playlist_tracks", "Updated a shared playlist"
+        JAM_INVITE = "jam_invite", "Invited you to a jam"
+        WELCOME = "welcome", "Welcome to the platform"
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"

@@ -1,5 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, Copy, Crown, Link2, LogOut, Radio, User, UserMinus, Users } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  Crown,
+  Link2,
+  LogOut,
+  Radio,
+  User,
+  UserMinus,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -13,10 +24,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { SwitchRow } from '@/components/ui/switch'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
 import { roomKeys } from '@/lib/hooks/keys'
 import {
+  useInviteToJam,
   useJoinRoom,
   useKickMember,
   useLeaveRoom,
@@ -25,6 +38,7 @@ import {
   useUnshareRoom,
 } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
+import { useFriends } from '@/lib/hooks/queries/friends'
 import { useJamMembers, useRoom } from '@/lib/hooks/queries/rooms'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
@@ -217,6 +231,8 @@ export function JamDialog() {
               </div>
             )}
 
+            {isHost && <InviteFriends myUserId={myUserId} />}
+
             <div className="space-y-2">
               <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
                 <Users className="size-3.5" /> Listening · {count}
@@ -320,5 +336,45 @@ export function JamDialog() {
         )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Host-only: invite your friends to the jam through the events architecture. Each
+ *  Invite sends a JAM_INVITE notification (the backend shares the room if needed). */
+function InviteFriends({ myUserId }: { myUserId: string | null }) {
+  const friends = useFriends()
+  const invite = useInviteToJam()
+  const people = (friends.data ?? []).map((f) =>
+    f.requester.id === myUserId ? f.addressee : f.requester,
+  )
+  if (people.length === 0) return null
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
+        <UserPlus className="size-3.5" /> Invite friends
+      </p>
+      <ul className="max-h-40 space-y-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]">
+        {people.map((u) => (
+          <li key={u.id} className="flex items-center justify-between gap-2 rounded-lg px-1 py-0.5">
+            <span className="flex min-w-0 items-center gap-2">
+              <UserAvatar username={u.username} size="size-6" icon="size-3" link />
+              <span className="truncate text-sm">@{u.username}</span>
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 rounded-full px-2.5 text-xs"
+              disabled={invite.isPending}
+              onClick={() =>
+                invite.mutate(u.id, { onSuccess: () => toast.success(`Invited @${u.username}.`) })
+              }
+            >
+              Invite
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
