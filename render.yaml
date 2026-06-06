@@ -174,8 +174,13 @@ services:
       # RENDER_EXTERNAL_HOSTNAME, so this stays correct even if the suffix changes.
       # api.whirlyfan.com is the WS custom domain (Host header on direct socket
       # connections); the onrender host stays for the HTTP rewrites + health probe.
+      # music.whirlyfan.com is the public host the browser uses; /accounts/*
+      # reaches the backend via Render's rewrite, which forwards it as
+      # X-Forwarded-Host. With USE_X_FORWARDED_HOST=True (prod.py), get_host()
+      # validates against this list, so the public host must be present — it's
+      # what allauth builds the Google OAuth redirect_uri from.
       - key: DJANGO_ALLOWED_HOSTS
-        value: music-backend-ll7r.onrender.com,api.whirlyfan.com
+        value: music.whirlyfan.com,music-backend-ll7r.onrender.com,api.whirlyfan.com
       # CSRF middleware checks the Origin/Referer of state-changing requests.
       # The browser sends the origin it actually loaded, so once the custom
       # domain is live that's https://music.whirlyfan.com. We trust BOTH it and
