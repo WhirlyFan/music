@@ -96,10 +96,13 @@ export function NowPlayingBar() {
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
   const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
-  // In a jam, only the host drives playback; guests follow. Your own (unshared)
-  // room: always controllable.
+  // In a jam: the host always controls; guests drive playback only if the host
+  // enabled it (allow_guest_control). Queue editing stays host-only regardless.
+  // Your own (unshared) room: full control.
   const isShared = room?.is_shared ?? false
-  const canControl = !isShared || room?.host_id === myUserId
+  const isHost = room?.host_id === myUserId
+  const canDrive = !isShared || isHost || (room?.allow_guest_control ?? false)
+  const canEditQueue = !isShared || isHost
   const memberCount = room?.members?.length ?? 0
 
   // Publish the player pill + queue-panel heights so the search pill can sit just
@@ -172,12 +175,12 @@ export function NowPlayingBar() {
       onError: () => {
         // Only the controller skips on a genuine no-match — a guest's skip would
         // mutate their OWN room and bounce them out of the jam.
-        if (!canControl) return
+        if (!canDrive) return
         toast.error(`No YouTube match for “${track.title}” — skipping.`)
         next.mutate()
       },
     })
-  }, [track, matched, matchTrack, next, canControl])
+  }, [track, matched, matchTrack, next, canDrive])
 
   // Resolve a blank cover once per track — off the audio path (its own request),
   // so playback never waits on an image fetch. Invalidates the room + playlist
@@ -210,7 +213,7 @@ export function NowPlayingBar() {
   const upcoming = queue.length + contextAhead
 
   function togglePlay() {
-    if (!canControl) return // guests follow the host
+    if (!canDrive) return // guests follow the host
     const el = audioRef.current
     if (!el) return
     const willPlay = el.paused
@@ -223,7 +226,7 @@ export function NowPlayingBar() {
   }
 
   function handlePrevious() {
-    if (!canControl) return // guests follow the host
+    if (!canDrive) return // guests follow the host
     // Standard behavior: >3s in, restart the track; otherwise go to the previous.
     const el = audioRef.current
     if (el && el.currentTime > 3) {
@@ -234,7 +237,7 @@ export function NowPlayingBar() {
   }
 
   function seek(seconds: number) {
-    if (!canControl) return // guests follow the host's playhead
+    if (!canDrive) return // guests follow the host's playhead
     const el = audioRef.current
     if (!el) return
     el.currentTime = seconds
@@ -279,8 +282,8 @@ export function NowPlayingBar() {
                 size="sm"
                 variant="ghost"
                 onClick={() => shuffle.mutate()}
-                aria-disabled={context.length < 2 || !canControl || undefined}
-                disabled={context.length < 2 || !canControl}
+                aria-disabled={context.length < 2 || !canEditQueue || undefined}
+                disabled={context.length < 2 || !canEditQueue}
               >
                 <Shuffle className="mr-1 size-4" /> Shuffle
               </Button>
@@ -305,7 +308,7 @@ export function NowPlayingBar() {
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={!canControl}
+                disabled={!canEditQueue}
                 onClick={() => {
                   setQueueOpen(false)
                   clear.mutate()
@@ -325,7 +328,7 @@ export function NowPlayingBar() {
                 items={queue}
                 onPlay={(id) => jump.mutate(id)}
                 onRemove={(id) => removeItem.mutate(id)}
-                readOnly={!canControl}
+                readOnly={!canEditQueue}
               />
             )}
             <QueueSection
@@ -335,7 +338,7 @@ export function NowPlayingBar() {
               onPlay={(id) => jump.mutate(id)}
               onRemove={(id) => removeItem.mutate(id)}
               emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
-              readOnly={!canControl}
+              readOnly={!canEditQueue}
             />
           </div>
         </div>
@@ -348,7 +351,7 @@ export function NowPlayingBar() {
             variant="ghost"
             onClick={handlePrevious}
             aria-label="Previous"
-            disabled={!canControl}
+            disabled={!canDrive}
           >
             <SkipBack className="size-5" />
           </Button>
@@ -358,7 +361,7 @@ export function NowPlayingBar() {
             onClick={togglePlay}
             aria-label={loading ? 'Loading' : playing ? 'Pause' : 'Play'}
             aria-busy={loading || undefined}
-            disabled={!audioSrc || loading || !canControl}
+            disabled={!audioSrc || loading || !canDrive}
           >
             {loading ? (
               <Loader2 className="size-5 animate-spin" />
@@ -373,8 +376,8 @@ export function NowPlayingBar() {
             variant="ghost"
             onClick={() => next.mutate()}
             aria-label="Next"
-            aria-disabled={upcoming === 0 || !canControl || undefined}
-            disabled={upcoming === 0 || !canControl}
+            aria-disabled={upcoming === 0 || !canDrive || undefined}
+            disabled={upcoming === 0 || !canDrive}
           >
             <SkipForward className="size-5" />
           </Button>
@@ -457,10 +460,10 @@ export function NowPlayingBar() {
           currentTime={currentTime}
           duration={duration}
           audioReady={!!audioSrc}
-          canNext={upcoming > 0 && canControl}
+          canNext={upcoming > 0 && canDrive}
           onTogglePlay={togglePlay}
           onPrevious={handlePrevious}
-          onNext={() => canControl && next.mutate()}
+          onNext={() => canDrive && next.mutate()}
           onSeek={seek}
           onClose={() => setExpanded(false)}
         />

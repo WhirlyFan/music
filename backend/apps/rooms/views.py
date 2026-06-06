@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from apps.catalog.models import Playlist, Track
@@ -13,6 +14,7 @@ from apps.catalog.serializers import PlaylistSerializer
 from . import broadcast, services, snapshot
 from .models import PlaybackState
 from .serializers import (
+    GuestControlSerializer,
     JoinRoomSerializer,
     PlayNowSerializer,
     PlayPlaylistSerializer,
@@ -67,6 +69,16 @@ class RoomViewSet(viewsets.ViewSet):
             services.prewarm_upcoming(room)
         return Response(data)
 
+    def _control_room(self, request):
+        """Resolve the room a transport action (play/pause/seek/skip) targets — the
+        jam the user is in, else their own — and authorize it: the host always,
+        guests only when the host enabled guest control. Raises 403 otherwise.
+        (Host and solo users resolve to their own room, exactly as before.)"""
+        room = services.current_room(request.user)
+        if room.host_id == request.user.id or (room.is_shared and room.allow_guest_control):
+            return room
+        raise PermissionDenied("The host hasn't enabled guest controls in this jam.")
+
     def _broadcast_room(self, room):
         """Bump generation + broadcast a room to its group WITHOUT returning it —
         for when the response is a different room (e.g. leaving: tell the jam its
@@ -100,6 +112,16 @@ class RoomViewSet(viewsets.ViewSet):
         room = services.get_active_room(request.user)
         return self._apply(room, lambda: services.unshare_room(room))
 
+    @extend_schema(request=GuestControlSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"], url_path="guest-control")
+    def guest_control(self, request):
+        """Host toggle: let guests drive playback in this jam. Operates on the
+        caller's own room (you set this on the room you host)."""
+        s = GuestControlSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        room = services.get_active_room(request.user)
+        return self._apply(room, lambda: services.set_guest_control(room, s.validated_data["enabled"]))
+
     @extend_schema(request=JoinRoomSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def join(self, request):
@@ -130,7 +152,7 @@ class RoomViewSet(viewsets.ViewSet):
         private room harmlessly."""
         s = SyncPositionSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        room = services.get_active_room(request.user)
+        room = self._control_room(request)
         return self._apply(
             room,
             lambda: services.set_position(
@@ -207,13 +229,13 @@ class RoomViewSet(viewsets.ViewSet):
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def next(self, request):
-        room = services.get_active_room(request.user)
+        room = self._control_room(request)
         return self._apply(room, lambda: services.next_track(room))
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def previous(self, request):
-        room = services.get_active_room(request.user)
+        room = self._control_room(request)
         return self._apply(room, lambda: services.previous_track(room))
 
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)

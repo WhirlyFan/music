@@ -132,6 +132,13 @@ export function useLeaveRoom() {
   return useRoomMutation(() => api<Room>('/rooms/leave/', { method: 'POST' }))
 }
 
+/** Host toggle: let guests drive playback (play/pause/seek/skip) in the jam. */
+export function useSetGuestControl() {
+  return useRoomMutation((enabled: boolean) =>
+    api<Room>('/rooms/guest-control/', { method: 'POST', body: { enabled } }),
+  )
+}
+
 /** Save the whole queue as an owned playlist. */
 export function useSaveQueueAsPlaylist() {
   const qc = useQueryClient()

@@ -11,7 +11,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import type { Room } from '@/lib/api/models'
-import { useLeaveRoom, useShareRoom, useUnshareRoom } from '@/lib/hooks/mutations/rooms'
+import {
+  useLeaveRoom,
+  useSetGuestControl,
+  useShareRoom,
+  useUnshareRoom,
+} from '@/lib/hooks/mutations/rooms'
 
 type Member = { user_id: string; username: string; role: string }
 
@@ -34,6 +39,7 @@ export function JamDialog({
   const share = useShareRoom()
   const unshare = useUnshareRoom()
   const leave = useLeaveRoom()
+  const setGuestControl = useSetGuestControl()
   const [copied, setCopied] = useState(false)
 
   const isHost = !!myUserId && room.host_id === myUserId
@@ -111,6 +117,28 @@ export function JamDialog({
                 ))}
               </ul>
             </div>
+
+            {isHost && (
+              <button
+                type="button"
+                role="switch"
+                aria-checked={room.allow_guest_control ?? false}
+                disabled={setGuestControl.isPending}
+                onClick={() => setGuestControl.mutate(!room.allow_guest_control)}
+                className="border-border flex w-full items-center justify-between rounded-md border px-3 py-2 text-sm"
+              >
+                <span>Let guests play/pause</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    room.allow_guest_control
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {room.allow_guest_control ? 'On' : 'Off'}
+                </span>
+              </button>
+            )}
 
             {isHost ? (
               <Button

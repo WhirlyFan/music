@@ -148,6 +148,15 @@ def unshare_room(room: Room) -> Room:
     return room
 
 
+@transaction.atomic
+def set_guest_control(room: Room, enabled: bool) -> Room:
+    """Host toggle: let guests drive playback (play/pause/seek/skip) in this jam."""
+    if room.allow_guest_control != enabled:
+        room.allow_guest_control = enabled
+        room.save(update_fields=["allow_guest_control", "updated_at"])
+    return room
+
+
 def find_open_jam(code: str) -> Room | None:
     """The active shared room for a join code (case-insensitive), or None."""
     return Room.objects.filter(

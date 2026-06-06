@@ -165,6 +165,12 @@ class JoinRoomSerializer(serializers.Serializer):
     code = serializers.CharField(max_length=12)
 
 
+class GuestControlSerializer(serializers.Serializer):
+    """Host toggle: whether guests may drive playback."""
+
+    enabled = serializers.BooleanField()
+
+
 class SyncPositionSerializer(serializers.Serializer):
     """Host re-anchor: the real playhead (ms) + whether audio is actually playing."""
 

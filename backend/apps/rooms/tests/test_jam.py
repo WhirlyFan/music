@@ -131,6 +131,44 @@ def test_current_returns_own_room_when_not_in_jam():
 
 
 @pytest.mark.django_db
+def test_guest_control_gating_and_toggle():
+    host_api, host = authed()
+    code = host_api.post("/api/v1/rooms/share/").json()["code"]
+    guest_api, _ = authed()
+    guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json")
+
+    # Default: a guest can't drive transport in the jam.
+    r = guest_api.post(
+        "/api/v1/rooms/sync/", {"position_ms": 1000, "is_playing": True}, format="json"
+    )
+    assert r.status_code == 403
+    assert guest_api.post("/api/v1/rooms/next/").status_code == 403
+
+    # Host enables guest control (broadcasts; guests see allow_guest_control).
+    body = host_api.post(
+        "/api/v1/rooms/guest-control/", {"enabled": True}, format="json"
+    ).json()
+    assert body["allow_guest_control"] is True
+
+    # Now the guest drives the JAM (host's room), not their own.
+    r = guest_api.post(
+        "/api/v1/rooms/sync/", {"position_ms": 2000, "is_playing": True}, format="json"
+    )
+    assert r.status_code == 200
+    assert r.json()["host_id"] == str(host.id)
+    assert r.json()["position_ms"] == 2000
+
+    # Host turns it back off → guest is gated again.
+    host_api.post("/api/v1/rooms/guest-control/", {"enabled": False}, format="json")
+    assert (
+        guest_api.post(
+            "/api/v1/rooms/sync/", {"position_ms": 3000, "is_playing": True}, format="json"
+        ).status_code
+        == 403
+    )
+
+
+@pytest.mark.django_db
 def test_guest_can_leave_and_falls_back_to_own_room():
     host_api, host = authed()
     code = host_api.post("/api/v1/rooms/share/").json()["code"]

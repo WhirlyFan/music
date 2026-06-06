@@ -335,6 +335,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/guest-control/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Host toggle: let guests drive playback in this jam. Operates on the
+         *     caller's own room (you set this on the room you host).
+         */
+        post: operations["v1_rooms_guest_control_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/join/": {
         parameters: {
             query?: never;
@@ -730,6 +750,10 @@ export interface components {
             artwork_url: string;
             /** Format: uuid */
             source_playlist?: string | null;
+        };
+        /** @description Host toggle: whether guests may drive playback. */
+        GuestControl: {
+            enabled: boolean;
         };
         /** @description The result of a paste: loose tracks the caller can play/queue/save. */
         ImportResult: {
@@ -1384,6 +1408,31 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_guest_control_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuestControl"];
+                "application/x-www-form-urlencoded": components["schemas"]["GuestControl"];
+                "multipart/form-data": components["schemas"]["GuestControl"];
+            };
+        };
         responses: {
             200: {
                 headers: {
