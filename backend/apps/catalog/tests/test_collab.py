@@ -73,7 +73,7 @@ def test_accept_grants_access_and_notifies_owner():
     pl = PlaylistFactory(created_by=owner, is_public=False)
     collab.invite(pl, invitee=friend, by=owner)
     r = _authed(friend).post(f"{BASE}/{pl.id}/collab-accept/")
-    assert r.status_code == 200
+    assert r.status_code == 204
     assert (
         PlaylistCollaborator.objects.get(playlist=pl, user=friend).status
         == PlaylistCollaborator.Status.ACCEPTED

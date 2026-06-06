@@ -71,10 +71,12 @@ export async function api<T = unknown>(
     throw new ApiError(res.status, res.statusText, detail)
   }
 
-  // 204 No Content
+  // 204 No Content — or any empty body (e.g. a 200/201 with nothing to return, like
+  // an action endpoint that just succeeds). Parsing "" as JSON would throw and turn a
+  // successful call into a rejected mutation, so read text and only parse if present.
   if (res.status === 204) return undefined as T
-
-  return (await res.json()) as T
+  const text = await res.text()
+  return (text ? JSON.parse(text) : undefined) as T
 }
 
 export class ApiError extends Error {

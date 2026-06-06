@@ -382,7 +382,7 @@ class PlaylistViewSet(
         """The invitee accepts a pending collaboration invite (→ edit access)."""
         c = get_object_or_404(PlaylistCollaborator, playlist_id=pk, user=request.user)
         collab.accept(c, by=request.user)
-        return Response(status=status.HTTP_200_OK)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(request=None, responses=None)
     @action(detail=True, methods=["post"], url_path="collab-decline")

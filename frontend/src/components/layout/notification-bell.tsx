@@ -171,16 +171,21 @@ export function NotificationBell() {
         if (next && count > 0) markRead.mutate(undefined)
       }}
     >
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
-          <Bell className="size-5" />
-          {count > 0 && (
-            <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in pointer-events-none absolute -top-1 -right-1 flex size-[18px] items-center justify-center rounded-full text-[10px] leading-none font-bold tabular-nums ring-2">
-              {count > 9 ? '9+' : count}
-            </span>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
+      {/* Wrapper provides the positioning context so the count badge sits OUTSIDE the
+          Button (whose overflow-hidden — for the ripple — would otherwise clip it).
+          Same pattern as the jam count badge in the player. */}
+      <span className="relative inline-flex">
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Notifications">
+            <Bell className="size-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        {count > 0 && (
+          <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in pointer-events-none absolute -top-1 -right-1 flex size-[18px] items-center justify-center rounded-full text-[10px] leading-none font-bold tabular-nums ring-2">
+            {count > 9 ? '9+' : count}
+          </span>
+        )}
+      </span>
       <DropdownMenuContent align="end" className="w-80 p-0">
         <div className="border-border/60 border-b px-3 py-2">
           <p className="text-sm font-medium">Notifications</p>
