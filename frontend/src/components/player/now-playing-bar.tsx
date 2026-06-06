@@ -242,11 +242,9 @@ export function NowPlayingBar() {
 
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const contextLabel = room?.context_label ?? ''
-  // The full context comes from the paginated query (while the panel is open);
-  // seed the first paint from the small window the frame carries so it isn't empty
-  // before page 1 lands.
-  const loadedContext = contextQuery.data?.pages.flatMap((p: ContextPage) => p.results) ?? []
-  const context = loadedContext.length ? loadedContext : (room?.context_window ?? [])
+  // The full context isn't in the room frame (kept tiny) — it's the paginated query,
+  // fetched when the queue panel opens. Counts below come from frame metadata.
+  const context = contextQuery.data?.pages.flatMap((p: ContextPage) => p.results) ?? []
   const contextCount = room?.context_count ?? 0
   // Counts come from the frame's metadata (exact, gap-safe) — NOT the loaded slice,
   // which may be only the first page of a long list.

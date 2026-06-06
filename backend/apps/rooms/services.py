@@ -570,29 +570,6 @@ def upcoming(room: Room) -> dict:
     return {"queue": queue, "context": context}
 
 
-# How many context items to inline in the room snapshot (current + lookahead). The
-# FULL context list is served separately by the paginated /rooms/context/ endpoint,
-# so the broadcast frame stays small even for a 1000-track playlist; this window is
-# just enough for the queue panel's first paint before that query resolves.
-CONTEXT_WINDOW = 20
-
-
-def _ctx_sorted(room: Room) -> list[QueueItem]:
-    return sorted((i for i in room.items.all() if i.kind == CONTEXT), key=lambda i: i.position)
-
-
-def context_window(room: Room, *, size: int = CONTEXT_WINDOW) -> list[QueueItem]:
-    """The current context track + the next (size-1), from the prefetched items.
-    A small head so the panel paints immediately; the full list comes from the
-    paginated endpoint."""
-    playback = getattr(room, "playback", None)
-    pos = playback.context_pos if (playback and playback.context_pos is not None) else -1
-    ctx = _ctx_sorted(room)
-    if pos < 0:
-        return ctx[:size]
-    return [i for i in ctx if i.position >= pos][:size]
-
-
 def context_count(room: Room) -> int:
     """Total CONTEXT rows (the whole playing-from list), from prefetched items."""
     return sum(1 for i in room.items.all() if i.kind == CONTEXT)

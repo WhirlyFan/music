@@ -1011,8 +1011,6 @@ export interface components {
             readonly context_ahead: number;
             /** Pointer index into the context (position of the current context track). */
             readonly context_pos: number | null;
-            /** Small head (current + lookahead) for the panel's first paint. */
-            readonly context_window: components["schemas"]["QueueItem"][];
             /** Changes only when the context list's membership/order changes. */
             readonly context_version: string;
             /** Format: uuid */

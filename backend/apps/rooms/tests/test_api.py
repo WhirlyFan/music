@@ -76,9 +76,10 @@ def test_play_loads_context_with_label(client):
     )
     assert r.data["current"]["id"] == str(tracks[0].id)
     assert r.data["context_label"] == "My Album"
-    # context is the FULL playlist (stable list); current is the first track.
+    # context is the FULL playlist (stable list, via the paginated endpoint); current
+    # is the first track. The frame carries only the count, not the list.
     assert ctx_ids(api) == ids(tracks)
-    assert r.data["current_item_id"] == r.data["context_window"][0]["id"]
+    assert r.data["context_count"] == 4
 
 
 @pytest.mark.django_db
@@ -162,16 +163,16 @@ def test_play_playlist_then_save_as_playlist(client):
 
 
 @pytest.mark.django_db
-def test_snapshot_windows_context_not_full_list(client):
-    # A big context must NOT inline all its tracks in the snapshot — only a small
-    # window + count. The full list comes from the paginated /rooms/context/ endpoint.
+def test_snapshot_excludes_track_list_keeps_metadata(client):
+    # The played-from list is NOT inlined in the frame at all — no track array, just
+    # lightweight metadata. The full list is the paginated /rooms/context/ endpoint.
     api, _ = client
     tracks = [TrackFactory() for _ in range(60)]
     r = api.post("/api/v1/rooms/play/", {"track_ids": ids(tracks), "start_index": 0}, format="json")
-    assert "context" not in r.data  # the full array is gone
+    assert "context" not in r.data and "context_window" not in r.data
     assert r.data["context_count"] == 60
-    assert len(r.data["context_window"]) == 20  # current + lookahead only
-    assert r.data["context_window"][0]["track"]["id"] == str(tracks[0].id)
+    assert r.data["context_ahead"] == 59  # everything after the current track
+    assert "context_version" in r.data
 
 
 @pytest.mark.django_db
