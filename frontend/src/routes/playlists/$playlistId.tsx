@@ -50,6 +50,7 @@ import { usePlayPlaylist, useQueueTracks } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { useInfinitePlaylistTracks, usePlaylist } from '@/lib/hooks/queries/catalog'
 import { useRouteSearch } from '@/lib/hooks/queries/ui'
+import { usePlaylistSocket } from '@/lib/hooks/usePlaylistSocket'
 import { useDebounced } from '@/lib/use-debounced'
 
 /** A YouTube-thumbnail fallback cover — offer to re-resolve the real art. */
@@ -65,6 +66,8 @@ function PlaylistDetailPage() {
   const { playlistId } = Route.useParams()
   const navigate = useNavigate()
   const session = useSession()
+  // Live-update this view when anyone edits the playlist (ephemeral viewer channel).
+  usePlaylistSocket(playlistId)
   const { data: playlist, isLoading, error } = usePlaylist(playlistId)
   // Search value is owned by the persistent layout pill, keyed by this exact path
   // (same key the pill writes); this page reads it to drive the track query.

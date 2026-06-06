@@ -14,6 +14,7 @@ from django.utils import timezone
 from apps.notifications.events import emit, emit_many
 from apps.notifications.models import Notification
 
+from . import realtime
 from .models import PlaylistActivity, PlaylistCollaborator
 
 
@@ -74,6 +75,8 @@ def record_track_edit(playlist, actor, action, *, summary, **detail) -> None:
         title=playlist.title,
         summary=summary,
     )
+    # Live-update anyone currently viewing this playlist (open-ended set, ephemeral).
+    realtime.broadcast_playlist_changed(playlist.id)
 
 
 @transaction.atomic
@@ -96,6 +99,7 @@ def invite(playlist, *, invitee, by) -> PlaylistCollaborator:
             playlist_id=str(playlist.id),
             title=playlist.title,
         )
+        realtime.broadcast_playlist_changed(playlist.id)
     return collab
 
 
@@ -115,6 +119,7 @@ def accept(collab: PlaylistCollaborator, *, by) -> PlaylistCollaborator:
         playlist_id=str(collab.playlist.id),
         title=collab.playlist.title,
     )
+    realtime.broadcast_playlist_changed(collab.playlist_id)
     return collab
 
 
@@ -124,3 +129,4 @@ def remove(collab: PlaylistCollaborator, *, by) -> None:
     playlist, username = collab.playlist, collab.user.username
     collab.delete()
     log(playlist, by, PlaylistActivity.Action.COLLABORATOR_REMOVED, username=username)
+    realtime.broadcast_playlist_changed(playlist.id)

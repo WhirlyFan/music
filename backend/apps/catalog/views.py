@@ -8,7 +8,7 @@ from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from . import collab, match, streaming
+from . import collab, match, realtime, streaming
 from .ingest.spotify import SpotifyError
 from .models import (
     PlaybackSource,
@@ -164,6 +164,7 @@ class PlaylistViewSet(
         with transaction.atomic():
             playlist = serializer.save()
             collab.log(playlist, self.request.user, PlaylistActivity.Action.METADATA_EDITED)
+            realtime.broadcast_playlist_changed(playlist.id)
 
     @extend_schema(request=CreatePlaylistSerializer, responses=PlaylistSerializer)
     def create(self, request, *args, **kwargs):
@@ -191,6 +192,7 @@ class PlaylistViewSet(
             refresh_playlist(playlist, user=request.user)
         except (UnsupportedSourceError, SpotifyError) as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        realtime.broadcast_playlist_changed(playlist.id)
         playlist = Playlist.objects.annotate(track_count=Count("items")).get(pk=playlist.pk)
         return Response(PlaylistDetailSerializer(playlist, context={"request": request}).data)
 
