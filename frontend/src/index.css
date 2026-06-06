@@ -545,3 +545,95 @@
     scroll-behavior: auto !important;
   }
 }
+
+/*
+ * View Transitions (TanStack Router `defaultViewTransition`). Keep the root swap
+ * INSTANT so ordinary navigation is unchanged — only named regions animate.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/*
+ * The auth card opens/closes like a modal across navigations — including the
+ * Back button, which a plain route unmount can't animate. The outgoing snapshot
+ * plays the "close" (drop + fade), the incoming plays the "open" (rise + fade).
+ */
+::view-transition-old(auth-card) {
+  animation: auth-card-out 0.2s var(--ease-standard) both;
+}
+::view-transition-new(auth-card) {
+  animation: auth-card-in 0.3s var(--ease-out-back) both;
+}
+@keyframes auth-card-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(auth-card),
+  ::view-transition-new(auth-card) {
+    animation: none !important;
+  }
+}
+
+/*
+ * Tron trace — a tiny light that orbits the rounded edge of the account pill in
+ * the theme's inverse color (--foreground). A rotating conic-gradient masked to a
+ * ~1.5px ring (the ::after's border-box minus its content-box). The animated angle
+ * needs @property so the angle can be interpolated.
+ */
+@property --tron-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+/* In @layer components so a Tailwind position utility (e.g. `fixed` on the nav
+   pill) still wins — an UNLAYERED `position: relative` here would override every
+   layered utility and knock the fixed pill into normal flow as a full-width bar.
+   The host must be a positioned element (the pill is `fixed`) for the ::after to
+   anchor; this relative is just a fallback for non-positioned hosts. */
+@layer components {
+  .tron-trace {
+    position: relative;
+  }
+}
+.tron-trace::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--tron-angle),
+    transparent 0deg 300deg,
+    var(--foreground) 345deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: tron-trace 3.5s linear infinite;
+}
+@keyframes tron-trace {
+  to {
+    --tron-angle: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tron-trace::after {
+    animation: none;
+  }
+}

@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ShieldAlert, ShieldCheck } from 'lucide-react'
+import { Fingerprint, KeyRound, ShieldAlert, ShieldCheck, Smartphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { bannerError } from '@/lib/auth/errors'
 import { useAuthenticators, useDeactivateTotp } from '@/lib/auth/mfa'
 import { confirm } from '@/lib/overlay'
@@ -96,33 +96,26 @@ function TwoFactorOverview() {
       <ul className="divide-border bg-card divide-y rounded-md border" role="list">
         <MethodRow
           name="Authenticator app (TOTP)"
+          icon={<Smartphone className="size-4" aria-hidden="true" />}
           enrolled={hasTotp}
           description="Use Google Authenticator, 1Password, Authy, or similar. Recommended."
           enrollLink={
-            <Link
-              to="/account/mfa/totp"
-              className={buttonVariants({ variant: hasTotp ? 'outline' : 'default', size: 'sm' })}
-            >
-              {hasTotp ? 'Manage' : 'Enroll'}
-            </Link>
+            <Button asChild variant={hasTotp ? 'outline' : 'default'} size="sm">
+              <Link to="/account/mfa/totp">{hasTotp ? 'Manage' : 'Enroll'}</Link>
+            </Button>
           }
           onRemove={hasTotp ? handleRemoveTotp : undefined}
           removeBusy={deactivateTotp.isPending}
         />
         <MethodRow
           name="Passkey / security key"
+          icon={<Fingerprint className="size-4" aria-hidden="true" />}
           enrolled={hasWebAuthn}
           description="Touch ID, Face ID, YubiKey, or another WebAuthn device."
           enrollLink={
-            <Link
-              to="/account/mfa/webauthn"
-              className={buttonVariants({
-                variant: hasWebAuthn ? 'outline' : 'default',
-                size: 'sm',
-              })}
-            >
-              {hasWebAuthn ? 'Manage' : 'Enroll'}
-            </Link>
+            <Button asChild variant={hasWebAuthn ? 'outline' : 'default'} size="sm">
+              <Link to="/account/mfa/webauthn">{hasWebAuthn ? 'Manage' : 'Enroll'}</Link>
+            </Button>
           }
         />
         {/* Recovery codes are intrinsically tied to TOTP — allauth refuses
@@ -134,18 +127,15 @@ function TwoFactorOverview() {
         {hasTotp ? (
           <MethodRow
             name="Recovery codes"
+            icon={<KeyRound className="size-4" aria-hidden="true" />}
             enrolled={hasRecoveryCodes}
             description="Single-use backup codes. Use one if you lose your authenticator."
             enrollLink={
-              <Link
-                to="/account/mfa/recovery-codes"
-                className={buttonVariants({
-                  variant: hasRecoveryCodes ? 'outline' : 'default',
-                  size: 'sm',
-                })}
-              >
-                {hasRecoveryCodes ? 'View' : 'Generate'}
-              </Link>
+              <Button asChild variant={hasRecoveryCodes ? 'outline' : 'default'} size="sm">
+                <Link to="/account/mfa/recovery-codes">
+                  {hasRecoveryCodes ? 'View' : 'Generate'}
+                </Link>
+              </Button>
             }
           />
         ) : null}
@@ -156,6 +146,7 @@ function TwoFactorOverview() {
 
 function MethodRow({
   name,
+  icon,
   enrolled,
   description,
   enrollLink,
@@ -163,6 +154,7 @@ function MethodRow({
   removeBusy,
 }: {
   name: string
+  icon: React.ReactNode
   enrolled: boolean
   description: string
   enrollLink: React.ReactNode
@@ -171,18 +163,22 @@ function MethodRow({
 }) {
   return (
     <li className="flex items-center justify-between gap-4 p-4">
-      <div className="flex items-center gap-3">
-        <span
-          className={`inline-flex h-2 w-2 shrink-0 rounded-full ${
-            enrolled ? 'bg-success' : 'bg-muted-foreground/40'
+      <div className="flex min-w-0 items-center gap-3">
+        {/* Icon tile fills in green once the method is enrolled — a glanceable
+            status that doubles as the method's identity. */}
+        <div
+          className={`grid size-9 shrink-0 place-items-center rounded-lg transition-colors ${
+            enrolled ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
           }`}
           aria-hidden="true"
-        />
-        <div className="space-y-1">
+        >
+          {icon}
+        </div>
+        <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{name}</p>
             {enrolled ? (
-              <span className="text-success inline-flex items-center gap-1 text-xs">
+              <span className="text-success inline-flex items-center gap-1 text-xs font-medium">
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Enrolled
               </span>
             ) : null}
@@ -190,7 +186,7 @@ function MethodRow({
           <p className="text-muted-foreground text-xs">{description}</p>
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {enrolled && onRemove ? (
           <Button
             variant="ghost"

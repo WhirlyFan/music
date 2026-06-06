@@ -1,7 +1,8 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
+import { type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
 
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const AlertDialog = AlertDialogPrimitive.Root
@@ -102,10 +103,15 @@ function AlertDialogDescription({
 }
 
 // asChild → render our <Button> so dialog actions get the same press ripple.
+// We keep Radix's Action prop contract and ADD just the button's variant props,
+// so callers can pass `variant`/`size` (e.g. a destructive confirm) instead of
+// layering `buttonVariants` classes — without leaking `asChild` onto this wrapper
+// (it already uses asChild internally). Radix merges close-on-click onto Button.
 function AlertDialogAction({
   className,
   ...props
-}: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Action>) {
+}: React.ComponentPropsWithRef<typeof AlertDialogPrimitive.Action> &
+  VariantProps<typeof buttonVariants>) {
   return (
     <AlertDialogPrimitive.Action asChild>
       <Button data-slot="alert-dialog-action" className={className} {...props} />

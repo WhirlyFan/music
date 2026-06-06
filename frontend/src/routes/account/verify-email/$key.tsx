@@ -2,7 +2,7 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { CircleAlert, Loader2, LogIn, MailCheck } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { auth } from '@/lib/auth/api'
 import { hasVerifiedPrimaryEmail } from '@/lib/auth/guards'
 import { emailKeys } from '@/lib/hooks/keys'
@@ -82,10 +82,12 @@ function VerifyEmailPage() {
             Your email is verified. Log in on this device to continue.
           </p>
         </div>
-        <Link to="/login" className={buttonVariants({ variant: 'default' }) + ' w-full'}>
-          <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />
-          Log in
-        </Link>
+        <Button asChild className="w-full">
+          <Link to="/login">
+            <LogIn className="mr-2 h-4 w-4" aria-hidden="true" />
+            Log in
+          </Link>
+        </Button>
       </div>
     )
   }
@@ -101,13 +103,12 @@ function VerifyEmailPage() {
         </p>
       </div>
 
-      <Link
-        to="/account/verify-email"
-        className={buttonVariants({ variant: 'default' }) + ' w-full'}
-      >
-        <MailCheck className="mr-2 h-4 w-4" aria-hidden="true" />
-        Get a new link
-      </Link>
+      <Button asChild className="w-full">
+        <Link to="/account/verify-email">
+          <MailCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+          Get a new link
+        </Link>
+      </Button>
 
       <p className="text-muted-foreground text-xs">
         Wrong account?{' '}

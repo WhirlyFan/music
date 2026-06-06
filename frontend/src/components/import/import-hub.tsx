@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { SongRow } from '@/components/track/song-row'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RainbowButton } from '@/components/ui/rainbow-button'
 import { SkeletonZone } from '@/components/ui/skeleton'
@@ -152,7 +152,7 @@ export function OmniBox({
           label rolls between "Search" and "Import" as the input becomes a link. (Results
           pages don't pass `submit` — there the box re-searches on Enter.) */}
       {submit && (
-        <div className="mt-4 flex justify-center">
+        <div className="mt-8 flex justify-center">
           <RainbowButton
             type="submit"
             className="min-w-36"
@@ -280,13 +280,11 @@ export function ImportResultView({ result }: { result: ImportResult }) {
               Add all to queue
             </Button>
             {result.already_saved ? (
-              <Link
-                to="/playlists/$playlistId"
-                params={{ playlistId: result.already_saved }}
-                className={buttonVariants({ variant: 'outline', size: 'sm' })}
-              >
-                Open saved playlist
-              </Link>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/playlists/$playlistId" params={{ playlistId: result.already_saved }}>
+                  Open saved playlist
+                </Link>
+              </Button>
             ) : (
               <Button size="sm" variant="outline" onClick={saveAsPlaylist}>
                 Save as playlist

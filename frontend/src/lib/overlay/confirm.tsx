@@ -8,7 +8,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { buttonVariants } from '@/components/ui/button'
 
 import { overlay } from './overlay'
 
@@ -31,7 +30,7 @@ export async function confirm(opts: ConfirmOpts): Promise<boolean> {
           <AlertDialogCancel onClick={() => close(false)}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={() => close(true)}
-            className={opts.destructive ? buttonVariants({ variant: 'destructive' }) : undefined}
+            variant={opts.destructive ? 'destructive' : undefined}
           >
             {opts.confirmLabel}
           </AlertDialogAction>

@@ -5,12 +5,14 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { AuthCard } from '@/components/auth/auth-card'
 import { GoogleButton } from '@/components/auth/google-button'
 import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, parseAllAuthErrors } from '@/lib/auth/errors'
 import { isEmailVerificationPending, isMfaChallenge, isMfaTrustPending } from '@/lib/auth/guards'
+import { resolveLanding } from '@/lib/auth/landing'
 import { useLogin, useMfaAuthenticate, useMfaTrust } from '@/lib/hooks/mutations/auth'
 
 export const Route = createFileRoute('/login')({
@@ -39,20 +41,24 @@ function LoginPage() {
   const navigate = useNavigate()
   const login = useLogin()
   const { redirect: redirectTo } = Route.useSearch()
-  const dest = redirectTo ?? '/'
   // `mfaRequired` flips to true after a successful password step where the
   // server signaled `mfa_authenticate` is pending. Kept in state so it
   // survives unrelated re-renders.
   const [mfaRequired, setMfaRequired] = useState(false)
+  // Stays true from the moment the password is accepted through resolving the
+  // landing route — so the button keeps its spinner while we figure out the
+  // destination, and we navigate straight there instead of flashing a page.
+  const [routing, setRouting] = useState(false)
 
   const form = useForm({
     defaultValues: { identifier: '', password: '' },
     onSubmit: async ({ value }) => {
       // Idempotency guard — pairs with `disabled` on the submit button.
-      if (login.isPending) return
+      if (login.isPending || routing) return
       const result = await login.mutateAsync(value)
       if (result.status === 200) {
-        navigate({ to: dest })
+        setRouting(true)
+        navigate({ to: await resolveLanding(redirectTo) })
       } else if (isMfaChallenge(result)) {
         setMfaRequired(true)
       } else if (isEmailVerificationPending(result)) {
@@ -72,7 +78,7 @@ function LoginPage() {
   })
 
   if (mfaRequired) {
-    return <MfaChallenge onCancel={() => setMfaRequired(false)} dest={dest} />
+    return <MfaChallenge onCancel={() => setMfaRequired(false)} returnTo={redirectTo} />
   }
 
   // Parse allauth's structured error response so we can show actionable copy
@@ -82,9 +88,18 @@ function LoginPage() {
   const parsed = parseAllAuthErrors(login.data)
 
   return (
-    <div className="mx-auto max-w-sm space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Log in</h1>
-
+    <AuthCard
+      title="Log in"
+      description="Welcome back — sign in to keep listening."
+      footer={
+        <>
+          Don&apos;t have an account?{' '}
+          <Link to="/signup" className="text-primary hover:underline">
+            Sign up
+          </Link>
+        </>
+      }
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -160,11 +175,11 @@ function LoginPage() {
 
         <Button
           type="submit"
-          disabled={login.isPending}
-          aria-busy={login.isPending || undefined}
+          disabled={login.isPending || routing}
+          aria-busy={login.isPending || routing || undefined}
           className="w-full"
         >
-          {login.isPending ? (
+          {login.isPending || routing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
               Logging in…
@@ -182,14 +197,7 @@ function LoginPage() {
       </div>
 
       <GoogleButton />
-
-      <p className="text-muted-foreground text-center text-sm">
-        Don&apos;t have an account?{' '}
-        <Link to="/signup" className="text-primary hover:underline">
-          Sign up
-        </Link>
-      </p>
-    </div>
+    </AuthCard>
   )
 }
 
@@ -202,7 +210,7 @@ function LoginPage() {
  * the `mfa_trust` stage — we surface that inline with a "Remember this
  * browser for 30 days" choice and complete the stage in the same submit.
  */
-function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }) {
+function MfaChallenge({ onCancel, returnTo }: { onCancel: () => void; returnTo?: string }) {
   const navigate = useNavigate()
   const mfa = useMfaAuthenticate()
   const trust = useMfaTrust()
@@ -211,11 +219,13 @@ function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }
   // Unchecked → we still post {trust: false} because allauth's trust stage
   // blocks the login until *some* answer is given.
   const [trustChoice, setTrustChoice] = useState(false)
+  // Held busy while we resolve the landing route, so we route straight there.
+  const [routing, setRouting] = useState(false)
 
   const codeForm = useForm({
     defaultValues: { code: '' },
     onSubmit: async ({ value }) => {
-      if (mfa.isPending || trust.isPending) return
+      if (mfa.isPending || trust.isPending || routing) return
       const result = await mfa.mutateAsync(value.code.trim())
       // With MFA_TRUST_ENABLED, an accepted code advances allauth to the
       // trust stage — the response is 401 + `mfa_trust: is_pending: true`,
@@ -228,12 +238,14 @@ function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }
           if (msg) toast.error(msg)
           return
         }
-        navigate({ to: dest })
+        setRouting(true)
+        navigate({ to: await resolveLanding(returnTo) })
         return
       }
       if (result.status === 200) {
         // Trust not enabled (or already trusted) — code accepted, fully in.
-        navigate({ to: dest })
+        setRouting(true)
+        navigate({ to: await resolveLanding(returnTo) })
         return
       }
       const msg = bannerError(result, 'Invalid code — try again.')
@@ -241,17 +253,13 @@ function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }
     },
   })
   const parsedMfa = parseAllAuthErrors(mfa.data)
-  const busy = mfa.isPending || trust.isPending
+  const busy = mfa.isPending || trust.isPending || routing
 
   return (
-    <div className="mx-auto max-w-sm space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Multi-factor code</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Enter the 6-digit code from your authenticator app, or one of your recovery codes.
-        </p>
-      </div>
-
+    <AuthCard
+      title="Multi-factor code"
+      description="Enter the 6-digit code from your authenticator app, or one of your recovery codes."
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -312,6 +320,6 @@ function MfaChallenge({ onCancel, dest }: { onCancel: () => void; dest: string }
           Cancel
         </Button>
       </form>
-    </div>
+    </AuthCard>
   )
 }

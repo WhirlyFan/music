@@ -5,8 +5,9 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { AuthCard } from '@/components/auth/auth-card'
 import { GoogleButton } from '@/components/auth/google-button'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api/client'
@@ -96,16 +97,19 @@ function ConfirmSignOut({
   // the user out. Let them carry on as themselves.
   if (!invitedEmail) {
     return (
-      <div className="mx-auto max-w-sm space-y-4 text-center">
-        <h1 className="text-2xl font-semibold tracking-tight">Invite unavailable</h1>
-        <p className="text-muted-foreground text-sm">
-          This invite link is invalid or has expired. You’re still signed in as{' '}
-          <span className="font-medium">{signedInAs}</span>.
-        </p>
-        <Link to="/" className={buttonVariants({ className: 'w-full' })}>
-          Go home
-        </Link>
-      </div>
+      <AuthCard
+        title="Invite unavailable"
+        description={
+          <>
+            This invite link is invalid or has expired. You’re still signed in as{' '}
+            <span className="text-foreground font-medium">{signedInAs}</span>.
+          </>
+        }
+      >
+        <Button asChild className="w-full">
+          <Link to="/">Go home</Link>
+        </Button>
+      </AuthCard>
     )
   }
 
@@ -124,17 +128,20 @@ function ConfirmSignOut({
   }
 
   return (
-    <div className="mx-auto max-w-sm space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Accept this invite?</h1>
-      <p className="text-muted-foreground text-sm">
-        You’re signed in as <span className="font-medium">{signedInAs}</span>. This invite is for{' '}
-        <span className="font-medium">{invitedEmail}</span>. Continuing will sign you out so you can
-        create that account.
-      </p>
+    <AuthCard
+      title="Accept this invite?"
+      description={
+        <>
+          You’re signed in as <span className="text-foreground font-medium">{signedInAs}</span>.
+          This invite is for <span className="text-foreground font-medium">{invitedEmail}</span>.
+          Continuing will sign you out so you can create that account.
+        </>
+      }
+    >
       <div className="flex gap-3">
-        <Link to="/" className={buttonVariants({ variant: 'outline', className: 'flex-1' })}>
-          Cancel
-        </Link>
+        <Button asChild variant="outline" className="flex-1">
+          <Link to="/">Cancel</Link>
+        </Button>
         <Button
           className="flex-1"
           onClick={onContinue}
@@ -144,7 +151,7 @@ function ConfirmSignOut({
           {busy ? 'Signing out…' : 'Sign out & continue'}
         </Button>
       </div>
-    </div>
+    </AuthCard>
   )
 }
 
@@ -209,9 +216,18 @@ function SignupForm({ invitedEmail }: { invitedEmail: string }) {
   const parsed = parseAllAuthErrors(signup.data)
 
   return (
-    <div className="mx-auto max-w-sm space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Create an account</h1>
-
+    <AuthCard
+      title="Create an account"
+      description="You’re invited — finish setting up to start listening."
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link to="/login" className="text-primary hover:underline">
+            Log in
+          </Link>
+        </>
+      }
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault()
@@ -353,7 +369,7 @@ function SignupForm({ invitedEmail }: { invitedEmail: string }) {
 
       {/* Google still respects invite-only: a new Google email must hold an invite
           (server-side gate), else it lands back with an "invite required" message. */}
-      <GoogleButton label="Sign up with Google" />
-    </div>
+      <GoogleButton from="/signup" label="Sign up with Google" />
+    </AuthCard>
   )
 }

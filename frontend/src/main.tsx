@@ -1,6 +1,7 @@
 import './index.css'
 
 import { QueryClientProvider } from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -19,6 +20,11 @@ applyInitialTheme()
 const router = createRouter({
   routeTree,
   defaultPreload: 'intent',
+  // Wrap navigations (incl. Back/Forward) in the View Transitions API so routes
+  // can animate OUT, not just in. We scope the visible effect in index.css: the
+  // root swap stays instant (ordinary pages unchanged), and only named regions
+  // like the auth card play an open/close — see `::view-transition-*(auth-card)`.
+  defaultViewTransition: true,
   context: { queryClient },
 })
 
@@ -40,6 +46,9 @@ createRoot(rootElement).render(
         <RouterProvider router={router} />
         {/* Sibling to the router so overlays render above all routes. */}
         <OverlayRenderer />
+        {/* Dev-only TanStack Query inspector (cache, fetch states). Tree-shaken
+            out of prod builds. Toggle via its own floating button. */}
+        {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
       </QueryClientProvider>
     </RootErrorBoundary>
   </StrictMode>,

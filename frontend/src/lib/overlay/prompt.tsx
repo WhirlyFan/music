@@ -1,15 +1,14 @@
 import { useState } from 'react'
 
+import { Button } from '@/components/ui/button'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
 import { overlay, type OverlayAsyncProps } from './overlay'
@@ -24,7 +23,9 @@ type PromptOpts = {
 }
 
 /**
- * A single-line text prompt as a modal. Resolves the trimmed string, or `null`
+ * A single-line text prompt as a plain modal (a regular Dialog, not an
+ * AlertDialog — this isn't an interruptive confirmation, so clicking the scrim
+ * or pressing Escape should dismiss it). Resolves the trimmed string, or `null`
  * if cancelled/dismissed. Pre-fill with `defaultValue` (e.g. an imported
  * playlist's source name); it's selected on focus so typing replaces it.
  */
@@ -42,12 +43,12 @@ function PromptDialog({
   const name = value.trim()
 
   return (
-    <AlertDialog open={isOpen} onOpenChange={(o) => !o && close(null)}>
-      <AlertDialogContent onCloseAutoFocus={() => !isOpen && unmount()}>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{opts.title}</AlertDialogTitle>
-          {opts.description && <AlertDialogDescription>{opts.description}</AlertDialogDescription>}
-        </AlertDialogHeader>
+    <Dialog open={isOpen} onOpenChange={(o) => !o && close(null)}>
+      <DialogContent onCloseAutoFocus={() => !isOpen && unmount()}>
+        <DialogHeader>
+          <DialogTitle>{opts.title}</DialogTitle>
+          {opts.description && <DialogDescription>{opts.description}</DialogDescription>}
+        </DialogHeader>
         <form
           className="space-y-1"
           onSubmit={(e) => {
@@ -70,13 +71,15 @@ function PromptDialog({
             aria-label={opts.label ?? opts.title}
           />
         </form>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => close(null)}>Cancel</AlertDialogCancel>
-          <AlertDialogAction disabled={!name} onClick={() => name && close(name)}>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => close(null)}>
+            Cancel
+          </Button>
+          <Button disabled={!name} onClick={() => name && close(name)}>
             {opts.confirmLabel ?? 'Save'}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

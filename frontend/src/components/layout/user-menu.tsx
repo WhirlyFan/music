@@ -7,7 +7,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -27,19 +26,16 @@ function inviteErrorMessage(e: unknown): string {
 
 type Props = {
   username: string
-  email: string
   firstName?: string
   lastName?: string
 }
 
 /**
- * Account dropdown — avatar trigger + user info + account actions.
- *
- * Theme switching is *not* here: it lives in ThemeToggle in the header so
- * it's reachable when logged out too. This menu is strictly for user-scoped
- * actions (settings, log out, future profile/billing/etc.).
+ * Account menu — avatar (+ username on wider screens) opens a labeled dropdown
+ * of account actions (Settings, Invite, Log out). No profile panel: just the
+ * actions. Radix gives the menu/menuitem semantics + keyboard nav for free.
  */
-export function UserMenu({ username, email, firstName, lastName }: Props) {
+export function UserMenu({ username, firstName, lastName }: Props) {
   const navigate = useNavigate()
   const logout = useLogout()
   const invite = useInvite()
@@ -59,43 +55,34 @@ export function UserMenu({ username, email, firstName, lastName }: Props) {
     })
   }
 
-  // Pick the best human label: "First Last" if both set, else username.
-  const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim()
-  const displayName = fullName || username
-
   const handleLogout = async () => {
     await logout.mutateAsync()
     navigate({ to: '/login' })
   }
 
+  const fullName = `${firstName ?? ''} ${lastName ?? ''}`.trim()
+  const initials = avatarInitials(fullName || username)
+
   return (
     <DropdownMenu>
       {/* 44x44 minimum touch target per WCAG 2.5.5 — the trigger area is
           padded; the avatar visual stays at 36px so the design doesn't
-          balloon. */}
+          balloon. The pill sits on the page bg so it reads in the corner. */}
       <DropdownMenuTrigger
-        className="ring-offset-background focus-visible:ring-ring flex min-h-11 items-center gap-2 rounded-full px-1 py-1 transition-shadow focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+        className="ring-offset-background focus-visible:ring-ring bg-background/70 border-border/60 flex min-h-11 items-center gap-2 rounded-full border py-1 pr-3 pl-1 shadow-sm backdrop-blur transition-shadow focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
         aria-label="Open account menu"
       >
         <Avatar className="h-9 w-9">
           {/* DiceBear avatar seeded by username (stable across email changes). */}
           <AvatarImage src={dicebearAvatarUrl(username)} alt="" />
-          <AvatarFallback>{avatarInitials(displayName)}</AvatarFallback>
+          <AvatarFallback>{initials}</AvatarFallback>
         </Avatar>
-        {/* Username next to the avatar on medium+ widths so the header stays
-            compact on mobile. The dropdown still has the full info. */}
+        {/* Username next to the avatar on medium+ widths so the corner stays
+            compact on mobile. */}
         <span className="hidden text-sm font-medium sm:inline">{username}</span>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="flex flex-col gap-0.5">
-          <span className="truncate text-sm font-medium">{displayName}</span>
-          <span className="text-muted-foreground truncate text-xs font-normal">@{username}</span>
-          <span className="text-muted-foreground truncate text-xs font-normal">{email}</span>
-        </DropdownMenuLabel>
-
-        <DropdownMenuSeparator />
-
+      <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
           <Settings className="mr-2 h-4 w-4" />
           Settings

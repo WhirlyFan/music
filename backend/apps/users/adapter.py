@@ -12,6 +12,7 @@ signup flow), which bootstraps the first/admin user.
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 
@@ -24,6 +25,8 @@ from django.utils import timezone
 from waffle import switch_is_active
 
 from .models import Invitation
+
+logger = logging.getLogger("apps.users.social")
 
 
 def _unique_handle(first_name: str) -> str:
@@ -99,3 +102,20 @@ class SocialAccountAdapter(DefaultSocialAccountAdapter):
         user = super().save_user(request, sociallogin, form=form)
         _accept_invite(user.email)
         return user
+
+    def on_authentication_error(
+        self, request, provider, error=None, exception=None, extra_context=None
+    ):
+        # allauth otherwise swallows social-login failures into an opaque
+        # `?error=unknown` redirect with no server log. Log the real cause so the
+        # provider/state/token/adapter failure is diagnosable.
+        logger.error(
+            "social auth error: provider=%s error=%s exception=%r extra=%s",
+            getattr(provider, "id", provider),
+            error,
+            exception,
+            extra_context,
+        )
+        return super().on_authentication_error(
+            request, provider, error=error, exception=exception, extra_context=extra_context
+        )

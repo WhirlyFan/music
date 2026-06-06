@@ -91,7 +91,7 @@ export function NowPlayingBar() {
   // Publish the player pill + queue-panel heights so the search pill can sit just
   // above them. We measure the queue's STABLE full height (the inner box) once;
   // both the queue's max-height and the pill's bottom then animate that exact
-  // pixel value with the same 280ms ease-out-quint, so they open in lockstep.
+  // pixel value with the same 320ms ease-out-quint, so they open in lockstep.
   // Only the async RO callback setStates (never the effect body). Re-attaches when
   // the bar mounts (track present → itemId set).
   useEffect(() => {
@@ -209,19 +209,27 @@ export function NowPlayingBar() {
     >
       {/* Queue panel. Always mounted; its max-height animates 0→(measured px) so its
           top edge travels by exactly the panel height. The search pill animates its
-          bottom by that SAME pixel value with the SAME 280ms ease-out-quint, so the
+          bottom by that SAME pixel value with the SAME 320ms ease-out-quint, so the
           two open in true lockstep (max-height in px, not grid `fr`, matches the
           pill's px curve exactly). `inert` drops it from tab/a11y while collapsed. */}
       <div
-        className="ease-out-quint absolute inset-x-0 bottom-full mb-2 overflow-hidden transition-[max-height] duration-[280ms] motion-reduce:transition-none"
+        className="ease-out-quint absolute inset-x-0 bottom-full mb-2 overflow-hidden transition-[max-height] duration-[320ms] motion-reduce:transition-none"
         style={{ maxHeight: queueOpen ? queueHeight : 0 }}
       >
         <div
           ref={queuePanelRef}
           inert={!queueOpen}
-          className="border-border bg-background/95 max-h-60 overflow-y-auto rounded-2xl border px-4 py-3 shadow-lg backdrop-blur sm:max-h-80"
+          // Outer: the rounded/blurred panel that animates (composited transform +
+          // opacity → the auth-card open/close feel). overflow-hidden clips to the
+          // radius. The header is PINNED (a sibling above the scroll region), so the
+          // scrollbar lives only beside the song list — below the rounded top corner.
+          // The max-height wrapper above drives the layout reveal + search-pill lockstep.
+          className={`border-border bg-background/95 ease-out-back overflow-hidden rounded-2xl border shadow-lg backdrop-blur transition-[transform,opacity] duration-[320ms] motion-reduce:transition-none ${
+            queueOpen ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
+          }`}
         >
-          <div className="mb-2 flex items-center justify-between">
+          {/* Pinned header — stays put while the song list scrolls below it. */}
+          <div className="border-border/60 flex items-center justify-between border-b px-4 py-2.5">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
               <Button
@@ -264,22 +272,26 @@ export function NowPlayingBar() {
             </div>
           </div>
 
-          {queue.length > 0 && (
+          {/* Scroll region — only the songs scroll; thin, transparent-track scrollbar
+              (thumb only), capped so a long queue can't run off-screen. */}
+          <div className="max-h-56 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] overflow-y-auto px-4 py-2 sm:max-h-72">
+            {queue.length > 0 && (
+              <QueueSection
+                label="Next in queue"
+                items={queue}
+                onPlay={(id) => jump.mutate(id)}
+                onRemove={(id) => removeItem.mutate(id)}
+              />
+            )}
             <QueueSection
-              label="Next in queue"
-              items={queue}
+              label={contextLabel ? `Playing from ${contextLabel}` : 'Now playing'}
+              items={context}
+              currentId={itemId}
               onPlay={(id) => jump.mutate(id)}
               onRemove={(id) => removeItem.mutate(id)}
+              emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
             />
-          )}
-          <QueueSection
-            label={contextLabel ? `Playing from ${contextLabel}` : 'Now playing'}
-            items={context}
-            currentId={itemId}
-            onPlay={(id) => jump.mutate(id)}
-            onRemove={(id) => removeItem.mutate(id)}
-            emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
-          />
+          </div>
         </div>
       </div>
 

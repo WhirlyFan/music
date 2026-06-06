@@ -33,7 +33,14 @@ export function GoogleIcon() {
  * are set. New Google users still need an invite (server-side gate); existing
  * users (matched by verified email) just log in.
  */
-export function GoogleButton({ label = 'Continue with Google' }: { label?: string }) {
+export function GoogleButton({
+  label = 'Continue with Google',
+  from = '/login',
+}: {
+  label?: string
+  /** The page that launched the flow — where to return on error/cancel. */
+  from?: string
+}) {
   const { hasGoogle } = useSocialProviders()
   if (!hasGoogle) return null
 
@@ -41,9 +48,12 @@ export function GoogleButton({ label = 'Continue with Google' }: { label?: strin
     <Button
       type="button"
       variant="outline"
-      className="w-full"
+      className="w-full gap-2"
       onClick={() =>
-        void providerRedirect('google', { process: 'login', callbackUrl: '/auth/callback' })
+        void providerRedirect('google', {
+          process: 'login',
+          callbackUrl: `/auth/callback?from=${encodeURIComponent(from)}`,
+        })
       }
     >
       <GoogleIcon />

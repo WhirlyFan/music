@@ -1,3 +1,4 @@
+import { Slot, Slottable } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as React from 'react'
 
@@ -37,25 +38,34 @@ const buttonVariants = cva(
 )
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+  /**
+   * Render as the single child instead of a <button> (Radix Slot). Use this to
+   * style a navigation link as a button while keeping link semantics + the
+   * ripple: `<Button asChild><Link to="…">…</Link></Button>`. `Slottable` lets
+   * the ripple ride along as an extra child — Slot injects it into the link.
+   */
+  asChild?: boolean
+}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, onPointerDown, children, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, onPointerDown, children, ...props }, ref) => {
     const ripple = useRipple()
+    const Comp = asChild ? Slot : 'button'
 
     return (
-      <button
+      <Comp
         className={cn('relative overflow-hidden', buttonVariants({ variant, size, className }))}
         ref={ref}
-        onPointerDown={(e) => {
+        onPointerDown={(e: React.PointerEvent<HTMLElement>) => {
           ripple.onPointerDown(e)
-          onPointerDown?.(e)
+          onPointerDown?.(e as React.PointerEvent<HTMLButtonElement>)
         }}
         {...props}
       >
-        {children}
+        <Slottable>{children}</Slottable>
         <Ripples ripples={ripple.ripples} onDone={ripple.remove} />
-      </button>
+      </Comp>
     )
   },
 )

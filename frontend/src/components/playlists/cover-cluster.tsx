@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Ripples, useRipple } from '@/components/ui/ripple'
-import { Skeleton, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
+import { Skeleton, useSkeletonZone } from '@/components/ui/skeleton'
 import { TiltCard } from '@/components/ui/tilt-card'
 
 export type CoverItem = {
@@ -433,21 +433,17 @@ export function CoverCluster({
   }
 
   if (loading) {
+    // Covers fly in from the centre once data arrives, so a full skeleton grid no
+    // longer makes sense — just a single calm pulse at the centre where they'll land.
     return (
-      <SkeletonZone>
-        <div
-          role="status"
-          aria-busy
-          aria-label="Loading playlists"
-          className="grid size-full [grid-template-columns:repeat(auto-fill,minmax(112px,1fr))] gap-5 overflow-hidden p-4 sm:[grid-template-columns:repeat(auto-fill,minmax(144px,1fr))]"
-        >
-          {Array.from({ length: 18 }).map((_, i) => (
-            <div key={i} className="aspect-square">
-              <CoverTile />
-            </div>
-          ))}
-        </div>
-      </SkeletonZone>
+      <div
+        role="status"
+        aria-busy
+        aria-label="Loading playlists"
+        className="grid size-full place-items-center"
+      >
+        <div className="bg-muted/60 size-28 animate-pulse rounded-2xl sm:size-36" />
+      </div>
     )
   }
 

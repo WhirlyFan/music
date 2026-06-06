@@ -4,7 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { FormError } from '@/components/ui/form-error'
 import { Input } from '@/components/ui/input'
 import { bannerError, fieldErrorMessage, parseAllAuthErrors } from '@/lib/auth/errors'
@@ -83,12 +83,9 @@ function ResetPasswordPage() {
           id="reset-form-error"
         >
           <p>This reset link has expired or already been used. Request a new one.</p>
-          <Link
-            to="/account/password/forgot"
-            className={buttonVariants({ variant: 'outline', size: 'sm' })}
-          >
-            Request a new link
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/account/password/forgot">Request a new link</Link>
+          </Button>
         </div>
       ) : null}
 

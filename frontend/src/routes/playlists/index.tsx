@@ -34,14 +34,11 @@ function PlaylistsPage() {
   const items = data?.pages.flatMap((p) => p.results) ?? []
   const empty = !playlists.isLoading && items.length === 0
 
-  // Full-bleed drag canvas: a fixed layer below the header, escaping <main>'s max-width
-  // + padding. overflow-hidden — you pan the cluster, the page doesn't scroll.
+  // Full-bleed drag canvas: a fixed full-viewport layer escaping <main>'s max-width
+  // + padding (the floating top chrome simply rides above it). overflow-hidden — you
+  // pan the cluster, the page doesn't scroll.
   return (
-    <div className="fixed inset-x-0 top-14 bottom-0 overflow-hidden">
-      <h1 className="bg-background/70 absolute top-3 left-4 z-10 rounded-lg px-3 py-1.5 text-lg font-semibold tracking-tight backdrop-blur">
-        My playlists
-      </h1>
-
+    <div className="fixed inset-0 overflow-hidden">
       {playlists.isError ? (
         <div className="grid size-full place-items-center p-6">
           <FormError message="Failed to load playlists." />
