@@ -280,7 +280,9 @@ function PlaylistDetailPage() {
       />
 
       {!editing && playlist.description && (
-        <p className="text-muted-foreground line-clamp-3 max-w-2xl text-sm break-words whitespace-pre-wrap">
+        // A blurb, not chrome: a left accent rule + flowing prose at a readable
+        // measure reads evenly, instead of ragged pre-wrapped text floating full-width.
+        <p className="text-muted-foreground border-border max-w-prose border-l-2 pl-3 text-sm leading-relaxed break-words">
           {playlist.description}
         </p>
       )}

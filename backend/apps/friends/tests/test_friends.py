@@ -75,8 +75,8 @@ def test_friends_list_and_requests_split():
     services.send_request(asker, me)  # incoming pending
 
     api = _authed(me)
-    friends = api.get("/api/v1/friends/")
-    assert len(friends.data) == 1 and friends.data[0]["status"] == "accepted"
+    friends = api.get("/api/v1/friends/").data["results"]  # paginated
+    assert len(friends) == 1 and friends[0]["status"] == "accepted"
 
     reqs = api.get("/api/v1/friends/requests/").data
     assert len(reqs["incoming"]) == 1 and reqs["incoming"][0]["requester"]["id"] == str(asker.id)

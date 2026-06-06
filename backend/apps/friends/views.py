@@ -29,9 +29,11 @@ class FriendshipViewSet(mixins.DestroyModelMixin, viewsets.GenericViewSet):
         )
 
     def list(self, request):
-        """Accepted friends."""
+        """Accepted friends — paginated (25/page); the client loads more on scroll,
+        so a user with many friends doesn't fetch them all at once."""
         qs = self.get_queryset().filter(status=Friendship.Status.ACCEPTED)
-        return Response(self.get_serializer(qs, many=True).data)
+        page = self.paginate_queryset(qs)
+        return self.get_paginated_response(self.get_serializer(page, many=True).data)
 
     @extend_schema(
         responses={

@@ -344,7 +344,7 @@ export function JamDialog() {
 function InviteFriends({ myUserId }: { myUserId: string | null }) {
   const friends = useFriends()
   const invite = useInviteToJam()
-  const people = (friends.data ?? []).map((f) =>
+  const people = (friends.data?.pages.flatMap((p) => p.results) ?? []).map((f) =>
     f.requester.id === myUserId ? f.addressee : f.requester,
   )
   if (people.length === 0) return null
@@ -354,7 +354,19 @@ function InviteFriends({ myUserId }: { myUserId: string | null }) {
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
         <UserPlus className="size-3.5" /> Invite friends
       </p>
-      <ul className="max-h-40 space-y-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]">
+      <ul
+        className="max-h-40 space-y-1 overflow-y-auto pr-0.5 [scrollbar-width:thin]"
+        onScroll={(e) => {
+          const el = e.currentTarget
+          if (
+            friends.hasNextPage &&
+            !friends.isFetchingNextPage &&
+            el.scrollHeight - el.scrollTop - el.clientHeight < 48
+          ) {
+            void friends.fetchNextPage()
+          }
+        }}
+      >
         {people.map((u) => (
           <li key={u.id} className="flex items-center justify-between gap-2 rounded-lg px-1 py-0.5">
             <span className="flex min-w-0 items-center gap-2">

@@ -28,7 +28,8 @@ export function FriendsPanel() {
   const requests = useFriendRequests()
   const incoming = requests.data?.incoming ?? []
   const outgoing = requests.data?.outgoing ?? []
-  const friendCount = friends.data?.length ?? 0
+  const friendList = friends.data?.pages.flatMap((p) => p.results) ?? []
+  const friendCount = friends.data?.pages[0]?.count ?? 0
 
   return (
     <div className="space-y-6">
@@ -53,11 +54,28 @@ export function FriendsPanel() {
       <Section icon={Users} title="Friends" badge={friendCount || undefined}>
         {friends.isLoading ? (
           <RowSkeletons />
-        ) : friends.data && friends.data.length > 0 ? (
-          friends.data.map((f) => {
-            const other = f.requester.username === myUsername ? f.addressee : f.requester
-            return <FriendRow key={f.id} id={f.id} user={other} />
-          })
+        ) : friendList.length > 0 ? (
+          <div
+            className="max-h-96 overflow-y-auto [scrollbar-width:thin]"
+            onScroll={(e) => {
+              const el = e.currentTarget
+              if (
+                friends.hasNextPage &&
+                !friends.isFetchingNextPage &&
+                el.scrollHeight - el.scrollTop - el.clientHeight < 64
+              ) {
+                void friends.fetchNextPage()
+              }
+            }}
+          >
+            {friendList.map((f) => {
+              const other = f.requester.username === myUsername ? f.addressee : f.requester
+              return <FriendRow key={f.id} id={f.id} user={other} />
+            })}
+            {friends.isFetchingNextPage && (
+              <p className="text-muted-foreground px-5 py-2 text-center text-xs">Loading…</p>
+            )}
+          </div>
         ) : (
           <p className="text-muted-foreground px-5 py-8 text-center text-sm">
             No friends yet — search above to send your first request.

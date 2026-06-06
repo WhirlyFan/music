@@ -22,12 +22,16 @@ export type Friendship = {
   created_at: string
 }
 type RequestsPayload = { incoming: Friendship[]; outgoing: Friendship[] }
+type FriendsPage = { count: number; next: string | null; results: Friendship[] }
 
-/** Accepted friends. */
+/** Accepted friends. Infinite (25/page): a social user can have many, so only the
+ *  first page loads — more on scroll. `data.pages[0].count` is the total. */
 export function useFriends(enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: friendKeys.list(),
-    queryFn: () => api<Friendship[]>('/friends/'),
+    queryFn: ({ pageParam }) => api<FriendsPage>(`/friends/?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled,
   })
 }
