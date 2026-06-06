@@ -148,6 +148,10 @@ export function NowPlayingBar() {
   // resolving/buffering, `loading` shows a spinner so there's no mis-click gap.
   const hydrated = useRef(false)
   const followedItem = useRef<string | null>(null)
+  const roomRef = useRef(room) // latest room for the gesture-resume handler below
+  useEffect(() => {
+    roomRef.current = room
+  }, [room])
   useEffect(() => {
     const el = audioRef.current
     if (!el || !itemId || !audioSrc) return
@@ -185,6 +189,29 @@ export function NowPlayingBar() {
     if (el) el.volume = volume
     localStorage.setItem('player:volume', String(volume))
   }, [volume, itemId, audioSrc])
+
+  // Autoplay unblock + resync. A refresh (especially mid-jam) can leave us showing
+  // the server's "playing" state while our <audio> is actually paused, because the
+  // browser blocks gesture-less playback. The user's FIRST interaction anywhere
+  // lifts that block — so on any gesture, if the server says we should be playing
+  // but we're paused, seek to the live position and resume. Self-disables once
+  // playing; never fires while the server is paused (so it won't fight a pause).
+  useEffect(() => {
+    const resume = () => {
+      const el = audioRef.current
+      const r = roomRef.current
+      if (!el || !el.paused || !r?.is_playing || !r.current_item_id) return
+      const t = intendedSeconds(r)
+      if (Number.isFinite(t)) el.currentTime = t
+      void el.play().catch(() => {})
+    }
+    window.addEventListener('pointerdown', resume)
+    window.addEventListener('keydown', resume)
+    return () => {
+      window.removeEventListener('pointerdown', resume)
+      window.removeEventListener('keydown', resume)
+    }
+  }, [])
 
   // Stuck-at-end watchdog: if we're parked at the end while the server still thinks
   // we're playing (the track ended while disconnected/backgrounded, so `onEnded`
