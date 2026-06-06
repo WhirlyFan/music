@@ -305,10 +305,12 @@ class RoomViewSet(viewsets.ViewSet):
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def jump(self, request):
-        """Play a specific queue item now (click any row in the queue)."""
+        """Play a specific queue item now (click any row in the queue). A transport
+        action — resolve the room the user is *in* (the jam, for a guest), like
+        play/pause/seek, so it targets and broadcasts to the shared room."""
         s = QueueItemRefSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        room = services.get_active_room(request.user)
+        room = self._control_room(request)
         return self._apply(room, lambda: services.jump(room, s.validated_data["item_id"]))
 
     @extend_schema(request=QueueItemRefSerializer, responses=RoomSerializer)
