@@ -15,8 +15,10 @@ type PlayerUiState = {
   // there's one Jam modal / one Invite modal regardless of what opened it.
   jamOpen: boolean
   inviteOpen: boolean
+  saveQueueOpen: boolean
   setJamOpen: (jamOpen: boolean) => void
   setInviteOpen: (inviteOpen: boolean) => void
+  setSaveQueueOpen: (saveQueueOpen: boolean) => void
 }
 
 export const usePlayerUiStore = create<PlayerUiState>((set) => ({
@@ -26,6 +28,8 @@ export const usePlayerUiStore = create<PlayerUiState>((set) => ({
   setPlayerHeight: (playerHeight) => set({ playerHeight }),
   jamOpen: false,
   inviteOpen: false,
+  saveQueueOpen: false,
   setJamOpen: (jamOpen) => set({ jamOpen }),
   setInviteOpen: (inviteOpen) => set({ inviteOpen }),
+  setSaveQueueOpen: (saveQueueOpen) => set({ saveQueueOpen }),
 }))

@@ -1,14 +1,11 @@
 import { useRouterState } from '@tanstack/react-router'
-import { Moon, Save, Sun, UserPlus } from 'lucide-react'
-import { toast } from 'sonner'
+import { ListPlus, Moon, Radio, Sun, UserPlus } from 'lucide-react'
 
 import { routeHasFloatingSearch } from '@/components/layout/global-search-pill'
 import { type GooeyItem, GooeyMenu } from '@/components/ui/gooey-menu'
 import { isSessionAuthenticated } from '@/lib/auth/guards'
-import { useSaveQueueAsPlaylist } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { useRoom } from '@/lib/hooks/queries/rooms'
-import { promptText } from '@/lib/overlay'
 import { useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 import { useThemeStore } from '@/lib/theme/store'
@@ -18,15 +15,17 @@ const GAP = 8 // matches the player/queue/pill gaps
 const PILL_H = 48 // the floating search pill is h-12
 
 /**
- * Global bottom-right quick-actions FAB (gooey menu). Invite-a-friend + a theme
- * toggle are always present; Save-queue appears when something's queued. Authed-only.
+ * Global bottom-right quick-actions FAB (gooey menu). Jam + Invite-a-friend + a
+ * theme toggle are always present; Save-queue appears when something's queued.
+ * (So the jam is reachable even when the player/seek bar isn't open.) Authed-only.
  */
 export function QuickActionsFab() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const { data: room } = useRoom(authed)
-  const save = useSaveQueueAsPlaylist()
+  const setJamOpen = usePlayerUiStore((s) => s.setJamOpen)
   const setInviteOpen = usePlayerUiStore((s) => s.setInviteOpen)
+  const setSaveQueueOpen = usePlayerUiStore((s) => s.setSaveQueueOpen)
   const resolvedTheme = useThemeStore((s) => s.resolved)
   const toggleTheme = useThemeStore((s) => s.toggle)
   const [queueOpen] = useQueueOpen()
@@ -50,6 +49,11 @@ export function QuickActionsFab() {
   const hasQueue = (room?.context?.length ?? 0) > 0
   const items: GooeyItem[] = [
     {
+      icon: <Radio className="size-5" />,
+      label: 'Jam',
+      onSelect: () => setJamOpen(true),
+    },
+    {
       icon: <UserPlus className="size-5" />,
       label: 'Invite a friend',
       onSelect: () => setInviteOpen(true),
@@ -57,17 +61,9 @@ export function QuickActionsFab() {
     ...(hasQueue
       ? [
           {
-            icon: <Save className="size-5" />,
+            icon: <ListPlus className="size-5" />,
             label: 'Save queue as playlist',
-            onSelect: async () => {
-              const title = await promptText({
-                title: 'Save queue as playlist',
-                label: 'Playlist name',
-                confirmLabel: 'Save playlist',
-              })
-              if (title)
-                save.mutate(title, { onSuccess: () => toast.success('Saved to your playlists.') })
-            },
+            onSelect: () => setSaveQueueOpen(true),
           },
         ]
       : []),

@@ -18,11 +18,12 @@ import { UserMenu } from '@/components/layout/user-menu'
 import { InviteFriendDialog } from '@/components/player/invite-friend-dialog'
 import { JamDialog } from '@/components/player/jam-dialog'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
+import { SaveQueueDialog } from '@/components/player/save-queue-dialog'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
 import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/guards'
-import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
+import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 
 type SessionUser = { email?: string; username?: string; first_name?: string; last_name?: string }
@@ -193,6 +194,7 @@ function RootLayout() {
           menu via the player-ui store (self-contained — they read the room). */}
       {authed && <JamDialog />}
       {authed && <InviteFriendDialog />}
+      {authed && <SaveQueueDialog />}
 
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </div>

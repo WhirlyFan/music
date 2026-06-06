@@ -1,9 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, Copy, Crown, Link2, LogOut, Radio, UserMinus, Users } from 'lucide-react'
+import { Check, Copy, Crown, Link2, LogOut, Radio, User, UserMinus, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -13,7 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
-import { dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { roomKeys } from '@/lib/hooks/keys'
 import {
   useJoinRoom,
@@ -129,7 +127,7 @@ export function JamDialog() {
             </Button>
 
             <div className="text-muted-foreground flex items-center gap-3 text-xs">
-              <span className="bg-border h-px flex-1" /> or join one{' '}
+              <span className="bg-border h-px flex-1" /> or join with a code{' '}
               <span className="bg-border h-px flex-1" />
             </div>
 
@@ -138,7 +136,7 @@ export function JamDialog() {
                 e.preventDefault()
                 submitJoin()
               }}
-              className="flex gap-2"
+              className="space-y-2"
             >
               <input
                 value={joinCode}
@@ -150,16 +148,16 @@ export function JamDialog() {
                       .slice(0, 6),
                   )
                 }
-                placeholder="CODE"
+                placeholder="ABC123"
                 aria-label="Jam code"
                 autoComplete="off"
                 autoCapitalize="characters"
-                className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 min-w-0 flex-1 rounded-xl border py-2.5 text-center font-mono text-lg font-bold tracking-[0.3em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
+                className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 w-full rounded-xl border py-2.5 text-center font-mono text-xl font-bold tracking-[0.35em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
                   wiggle ? 'border-destructive animate-wiggle' : ''
                 }`}
               />
-              <Button type="submit" disabled={!joinCode || join.isPending}>
-                {join.isPending ? 'Joining…' : 'Join'}
+              <Button type="submit" className="w-full" disabled={!joinCode || join.isPending}>
+                {join.isPending ? 'Joining…' : 'Join jam'}
               </Button>
             </form>
           </div>
@@ -170,18 +168,26 @@ export function JamDialog() {
           <div className="space-y-5">
             {isHost && (
               <div className="space-y-2.5">
-                <div className="flex justify-center gap-1.5">
+                <div className="flex justify-center gap-1 sm:gap-1.5">
                   {(room.code ?? '').split('').map((ch, i) => (
                     <span
                       key={`${ch}-${i}`}
                       style={{ animationDelay: `${i * 45}ms` }}
-                      className="from-primary/10 to-accent/10 border-border/70 motion-safe:animate-pop-in flex size-12 items-center justify-center rounded-xl border bg-gradient-to-br font-mono text-2xl font-bold"
+                      className="from-primary/10 to-accent/10 border-border/70 motion-safe:animate-pop-in flex size-10 items-center justify-center rounded-xl border bg-gradient-to-br font-mono text-xl font-bold sm:size-12 sm:text-2xl"
                     >
                       {ch}
                     </span>
                   ))}
                 </div>
                 <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => copy('link', link)}>
+                    {copied === 'link' ? (
+                      <Check className="mr-2 size-4" />
+                    ) : (
+                      <Link2 className="mr-2 size-4" />
+                    )}
+                    {copied === 'link' ? 'Copied' : 'Copy link'}
+                  </Button>
                   <Button
                     variant="outline"
                     className="flex-1"
@@ -193,14 +199,6 @@ export function JamDialog() {
                       <Copy className="mr-2 size-4" />
                     )}
                     {copied === 'code' ? 'Copied' : 'Copy code'}
-                  </Button>
-                  <Button variant="outline" className="flex-1" onClick={() => copy('link', link)}>
-                    {copied === 'link' ? (
-                      <Check className="mr-2 size-4" />
-                    ) : (
-                      <Link2 className="mr-2 size-4" />
-                    )}
-                    {copied === 'link' ? 'Copied' : 'Copy link'}
                   </Button>
                 </div>
               </div>
@@ -230,10 +228,9 @@ export function JamDialog() {
                     className="group motion-safe:animate-fade-in flex items-center gap-2.5"
                   >
                     <div className="relative shrink-0">
-                      <Avatar className="size-8">
-                        <AvatarImage src={dicebearAvatarUrl(m.username)} alt="" />
-                        <AvatarFallback>{m.username.slice(0, 2).toUpperCase()}</AvatarFallback>
-                      </Avatar>
+                      <span className="from-primary to-accent text-primary-foreground flex size-8 items-center justify-center rounded-full bg-gradient-to-br">
+                        <User className="size-4" />
+                      </span>
                       <span className="bg-success ring-background absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full ring-2" />
                     </div>
                     <span className="min-w-0 flex-1 truncate text-sm font-medium">

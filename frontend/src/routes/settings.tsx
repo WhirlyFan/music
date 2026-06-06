@@ -7,6 +7,7 @@ import { GoogleIcon } from '@/components/auth/google-button'
 import { SettingsPageShell } from '@/components/layout/settings-page-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError } from '@/lib/api/client'
 import { providerRedirect } from '@/lib/auth/api'
 import { useAuthenticators } from '@/lib/auth/mfa'
@@ -26,7 +27,8 @@ const USERNAME_RE = /^[a-zA-Z0-9_-]{3,30}$/
 function SettingsPage() {
   const authenticators = useAuthenticators()
   const session = useSession()
-  const { hasGoogle } = useSocialProviders()
+  const social = useSocialProviders()
+  const { hasGoogle } = social
   const data = (authenticators.data?.data as AuthenticatorEntry[] | undefined) ?? []
   const types = new Set(data.map((a) => a.type))
   const mfaEnrolled = types.has('totp') || types.has('webauthn')
@@ -65,9 +67,11 @@ function SettingsPage() {
         />
       </Section>
 
-      {hasGoogle && (
+      {/* Reserve the section while we learn whether Google is configured, so it
+          doesn't pop in after load. (Hidden once we know it isn't.) */}
+      {(social.isPending || hasGoogle) && (
         <Section title="Connected accounts" description="Sign in faster with a linked account.">
-          <GoogleConnectionRow />
+          <GoogleConnectionRow loading={social.isPending} />
         </Section>
       )}
 
@@ -75,6 +79,7 @@ function SettingsPage() {
         <SettingsRow
           icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
           title="Multi-factor authentication"
+          loading={authenticators.isPending}
           description={
             mfaEnrolled
               ? 'Enrolled. A code or passkey is required every time you log in.'
@@ -171,8 +176,8 @@ function UsernameRow({ username }: { username?: string }) {
 /** Connect / disconnect Google for the signed-in user. Connect uses allauth's
  *  process=connect redirect, returning to /settings; disconnect calls the headless
  *  manage-providers endpoint (allauth refuses if it'd lock you out of every login). */
-function GoogleConnectionRow() {
-  const { google } = useProviderAccounts()
+function GoogleConnectionRow({ loading: parentLoading }: { loading?: boolean }) {
+  const { google, isPending } = useProviderAccounts()
   const disconnect = useDisconnectProvider()
   const connected = Boolean(google)
 
@@ -180,6 +185,7 @@ function GoogleConnectionRow() {
     <SettingsRow
       icon={<GoogleIcon />}
       title="Google"
+      loading={parentLoading || isPending}
       description={connected ? (google?.display ?? 'Connected.') : 'Link your Google account.'}
       status={connected ? 'on' : 'off'}
       action={
@@ -247,32 +253,40 @@ function SettingsRow({
   description,
   status,
   action,
+  loading = false,
 }: {
   icon: React.ReactNode
   title: string
   description: string
   status?: 'on' | 'off'
   action: React.ReactNode
+  loading?: boolean
 }) {
   return (
     <div className="flex items-center justify-between gap-4 p-4">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <div className="text-muted-foreground shrink-0">{icon}</div>
-        <div className="space-y-1">
+        <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2">
             <p className="text-sm font-medium">{title}</p>
-            {status === 'on' ? (
+            {!loading && status === 'on' ? (
               <span className="text-success inline-flex items-center gap-1 text-xs">On</span>
-            ) : status === 'off' ? (
+            ) : !loading && status === 'off' ? (
               <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
                 Off
               </span>
             ) : null}
           </div>
-          <p className="text-muted-foreground text-xs">{description}</p>
+          {loading ? (
+            <Skeleton className="h-3 w-44" />
+          ) : (
+            <p className="text-muted-foreground truncate text-xs">{description}</p>
+          )}
         </div>
       </div>
-      <div className="shrink-0">{action}</div>
+      <div className="shrink-0">
+        {loading ? <Skeleton className="h-9 w-20 rounded-lg" /> : action}
+      </div>
     </div>
   )
 }

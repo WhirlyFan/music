@@ -27,14 +27,12 @@ import {
   useNext,
   usePrevious,
   useRemoveItem,
-  useSaveQueueAsPlaylist,
   useShuffle,
   useSyncPlayback,
 } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { useRoom } from '@/lib/hooks/queries/rooms'
 import { useRoomSocket } from '@/lib/hooks/useRoomSocket'
-import { promptText } from '@/lib/overlay'
 import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
@@ -67,7 +65,6 @@ export function NowPlayingBar() {
   const removeItem = useRemoveItem()
   const shuffle = useShuffle()
   const clear = useClearQueue()
-  const save = useSaveQueueAsPlaylist()
   const syncPlayback = useSyncPlayback()
 
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -87,6 +84,7 @@ export function NowPlayingBar() {
   const [expanded, setExpanded] = useNowPlayingOpen()
   const [queueOpen, setQueueOpen] = useQueueOpen()
   const setJamOpen = usePlayerUiStore((s) => s.setJamOpen)
+  const setSaveQueueOpen = usePlayerUiStore((s) => s.setSaveQueueOpen)
   const queueHeight = usePlayerUiStore((s) => s.queueHeight)
   const setQueueHeight = usePlayerUiStore((s) => s.setQueueHeight)
   const setPlayerHeight = usePlayerUiStore((s) => s.setPlayerHeight)
@@ -277,22 +275,7 @@ export function NowPlayingBar() {
           <div className="border-border/60 flex items-center justify-between border-b px-4 py-2.5">
             <p className="text-sm font-medium">Queue</p>
             <div className="flex gap-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={async () => {
-                  const title = await promptText({
-                    title: 'Save queue as playlist',
-                    label: 'Playlist name',
-                    defaultValue: contextLabel,
-                    confirmLabel: 'Save playlist',
-                  })
-                  if (title)
-                    save.mutate(title, {
-                      onSuccess: () => toast.success('Saved to your playlists.'),
-                    })
-                }}
-              >
+              <Button size="sm" variant="ghost" onClick={() => setSaveQueueOpen(true)}>
                 Save
               </Button>
               <Button

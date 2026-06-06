@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Radio, Settings } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -11,7 +11,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { useLogout } from '@/lib/hooks/mutations/auth'
-import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
 type Props = {
   username: string
@@ -21,13 +20,11 @@ type Props = {
 
 /**
  * Account menu — avatar (+ username on wider screens) opens a labeled dropdown
- * of account actions (Settings, Jam, Log out). The Jam item opens the global jam
- * modal (start/join/manage); inviting a friend lives in the FAB now.
+ * of account actions (Settings, Log out). Jam + Invite live in the FAB now.
  */
 export function UserMenu({ username, firstName, lastName }: Props) {
   const navigate = useNavigate()
   const logout = useLogout()
-  const setJamOpen = usePlayerUiStore((s) => s.setJamOpen)
 
   const handleLogout = async () => {
     await logout.mutateAsync()
@@ -60,11 +57,6 @@ export function UserMenu({ username, firstName, lastName }: Props) {
         <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
           <Settings className="mr-2 h-4 w-4" />
           Settings
-        </DropdownMenuItem>
-
-        <DropdownMenuItem onSelect={() => setJamOpen(true)}>
-          <Radio className="mr-2 h-4 w-4" />
-          Jam
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
