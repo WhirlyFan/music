@@ -254,10 +254,16 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         Returns the existing active source if already matched (no wasted
         YouTube search); otherwise resolves one; 404 if nothing fits.
         """
-        track = get_object_or_404(Track, pk=pk)
-        ps = track.playback_sources.filter(
-            status=PlaybackSource.Status.ACTIVE
-        ).first() or match.match_track_to_youtube(track)
+        # Lock the track row so concurrent match-on-play calls (every client in a
+        # jam fires one for the same current track) serialize: the first resolves
+        # + creates the ACTIVE source, the rest wait and then find it — instead of
+        # racing into duplicate inserts that violate one_active_playback_source_per_track.
+        with transaction.atomic():
+            track = get_object_or_404(Track.objects.select_for_update(), pk=pk)
+            ps = (
+                track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).first()
+                or match.match_track_to_youtube(track)
+            )
         if ps is None:
             return Response({"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PlaybackSourceSerializer(ps).data)

@@ -96,6 +96,11 @@ export function NowPlayingBar() {
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
   const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
+  // In a jam, only the host drives playback; guests follow. Your own (unshared)
+  // room: always controllable.
+  const isShared = room?.is_shared ?? false
+  const canControl = !isShared || room?.host_id === myUserId
+  const memberCount = room?.members?.length ?? 0
 
   // Publish the player pill + queue-panel heights so the search pill can sit just
   // above them. We measure the queue's STABLE full height (the inner box) once;
@@ -165,11 +170,14 @@ export function NowPlayingBar() {
     attempted.current = track.id
     matchTrack.mutate(track.id, {
       onError: () => {
+        // Only the controller skips on a genuine no-match — a guest's skip would
+        // mutate their OWN room and bounce them out of the jam.
+        if (!canControl) return
         toast.error(`No YouTube match for “${track.title}” — skipping.`)
         next.mutate()
       },
     })
-  }, [track, matched, matchTrack, next])
+  }, [track, matched, matchTrack, next, canControl])
 
   // Resolve a blank cover once per track — off the audio path (its own request),
   // so playback never waits on an image fetch. Invalidates the room + playlist
@@ -195,11 +203,6 @@ export function NowPlayingBar() {
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const context = room?.context ?? [] // the FULL playlist/album (stable list)
   const contextLabel = room?.context_label ?? ''
-  // In a jam, only the host drives playback; guests follow (their <audio>
-  // reconciles to the host automatically). Your own (unshared) room: always.
-  const isShared = room?.is_shared ?? false
-  const canControl = !isShared || room?.host_id === myUserId
-  const memberCount = room?.members?.length ?? 0
   // The list includes already-played tracks, so "upcoming" is only what's after
   // the current position (plus the user queue, which plays first).
   const ctxIdx = context.findIndex((i) => i.id === itemId)
