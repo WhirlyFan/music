@@ -105,7 +105,7 @@ CONTENT_SECURITY_POLICY = {
         "default-src": [SELF],
         "script-src": [SELF],
         "style-src": [SELF, "'unsafe-inline'"],  # admin inline styles
-        "img-src": [SELF, "data:"],
+        "img-src": [SELF, "data:", "https://api.dicebear.com"],  # user avatars
         "font-src": [SELF],
         "connect-src": [SELF, "wss://api.whirlyfan.com"],  # jam WebSocket (cross-origin)
         "object-src": [NONE],
