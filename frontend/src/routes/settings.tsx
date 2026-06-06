@@ -1,10 +1,12 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { KeyRound, Loader2, Mail, Pencil, ShieldCheck } from 'lucide-react'
+import { KeyRound, Loader2, Mail, Pencil, ShieldCheck, UserRound, Users } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { GoogleIcon } from '@/components/auth/google-button'
-import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { PageHeader } from '@/components/layout/page-header'
+import { SectionSidebar, type SidebarItem } from '@/components/layout/section-sidebar'
+import { settingsCard } from '@/components/layout/settings-page-shell'
 import { FriendsPanel } from '@/components/social/friends-panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,35 +25,47 @@ export const Route = createFileRoute('/settings')({
 
 type AuthenticatorEntry = { type?: string }
 type SessionUser = { email?: string; username?: string; first_name?: string; last_name?: string }
+type Tab = 'profile' | 'friends' | 'account' | 'security'
+
+const TABS: SidebarItem<Tab>[] = [
+  { key: 'profile', label: 'Profile', icon: UserRound },
+  { key: 'friends', label: 'Friends', icon: Users },
+  { key: 'account', label: 'Account', icon: KeyRound },
+  { key: 'security', label: 'Security', icon: ShieldCheck },
+]
 
 // 3–30 chars, letters/digits/_/- — mirrors the backend rule (apps/users/views.py).
 const USERNAME_RE = /^[a-zA-Z0-9_-]{3,30}$/
 
 function SettingsPage() {
-  const authenticators = useAuthenticators()
   const session = useSession()
-  const social = useSocialProviders()
-  const { hasGoogle } = social
-  const data = (authenticators.data?.data as AuthenticatorEntry[] | undefined) ?? []
-  const types = new Set(data.map((a) => a.type))
-  const mfaEnrolled = types.has('totp') || types.has('webauthn')
   const user = (session.data?.data as { user?: SessionUser } | undefined)?.user
+  const [tab, setTab] = useState<Tab>('profile')
 
   return (
-    <SettingsPageShell title="Settings" description="Manage your account, security, and friends.">
-      {/* Profile banner — identity at a glance; Edit reveals username + email so the
-          account section doesn't need separate rows for them. */}
-      <ProfileBanner user={user} />
-
-      {/* FriendsPanel renders its own cards, so it isn't wrapped in a Section card. */}
-      <section className="space-y-3">
-        <div>
-          <h2 className="text-lg font-medium">Friends</h2>
-          <p className="text-muted-foreground text-sm">People you listen and collaborate with.</p>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <PageHeader title="Settings" description="Manage your profile, friends, account, and security." />
+      <div className="flex flex-col gap-6 sm:flex-row">
+        <aside className="sm:w-52 sm:shrink-0">
+          <SectionSidebar items={TABS} value={tab} onChange={setTab} />
+        </aside>
+        <div className="min-w-0 flex-1 space-y-6">
+          {tab === 'profile' && <ProfileBanner user={user} />}
+          {tab === 'friends' && <FriendsPanel />}
+          {tab === 'account' && <AccountSection />}
+          {tab === 'security' && <SecuritySection />}
         </div>
-        <FriendsPanel />
-      </section>
+      </div>
+    </div>
+  )
+}
 
+/** Account section — password + connected accounts. */
+function AccountSection() {
+  const social = useSocialProviders()
+  const { hasGoogle } = social
+  return (
+    <>
       <Section title="Account" description="How you sign in.">
         <SettingsRow
           icon={<KeyRound className="size-4" aria-hidden="true" />}
@@ -72,26 +86,35 @@ function SettingsPage() {
           <GoogleConnectionRow loading={social.isPending} />
         </Section>
       )}
+    </>
+  )
+}
 
-      <Section title="Security" description="How you sign in to your account.">
-        <SettingsRow
-          icon={<ShieldCheck className="size-4" aria-hidden="true" />}
-          title="Multi-factor authentication"
-          loading={authenticators.isPending}
-          description={
-            mfaEnrolled
-              ? 'Enrolled. A code or passkey is required every time you log in.'
-              : 'Add an authenticator app, passkey, or hardware key.'
-          }
-          status={mfaEnrolled ? 'on' : 'off'}
-          action={
-            <Button asChild variant={mfaEnrolled ? 'outline' : 'default'} size="sm">
-              <Link to="/account/mfa">{mfaEnrolled ? 'Manage' : 'Set up'}</Link>
-            </Button>
-          }
-        />
-      </Section>
-    </SettingsPageShell>
+/** Security section — multi-factor authentication. */
+function SecuritySection() {
+  const authenticators = useAuthenticators()
+  const data = (authenticators.data?.data as AuthenticatorEntry[] | undefined) ?? []
+  const types = new Set(data.map((a) => a.type))
+  const mfaEnrolled = types.has('totp') || types.has('webauthn')
+  return (
+    <Section title="Security" description="How you sign in to your account.">
+      <SettingsRow
+        icon={<ShieldCheck className="size-4" aria-hidden="true" />}
+        title="Multi-factor authentication"
+        loading={authenticators.isPending}
+        description={
+          mfaEnrolled
+            ? 'Enrolled. A code or passkey is required every time you log in.'
+            : 'Add an authenticator app, passkey, or hardware key.'
+        }
+        status={mfaEnrolled ? 'on' : 'off'}
+        action={
+          <Button asChild variant={mfaEnrolled ? 'outline' : 'default'} size="sm">
+            <Link to="/account/mfa">{mfaEnrolled ? 'Manage' : 'Set up'}</Link>
+          </Button>
+        }
+      />
+    </Section>
   )
 }
 

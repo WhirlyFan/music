@@ -20,6 +20,7 @@ import {
   Globe,
   GripVertical,
   ListPlus,
+  Lock,
   Pencil,
   RefreshCw,
   SearchX,
@@ -184,6 +185,9 @@ function PlaylistDetailPage() {
   const myUsername = (session.data?.data as { user?: { username?: string } } | undefined)?.user
     ?.username
   const allSelected = items.length > 0 && items.every((i) => selected.has(i.track.id))
+  // Current visibility — the draft while editing, the saved value otherwise. Drives a
+  // single label that stays in the same spot across view/edit (no jump).
+  const isPublicNow = editing ? draft.isPublic : playlist.is_public
 
   const toggleSelect = (trackId: string) =>
     setSelected((prev) => {
@@ -285,14 +289,37 @@ function PlaylistDetailPage() {
               <h1 className="text-2xl font-semibold tracking-tight">{playlist.title}</h1>
             )}
 
-            <p className="text-muted-foreground flex items-center gap-2 text-sm">
-              {`${playlist.track_count} track${playlist.track_count === 1 ? '' : 's'}`}
-              {!editing && playlist.is_public && (
-                <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
-                  <Globe className="size-3" aria-hidden /> Public
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <span>{`${playlist.track_count} track${playlist.track_count === 1 ? '' : 's'}`}</span>
+              <span aria-hidden>·</span>
+              {/* One visibility label, same spot in both modes. Owner edits it as a
+                  toggle; everyone else (and view mode) sees a static Public/Private. */}
+              {editing && isOwner ? (
+                <button
+                  type="button"
+                  aria-pressed={draft.isPublic}
+                  title="Toggle who can see this playlist"
+                  onClick={() => setDraft((d) => ({ ...d, isPublic: !d.isPublic }))}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    draft.isPublic
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-muted text-foreground/70 hover:text-foreground'
+                  }`}
+                >
+                  {draft.isPublic ? <Globe className="size-3" aria-hidden /> : <Lock className="size-3" aria-hidden />}
+                  {draft.isPublic ? 'Public' : 'Private'}
+                </button>
+              ) : (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    isPublicNow ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {isPublicNow ? <Globe className="size-3" aria-hidden /> : <Lock className="size-3" aria-hidden />}
+                  {isPublicNow ? 'Public' : 'Private'}
                 </span>
               )}
-            </p>
+            </div>
 
             {editing ? (
               <div className="max-w-xl space-y-1.5">
@@ -304,27 +331,9 @@ function PlaylistDetailPage() {
                   rows={2}
                   className="resize-none"
                 />
-                <div className="flex items-center justify-between gap-3">
-                  {isOwner ? (
-                    <button
-                      type="button"
-                      onClick={() => setDraft((d) => ({ ...d, isPublic: !d.isPublic }))}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                        draft.isPublic
-                          ? 'bg-primary/10 text-primary'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
-                    >
-                      <Globe className="size-3.5" aria-hidden />
-                      {draft.isPublic ? 'Public' : 'Private'}
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                  <span className="text-muted-foreground text-xs tabular-nums">
-                    {draft.description.length}/200
-                  </span>
-                </div>
+                <p className="text-muted-foreground text-right text-xs tabular-nums">
+                  {draft.description.length}/200
+                </p>
               </div>
             ) : (
               playlist.description && (
