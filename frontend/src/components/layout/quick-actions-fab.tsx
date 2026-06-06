@@ -1,11 +1,11 @@
 import { useRouterState } from '@tanstack/react-router'
-import { Moon, Save, Shuffle, Sun } from 'lucide-react'
+import { Moon, Save, Sun, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { routeHasFloatingSearch } from '@/components/layout/global-search-pill'
 import { type GooeyItem, GooeyMenu } from '@/components/ui/gooey-menu'
 import { isSessionAuthenticated } from '@/lib/auth/guards'
-import { useSaveQueueAsPlaylist, useShuffle } from '@/lib/hooks/mutations/rooms'
+import { useSaveQueueAsPlaylist } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { useRoom } from '@/lib/hooks/queries/rooms'
 import { promptText } from '@/lib/overlay'
@@ -18,15 +18,15 @@ const GAP = 8 // matches the player/queue/pill gaps
 const PILL_H = 48 // the floating search pill is h-12
 
 /**
- * Global bottom-right quick-actions FAB (gooey menu). Shuffle + Save-queue appear
- * when something's queued; a theme toggle is always present. Authed-only.
+ * Global bottom-right quick-actions FAB (gooey menu). Invite-a-friend + a theme
+ * toggle are always present; Save-queue appears when something's queued. Authed-only.
  */
 export function QuickActionsFab() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const { data: room } = useRoom(authed)
-  const shuffle = useShuffle()
   const save = useSaveQueueAsPlaylist()
+  const setInviteOpen = usePlayerUiStore((s) => s.setInviteOpen)
   const resolvedTheme = useThemeStore((s) => s.resolved)
   const toggleTheme = useThemeStore((s) => s.toggle)
   const [queueOpen] = useQueueOpen()
@@ -49,13 +49,13 @@ export function QuickActionsFab() {
 
   const hasQueue = (room?.context?.length ?? 0) > 0
   const items: GooeyItem[] = [
+    {
+      icon: <UserPlus className="size-5" />,
+      label: 'Invite a friend',
+      onSelect: () => setInviteOpen(true),
+    },
     ...(hasQueue
       ? [
-          {
-            icon: <Shuffle className="size-5" />,
-            label: 'Shuffle queue',
-            onSelect: () => shuffle.mutate(),
-          },
           {
             icon: <Save className="size-5" />,
             label: 'Save queue as playlist',

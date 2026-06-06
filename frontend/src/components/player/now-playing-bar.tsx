@@ -14,7 +14,6 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { FullScreenPlayer } from '@/components/player/full-screen-player'
-import { JamDialog } from '@/components/player/jam-dialog'
 import { SeekBar } from '@/components/player/seek-bar'
 import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
@@ -87,7 +86,7 @@ export function NowPlayingBar() {
   // Zustand client store (shared with the playlists search pill + FAB).
   const [expanded, setExpanded] = useNowPlayingOpen()
   const [queueOpen, setQueueOpen] = useQueueOpen()
-  const [jamOpen, setJamOpen] = useState(false)
+  const setJamOpen = usePlayerUiStore((s) => s.setJamOpen)
   const queueHeight = usePlayerUiStore((s) => s.queueHeight)
   const setQueueHeight = usePlayerUiStore((s) => s.setQueueHeight)
   const setPlayerHeight = usePlayerUiStore((s) => s.setPlayerHeight)
@@ -281,15 +280,6 @@ export function NowPlayingBar() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => shuffle.mutate()}
-                aria-disabled={context.length < 2 || !canEditQueue || undefined}
-                disabled={context.length < 2 || !canEditQueue}
-              >
-                <Shuffle className="mr-1 size-4" /> Shuffle
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
                 onClick={async () => {
                   const title = await promptText({
                     title: 'Save queue as playlist',
@@ -428,6 +418,15 @@ export function NowPlayingBar() {
           )}
         </div>
 
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => shuffle.mutate()}
+          aria-label="Shuffle"
+          disabled={context.length < 2 || !canEditQueue}
+        >
+          <Shuffle className="size-4" />
+        </Button>
         {/* Wrapper so the count badge isn't clipped by the Button's
             overflow-hidden (which the ripple needs). */}
         <span className="relative inline-flex">
@@ -435,8 +434,8 @@ export function NowPlayingBar() {
             <Radio className={`size-4 ${isShared ? 'text-primary' : ''}`} />
           </Button>
           {isShared && memberCount > 0 && (
-            <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in pointer-events-none absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2">
-              {memberCount}
+            <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in pointer-events-none absolute -top-1 -right-1 flex size-[18px] items-center justify-center rounded-full text-[10px] leading-none font-bold tabular-nums ring-2">
+              {memberCount > 9 ? '9+' : memberCount}
             </span>
           )}
         </span>
@@ -465,10 +464,6 @@ export function NowPlayingBar() {
           onSeek={seek}
           onClose={() => setExpanded(false)}
         />
-      )}
-
-      {room && (
-        <JamDialog room={room} myUserId={myUserId} open={jamOpen} onOpenChange={setJamOpen} />
       )}
 
       {audioSrc && (

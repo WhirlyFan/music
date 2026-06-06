@@ -165,15 +165,23 @@ def find_open_jam(code: str) -> Room | None:
 
 
 @transaction.atomic
-def join_guest(room: Room, user) -> None:
+def join_guest(room: Room, user) -> list[Room]:
     """Add `user` to `room` as a guest (no-op for the host). A user is a guest in
-    at most one jam at a time — joining leaves any previous guest membership."""
+    at most one jam at a time — joining leaves any previous guest membership.
+    Returns the rooms the user was removed from, so callers can refresh those
+    jams' counts (otherwise they'd only catch up on the next heartbeat)."""
     if room.host_id == user.id:
-        return  # the host trivially "joins" their own jam
+        return []  # the host trivially "joins" their own jam
+    left = list(
+        Room.objects.filter(members__user=user, members__role=RoomMember.Role.GUEST)
+        .exclude(pk=room.pk)
+        .distinct()
+    )
     RoomMember.objects.filter(user=user, role=RoomMember.Role.GUEST).exclude(room=room).delete()
     RoomMember.objects.get_or_create(
         room=room, user=user, defaults={"role": RoomMember.Role.GUEST}
     )
+    return left
 
 
 @transaction.atomic

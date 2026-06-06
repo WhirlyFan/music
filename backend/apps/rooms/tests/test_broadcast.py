@@ -30,6 +30,29 @@ def _recv(layer, chan, timeout=3):
 
 
 @pytest.mark.django_db
+def test_joining_another_jam_refreshes_the_one_you_left():
+    # Guest is in jam A; joining jam B must broadcast to A so its count drops now
+    # (not only on the next heartbeat).
+    host_a, _ = authed()
+    code_a = host_a.post("/api/v1/rooms/share/").json()["code"]
+    room_a_id = host_a.get("/api/v1/rooms/me/").json()["id"]
+    host_b, _ = authed()
+    code_b = host_b.post("/api/v1/rooms/share/").json()["code"]
+    guest, _ = authed()
+    guest.post("/api/v1/rooms/join/", {"code": code_a}, format="json")
+
+    layer = get_channel_layer()
+    chan = async_to_sync(layer.new_channel)()
+    async_to_sync(layer.group_add)(broadcast.group_name(room_a_id), chan)
+
+    guest.post("/api/v1/rooms/join/", {"code": code_b}, format="json")
+
+    msg = _recv(layer, chan)
+    assert msg["type"] == "room.update"
+    assert msg["room"]["members_count"] == 1  # only host A remains
+
+
+@pytest.mark.django_db
 def test_mutation_broadcasts_room_update_to_group():
     api, user = authed()
     room = services.get_active_room(user)

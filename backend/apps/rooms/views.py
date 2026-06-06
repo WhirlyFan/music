@@ -162,7 +162,16 @@ class RoomViewSet(viewsets.ViewSet):
         room = services.find_open_jam(s.validated_data["code"])
         if room is None:
             raise Http404("No open jam with that code.")
-        return self._apply(room, lambda: services.join_guest(room, request.user))
+        left_rooms: list = []
+
+        def _join():
+            left_rooms.extend(services.join_guest(room, request.user))
+
+        resp = self._apply(room, _join)
+        # The jams the user left lost a member — refresh their counts now.
+        for prev in left_rooms:
+            self._broadcast_room(prev)
+        return resp
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

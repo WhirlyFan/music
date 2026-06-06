@@ -15,6 +15,8 @@ import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
 import { TopNav } from '@/components/layout/top-nav'
 import { UserMenu } from '@/components/layout/user-menu'
+import { InviteFriendDialog } from '@/components/player/invite-friend-dialog'
+import { JamDialog } from '@/components/player/jam-dialog'
 import { NowPlayingBar } from '@/components/player/now-playing-bar'
 import { Toaster } from '@/components/ui/sonner'
 import { auth } from '@/lib/auth/api'
@@ -186,6 +188,11 @@ function RootLayout() {
 
       {/* Global bottom-right quick-actions (gooey FAB). */}
       <QuickActionsFab />
+
+      {/* One Jam modal + one Invite modal, opened from the player / FAB / account
+          menu via the player-ui store (self-contained — they read the room). */}
+      {authed && <JamDialog />}
+      {authed && <InviteFriendDialog />}
 
       {import.meta.env.DEV && <TanStackRouterDevtools />}
     </div>

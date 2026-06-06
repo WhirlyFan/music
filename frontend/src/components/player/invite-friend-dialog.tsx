@@ -13,6 +13,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { ApiError } from '@/lib/api/client'
 import { useInvite } from '@/lib/hooks/mutations/auth'
+import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
 /** Pull the backend's specific message (e.g. "already has an account") off a 400. */
 function inviteErrorMessage(e: unknown): string {
@@ -23,14 +24,11 @@ function inviteErrorMessage(e: unknown): string {
   return 'Couldn’t send the invite — try again.'
 }
 
-/** Invite a friend by email — they get a link to join. Matches the jam dialogs. */
-export function InviteFriendDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+/** Invite a friend by email — they get a link to join. Opened from the FAB
+ *  (open state in the player-ui store); matches the jam dialogs. */
+export function InviteFriendDialog() {
+  const open = usePlayerUiStore((s) => s.inviteOpen)
+  const setOpen = usePlayerUiStore((s) => s.setInviteOpen)
   const invite = useInvite()
   const [email, setEmail] = useState('')
 
@@ -41,7 +39,7 @@ export function InviteFriendDialog({
       onSuccess: () => {
         toast.success(`Invite sent to ${e}.`)
         setEmail('')
-        onOpenChange(false)
+        setOpen(false)
       },
       onError: (err) => toast.error(inviteErrorMessage(err)),
     })
@@ -52,7 +50,7 @@ export function InviteFriendDialog({
       open={open}
       onOpenChange={(o) => {
         if (!o) setEmail('')
-        onOpenChange(o)
+        setOpen(o)
       }}
     >
       <DialogContent className="sm:max-w-sm">

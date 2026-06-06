@@ -12,53 +12,58 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import type { Room } from '@/lib/api/models'
+import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
 import { dicebearAvatarUrl } from '@/lib/auth/avatar'
 import { roomKeys } from '@/lib/hooks/keys'
 import {
+  useJoinRoom,
   useKickMember,
   useLeaveRoom,
   useSetGuestControl,
   useShareRoom,
   useUnshareRoom,
 } from '@/lib/hooks/mutations/rooms'
-import { useJamMembers } from '@/lib/hooks/queries/rooms'
+import { useSession } from '@/lib/hooks/queries/auth'
+import { useJamMembers, useRoom } from '@/lib/hooks/queries/rooms'
+import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
 /**
- * Jam controls. The host shares a code, guests join and follow in sync. The
- * roster is fetched on demand via an infinite query (paginated, scrollable) —
- * it's kept off the broadcast frames, which carry only members_count.
+ * The single Jam modal — opened from the player's Jam button, the FAB, or the
+ * account menu (open state in the player-ui store). Self-contained: it reads the
+ * current room and shows the right state — Start/Join when you're not in a jam,
+ * or the live roster + controls when you are. The roster is a paginated infinite
+ * query (frames carry only members_count).
  */
-export function JamDialog({
-  room,
-  myUserId,
-  open,
-  onOpenChange,
-}: {
-  room: Room
-  myUserId: string | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+export function JamDialog() {
+  const open = usePlayerUiStore((s) => s.jamOpen)
+  const setOpen = usePlayerUiStore((s) => s.setJamOpen)
   const qc = useQueryClient()
+
+  const { data: session } = useSession()
+  const authed = isSessionAuthenticated(session)
+  const myUserId = sessionUserId(session)
+  const { data: room } = useRoom(authed)
+
   const share = useShareRoom()
   const unshare = useUnshareRoom()
   const leave = useLeaveRoom()
+  const join = useJoinRoom()
   const setGuestControl = useSetGuestControl()
   const kick = useKickMember()
-  const [copied, setCopied] = useState<'code' | 'link' | null>(null)
 
-  const isHost = !!myUserId && room.host_id === myUserId
-  const shared = room.is_shared ?? false
-  const count = room.members_count ?? 0
-  const link = room.code ? `${window.location.origin}/?jam=${room.code}` : ''
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null)
+  const [joinCode, setJoinCode] = useState('')
+  const [wiggle, setWiggle] = useState(false)
+
+  const isHost = !!myUserId && room?.host_id === myUserId
+  const shared = room?.is_shared ?? false
+  const count = room?.members_count ?? 0
+  const link = room?.code ? `${window.location.origin}/?jam=${room.code}` : ''
 
   const membersQuery = useJamMembers(open && shared)
   const members = membersQuery.data?.pages.flatMap((p) => p.results) ?? []
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = membersQuery
 
-  // Refetch the roster when the dialog opens or the count changes (someone
-  // joined / left / was kicked) — the frame only tells us the count moved.
   useEffect(() => {
     if (open && shared) void qc.invalidateQueries({ queryKey: roomKeys.members() })
   }, [open, shared, count, qc])
@@ -73,9 +78,24 @@ export function JamDialog({
     }
   }
 
+  const submitJoin = () => {
+    const c = joinCode.trim()
+    if (!c) return
+    join.mutate(c, {
+      onSuccess: () => setJoinCode(''),
+      onError: () => {
+        setWiggle(true)
+        setTimeout(() => setWiggle(false), 450)
+        toast.error('That jam code didn’t work — it may have ended.')
+      },
+    })
+  }
+
+  if (!room) return null
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-3 text-left">
             <span className="from-primary to-accent text-primary-foreground shadow-primary/30 relative flex size-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
@@ -85,7 +105,7 @@ export function JamDialog({
               <Radio className="relative size-5" />
             </span>
             <div className="min-w-0">
-              <DialogTitle>{shared ? 'Jam in progress' : 'Start a jam'}</DialogTitle>
+              <DialogTitle>{shared ? 'Jam in progress' : 'Jam'}</DialogTitle>
               <DialogDescription className="mt-0.5">
                 {shared
                   ? 'Everyone hears the same track, in sync.'
@@ -95,18 +115,57 @@ export function JamDialog({
           </div>
         </DialogHeader>
 
-        {!shared && isHost && (
-          <Button
-            variant="shadow"
-            className="w-full"
-            disabled={share.isPending}
-            onClick={() => share.mutate()}
-          >
-            <Radio className="mr-2 size-4" />
-            {share.isPending ? 'Starting…' : 'Start a jam'}
-          </Button>
+        {/* Not in a jam → start one, or join with a code. */}
+        {!shared && (
+          <div className="space-y-4">
+            <Button
+              variant="shadow"
+              className="w-full"
+              disabled={share.isPending}
+              onClick={() => share.mutate()}
+            >
+              <Radio className="mr-2 size-4" />
+              {share.isPending ? 'Starting…' : 'Start a jam'}
+            </Button>
+
+            <div className="text-muted-foreground flex items-center gap-3 text-xs">
+              <span className="bg-border h-px flex-1" /> or join one{' '}
+              <span className="bg-border h-px flex-1" />
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                submitJoin()
+              }}
+              className="flex gap-2"
+            >
+              <input
+                value={joinCode}
+                onChange={(e) =>
+                  setJoinCode(
+                    e.target.value
+                      .toUpperCase()
+                      .replace(/[^A-Z0-9]/g, '')
+                      .slice(0, 6),
+                  )
+                }
+                placeholder="CODE"
+                aria-label="Jam code"
+                autoComplete="off"
+                autoCapitalize="characters"
+                className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 min-w-0 flex-1 rounded-xl border py-2.5 text-center font-mono text-lg font-bold tracking-[0.3em] uppercase focus-visible:ring-2 focus-visible:outline-none ${
+                  wiggle ? 'border-destructive animate-wiggle' : ''
+                }`}
+              />
+              <Button type="submit" disabled={!joinCode || join.isPending}>
+                {join.isPending ? 'Joining…' : 'Join'}
+              </Button>
+            </form>
+          </div>
         )}
 
+        {/* In a jam — code (host), roster, controls. */}
         {shared && (
           <div className="space-y-5">
             {isHost && (
@@ -116,13 +175,12 @@ export function JamDialog({
                     <span
                       key={`${ch}-${i}`}
                       style={{ animationDelay: `${i * 45}ms` }}
-                      className="from-primary/10 to-accent/10 border-border/70 motion-safe:animate-pop-in flex size-11 items-center justify-center rounded-xl border bg-gradient-to-br font-mono text-2xl font-bold"
+                      className="from-primary/10 to-accent/10 border-border/70 motion-safe:animate-pop-in flex size-12 items-center justify-center rounded-xl border bg-gradient-to-br font-mono text-2xl font-bold"
                     >
                       {ch}
                     </span>
                   ))}
                 </div>
-                {/* Copy the raw code (to type into Join) OR the full invite link. */}
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
@@ -152,7 +210,6 @@ export function JamDialog({
               <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
                 <Users className="size-3.5" /> Listening · {count}
               </p>
-              {/* Scrollable roster — pages in as you scroll (handles big jams). */}
               <ul
                 onScroll={(e) => {
                   const el = e.currentTarget
@@ -164,7 +221,7 @@ export function JamDialog({
                     void fetchNextPage()
                   }
                 }}
-                className="max-h-52 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto"
+                className="max-h-72 min-h-12 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto"
               >
                 {members.map((m, i) => (
                   <li
@@ -245,7 +302,7 @@ export function JamDialog({
                 variant="outline"
                 className="w-full"
                 disabled={unshare.isPending}
-                onClick={() => unshare.mutate(undefined, { onSuccess: () => onOpenChange(false) })}
+                onClick={() => unshare.mutate(undefined, { onSuccess: () => setOpen(false) })}
               >
                 End jam
               </Button>
@@ -254,7 +311,7 @@ export function JamDialog({
                 variant="outline"
                 className="w-full"
                 disabled={leave.isPending}
-                onClick={() => leave.mutate(undefined, { onSuccess: () => onOpenChange(false) })}
+                onClick={() => leave.mutate(undefined, { onSuccess: () => setOpen(false) })}
               >
                 <LogOut className="mr-2 size-4" /> Leave jam
               </Button>

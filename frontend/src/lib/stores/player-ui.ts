@@ -11,6 +11,12 @@ type PlayerUiState = {
   playerHeight: number
   setQueueHeight: (queueHeight: number) => void
   setPlayerHeight: (playerHeight: number) => void
+  // Global modals (opened from the player, the FAB, or the account menu) so
+  // there's one Jam modal / one Invite modal regardless of what opened it.
+  jamOpen: boolean
+  inviteOpen: boolean
+  setJamOpen: (jamOpen: boolean) => void
+  setInviteOpen: (inviteOpen: boolean) => void
 }
 
 export const usePlayerUiStore = create<PlayerUiState>((set) => ({
@@ -18,4 +24,8 @@ export const usePlayerUiStore = create<PlayerUiState>((set) => ({
   playerHeight: 0,
   setQueueHeight: (queueHeight) => set({ queueHeight }),
   setPlayerHeight: (playerHeight) => set({ playerHeight }),
+  jamOpen: false,
+  inviteOpen: false,
+  setJamOpen: (jamOpen) => set({ jamOpen }),
+  setInviteOpen: (inviteOpen) => set({ inviteOpen }),
 }))
