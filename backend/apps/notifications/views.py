@@ -8,10 +8,13 @@ from .models import Notification
 from .serializers import NotificationSerializer
 
 
-class NotificationViewSet(mixins.ListModelMixin, viewsets.GenericViewSet):
+class NotificationViewSet(
+    mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet
+):
     """The caller's own notifications: a paginated list, an unread count for the
-    badge, and mark-read (specific ids, or all). Scoped to the caller — you only
-    ever see and mutate your own."""
+    badge, mark-read (specific ids, or all), and dismiss (DELETE one). Scoped to the
+    caller — you only ever see and mutate your own. Dismiss is used to consume an
+    actioned item (e.g. after accepting a request) so it leaves the list."""
 
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = NotificationSerializer

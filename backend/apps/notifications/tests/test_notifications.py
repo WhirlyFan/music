@@ -47,6 +47,21 @@ def test_api_is_scoped_unread_count_and_mark_read():
 
 
 @pytest.mark.django_db
+def test_dismiss_removes_a_notification_and_is_scoped():
+    me, other = UserFactory(), UserFactory()
+    mine = emit(Notification.Kind.FRIEND_REQUEST, recipient=me, actor=other)
+    theirs = emit(Notification.Kind.FRIEND_REQUEST, recipient=other, actor=me)
+
+    api = _authed(me)
+    # I can dismiss my own (consume an actioned item) → it leaves the list.
+    assert api.delete(f"/api/v1/notifications/{mine.id}/").status_code == 204
+    assert not Notification.objects.filter(pk=mine.id).exists()
+    # I can't dismiss someone else's (scoped queryset → 404).
+    assert api.delete(f"/api/v1/notifications/{theirs.id}/").status_code == 404
+    assert Notification.objects.filter(pk=theirs.id).exists()
+
+
+@pytest.mark.django_db
 def test_joining_a_jam_notifies_the_host():
     host, guest = UserFactory(), UserFactory()
     room = services.get_active_room(host)

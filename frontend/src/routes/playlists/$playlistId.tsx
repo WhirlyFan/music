@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
+import { AddSongs } from '@/components/playlist/add-songs'
 import { PlaylistCollaboration } from '@/components/playlist/playlist-collaboration'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import {
@@ -243,6 +244,9 @@ function PlaylistDetailPage() {
       {/* Collaboration: members + invite/leave, and the edit history. Shown to the
           owner and to collaborators (hidden for a public viewer who isn't a member). */}
       {canEdit && <PlaylistCollaboration playlistId={playlistId} isOwner={isOwner} />}
+
+      {/* Add songs (edit mode) — owner + collaborators grow the playlist here. */}
+      {editing && <AddSongs playlistId={playlistId} />}
 
       {/* Batch-select toolbar (edit mode). */}
       {editing && (
@@ -689,6 +693,9 @@ function TrackRow({
         </div>
         <p className="text-muted-foreground truncate text-sm">
           {[track.primary_artist, track.album_name].filter(Boolean).join(' · ')}
+          {item.added_by && (
+            <span className="text-muted-foreground/80"> · added by @{item.added_by}</span>
+          )}
         </p>
       </div>
       <div className="relative z-10 flex items-center" onPointerDown={(e) => e.stopPropagation()}>

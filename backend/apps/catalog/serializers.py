@@ -59,10 +59,13 @@ class TrackSerializer(serializers.ModelSerializer):
 
 class PlaylistTrackSerializer(serializers.ModelSerializer):
     track = TrackSerializer(read_only=True)
+    # Who added this song — shown on the row so collaborators can see each other's
+    # additions. Null for tracks added before this was tracked / by a deleted user.
+    added_by = serializers.CharField(source="added_by.username", read_only=True, allow_null=True)
 
     class Meta:
         model = PlaylistTrack
-        fields = ["position", "track"]
+        fields = ["position", "track", "added_by"]
 
 
 class PlaylistSerializer(serializers.ModelSerializer):

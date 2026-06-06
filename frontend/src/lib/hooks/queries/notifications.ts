@@ -42,3 +42,13 @@ export function useMarkNotificationsRead() {
     onSuccess: () => qc.invalidateQueries({ queryKey: notificationKeys.all() }),
   })
 }
+
+/** Dismiss one notification — used to consume an actioned item (e.g. after
+ *  accepting/declining a request) so it leaves the list instead of lingering. */
+export function useDismissNotification() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api(`/notifications/${id}/`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: notificationKeys.all() }),
+  })
+}

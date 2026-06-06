@@ -208,7 +208,7 @@ class PlaylistViewSet(
         # track `?search=` doesn't also match the playlist's title.
         playlist = get_object_or_404(self.get_queryset(), pk=pk)
         qs = (
-            playlist.items.select_related("track")
+            playlist.items.select_related("track", "added_by")
             .prefetch_related("track__playback_sources")
             .order_by("position")
         )
@@ -313,7 +313,7 @@ class PlaylistViewSet(
         playlist = self.get_object()
         try:
             target = int(request.data.get("position"))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return Response(
                 {"detail": "position must be an integer."}, status=status.HTTP_400_BAD_REQUEST
             )

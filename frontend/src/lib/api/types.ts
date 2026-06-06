@@ -191,6 +191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalog/playlists/{id}/collab-decline/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description The invitee declines their own pending invite (drops the row). */
+        post: operations["v1_catalog_playlists_collab_decline_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/playlists/{id}/collaborators/": {
         parameters: {
             query?: never;
@@ -560,13 +577,36 @@ export interface paths {
         };
         /**
          * @description The caller's own notifications: a paginated list, an unread count for the
-         *     badge, and mark-read (specific ids, or all). Scoped to the caller — you only
-         *     ever see and mutate your own.
+         *     badge, mark-read (specific ids, or all), and dismiss (DELETE one). Scoped to the
+         *     caller — you only ever see and mutate your own. Dismiss is used to consume an
+         *     actioned item (e.g. after accepting a request) so it leaves the list.
          */
         get: operations["v1_notifications_list"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * @description The caller's own notifications: a paginated list, an unread count for the
+         *     badge, mark-read (specific ids, or all), and dismiss (DELETE one). Scoped to the
+         *     caller — you only ever see and mutate your own. Dismiss is used to consume an
+         *     actioned item (e.g. after accepting a request) so it leaves the list.
+         */
+        delete: operations["v1_notifications_destroy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -601,8 +641,9 @@ export interface paths {
         };
         /**
          * @description The caller's own notifications: a paginated list, an unread count for the
-         *     badge, and mark-read (specific ids, or all). Scoped to the caller — you only
-         *     ever see and mutate your own.
+         *     badge, mark-read (specific ids, or all), and dismiss (DELETE one). Scoped to the
+         *     caller — you only ever see and mutate your own. Dismiss is used to consume an
+         *     actioned item (e.g. after accepting a request) so it leaves the list.
          */
         get: operations["v1_notifications_unread_count_retrieve"];
         put?: never;
@@ -1472,6 +1513,7 @@ export interface components {
         PlaylistTrack: {
             position: number;
             readonly track: components["schemas"]["Track"];
+            readonly added_by: string | null;
         };
         /**
          * @description Edit a playlist's own metadata (rename / describe / visibility).
@@ -1813,6 +1855,26 @@ export interface operations {
         };
     };
     v1_catalog_playlists_collab_accept_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    v1_catalog_playlists_collab_decline_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -2265,6 +2327,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaginatedNotificationList"];
                 };
+            };
+        };
+    };
+    v1_notifications_destroy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

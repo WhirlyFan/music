@@ -108,6 +108,9 @@ def test_collaborator_can_add_tracks_and_edit_fans_out_to_others_not_actor():
     assert PlaylistActivity.objects.filter(
         playlist=pl, actor=editor, action=PlaylistActivity.Action.TRACKS_ADDED
     ).exists()
+    # The track row credits who added it, so collaborators can see each other.
+    rows = _authed(owner).get(f"{BASE}/{pl.id}/tracks/").data["results"]
+    assert all(r["added_by"] == editor.username for r in rows)
 
 
 @pytest.mark.django_db

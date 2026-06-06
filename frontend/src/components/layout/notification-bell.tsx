@@ -12,6 +12,7 @@ import { useAcceptCollabInvite, useDeclineCollabInvite } from '@/lib/hooks/queri
 import { useAcceptFriend, useDeclineFriend } from '@/lib/hooks/queries/friends'
 import {
   type AppNotification,
+  useDismissNotification,
   useMarkNotificationsRead,
   useNotifications,
   useUnreadCount,
@@ -54,19 +55,28 @@ function playlistId(n: AppNotification): string | null {
   return linked && typeof id === 'string' ? id : null
 }
 
-/** Inline Accept / Decline for a friend-request notification, acting on the
- *  friendship id carried in the payload. */
-function FriendRequestActions({ friendshipId }: { friendshipId: string }) {
-  const accept = useAcceptFriend()
-  const decline = useDeclineFriend()
-  const busy = accept.isPending || decline.isPending
+/** Accept / Decline buttons that, once the action lands, dismiss the originating
+ *  notification so it's consumed (no stale buttons left behind). */
+function InviteActions({
+  notificationId,
+  onAccept,
+  onDecline,
+  busy,
+}: {
+  notificationId: string
+  onAccept: (onDone: () => void) => void
+  onDecline: (onDone: () => void) => void
+  busy: boolean
+}) {
+  const dismiss = useDismissNotification()
+  const consume = () => dismiss.mutate(notificationId)
   return (
     <span className="mt-1.5 flex gap-2">
       <Button
         size="sm"
         className="h-7 px-2.5 text-xs"
-        disabled={busy}
-        onClick={() => accept.mutate(friendshipId)}
+        disabled={busy || dismiss.isPending}
+        onClick={() => onAccept(consume)}
       >
         Accept
       </Button>
@@ -74,8 +84,8 @@ function FriendRequestActions({ friendshipId }: { friendshipId: string }) {
         size="sm"
         variant="ghost"
         className="h-7 px-2.5 text-xs"
-        disabled={busy}
-        onClick={() => decline.mutate(friendshipId)}
+        disabled={busy || dismiss.isPending}
+        onClick={() => onDecline(consume)}
       >
         Decline
       </Button>
@@ -83,31 +93,43 @@ function FriendRequestActions({ friendshipId }: { friendshipId: string }) {
   )
 }
 
-/** Inline Accept / Decline for a collaboration invite, acting on the playlist id. */
-function PlaylistInviteActions({ playlistId }: { playlistId: string }) {
+/** Inline Accept / Decline for a friend-request notification. */
+function FriendRequestActions({
+  friendshipId,
+  notificationId,
+}: {
+  friendshipId: string
+  notificationId: string
+}) {
+  const accept = useAcceptFriend()
+  const decline = useDeclineFriend()
+  return (
+    <InviteActions
+      notificationId={notificationId}
+      busy={accept.isPending || decline.isPending}
+      onAccept={(done) => accept.mutate(friendshipId, { onSuccess: done })}
+      onDecline={(done) => decline.mutate(friendshipId, { onSuccess: done })}
+    />
+  )
+}
+
+/** Inline Accept / Decline for a collaboration invite. */
+function PlaylistInviteActions({
+  playlistId,
+  notificationId,
+}: {
+  playlistId: string
+  notificationId: string
+}) {
   const accept = useAcceptCollabInvite()
   const decline = useDeclineCollabInvite()
-  const busy = accept.isPending || decline.isPending
   return (
-    <span className="mt-1.5 flex gap-2">
-      <Button
-        size="sm"
-        className="h-7 px-2.5 text-xs"
-        disabled={busy}
-        onClick={() => accept.mutate(playlistId)}
-      >
-        Accept
-      </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-7 px-2.5 text-xs"
-        disabled={busy}
-        onClick={() => decline.mutate(playlistId)}
-      >
-        Decline
-      </Button>
-    </span>
+    <InviteActions
+      notificationId={notificationId}
+      busy={accept.isPending || decline.isPending}
+      onAccept={(done) => accept.mutate(playlistId, { onSuccess: done })}
+      onDecline={(done) => decline.mutate(playlistId, { onSuccess: done })}
+    />
   )
 }
 
@@ -193,10 +215,13 @@ export function NotificationBell() {
                       <span className="text-muted-foreground text-xs">{timeAgo(n.created_at)}</span>
                       {n.kind === 'friend_request' &&
                         typeof n.payload.friendship_id === 'string' && (
-                          <FriendRequestActions friendshipId={n.payload.friendship_id} />
+                          <FriendRequestActions
+                            friendshipId={n.payload.friendship_id}
+                            notificationId={n.id}
+                          />
                         )}
                       {n.kind === 'playlist_invite' && pid && (
-                        <PlaylistInviteActions playlistId={pid} />
+                        <PlaylistInviteActions playlistId={pid} notificationId={n.id} />
                       )}
                     </span>
                   </li>
