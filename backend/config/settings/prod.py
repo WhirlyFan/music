@@ -28,6 +28,16 @@ if _render_host and _render_host not in ALLOWED_HOSTS:
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = True
 
+# Build absolute URLs (notably allauth's OAuth `redirect_uri`) from the public
+# host the browser used, not the internal service host. /accounts/* reaches this
+# backend via Render's rewrite from music.whirlyfan.com, which forwards the
+# original host in X-Forwarded-Host. Without this, get_host() returns the
+# *.onrender.com service host, so Google sees a redirect_uri that (a) isn't
+# registered and (b) couldn't set the .whirlyfan.com session cookie anyway.
+# get_host() still validates against ALLOWED_HOSTS, and falls back to the Host
+# header (the onrender host) for Render's direct health probe.
+USE_X_FORWARDED_HOST = True
+
 # --- HSTS ---
 SECURE_HSTS_SECONDS = 60 * 60 * 24 * 365  # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
