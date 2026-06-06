@@ -98,7 +98,7 @@ class PlaylistUpdateSerializer(serializers.ModelSerializer):
     # The model field is an unbounded TextField; cap it here so a description stays
     # short (the client mirrors this limit in the textarea). Kept tight on purpose —
     # a playlist blurb, not an essay — which also keeps the edit panel compact.
-    description = serializers.CharField(max_length=300, allow_blank=True, required=False)
+    description = serializers.CharField(max_length=200, allow_blank=True, required=False)
 
     class Meta:
         model = Playlist

@@ -13,7 +13,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router'
 import {
@@ -27,7 +26,7 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -44,14 +43,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Input } from '@/components/ui/input'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
-import { SwitchRow } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import type { PaginatedPlaylistTrackList, PlaylistDetail, PlaylistTrack } from '@/lib/api/models'
+import type { PaginatedPlaylistTrackList, PlaylistTrack } from '@/lib/api/models'
 import { playlistKeys } from '@/lib/hooks/keys'
 import {
   useDeletePlaylist,
@@ -97,8 +95,13 @@ function PlaylistDetailPage() {
   const reorder = useReorderPlaylistTrack(playlistId)
   const del = useDeletePlaylist()
   const refresh = useRefreshPlaylist()
+  const update = useUpdatePlaylist()
 
   const [editing, setEditing] = useState(false)
+  // Staged metadata edits (title/description/visibility), applied on Save and discarded
+  // on Cancel — edited inline in the header. Page-level state, so a collaborator's
+  // remote change can't clobber your open draft.
+  const [draft, setDraft] = useState({ title: '', description: '', isPublic: false })
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [refreshOpen, setRefreshOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
@@ -201,6 +204,35 @@ function PlaylistDetailPage() {
     })
   }
 
+  // Inline header editing: seed the draft on enter, apply on Save, discard on Cancel.
+  const startEdit = () => {
+    setDraft({
+      title: playlist.title,
+      description: playlist.description ?? '',
+      isPublic: playlist.is_public ?? false,
+    })
+    setEditing(true)
+  }
+  const saveEdit = () => {
+    const title = draft.title.trim()
+    if (!title) return toast.error('A playlist needs a title.')
+    update.mutate(
+      {
+        id: playlistId,
+        title,
+        description: draft.description,
+        // Visibility is owner-only; don't send it for a collaborator.
+        isPublic: isOwner ? draft.isPublic : undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success('Saved.')
+          setEditing(false)
+        },
+      },
+    )
+  }
+
   // Reorder via drag: optimistically reorder the cached track pages (so the row
   // stays put instead of snapping back), then persist to the new absolute position.
   const tracksKey = [...playlistKeys.tracks(playlistId), q]
@@ -233,83 +265,132 @@ function PlaylistDetailPage() {
 
   return (
     <div className="space-y-6 pb-36">
-      <PageHeader
-        breadcrumbs={[{ label: 'playlists', to: '/playlists' }, { label: playlist.title }]}
-        title={playlist.title}
-        description={
-          <span className="flex items-center gap-2">
-            {`${playlist.track_count} track${playlist.track_count === 1 ? '' : 's'}`}
-            {playlist.is_public && (
-              <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
-                <Globe className="size-3" aria-hidden /> Public
-              </span>
+      {/* Consolidated header: title + description live here and become inline fields
+          in edit mode (no separate metadata card) — so edit mode is mostly the track
+          list. The visibility toggle, refresh + delete are compact controls here too. */}
+      <header className="space-y-3">
+        <Breadcrumbs items={[{ label: 'playlists', to: '/playlists' }, { label: playlist.title }]} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0 flex-1 space-y-2">
+            {editing ? (
+              <input
+                value={draft.title}
+                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                maxLength={255}
+                autoFocus
+                aria-label="Playlist title"
+                className="border-border/60 focus:border-primary w-full max-w-xl border-b bg-transparent pb-0.5 text-2xl font-semibold tracking-tight outline-none"
+              />
+            ) : (
+              <h1 className="text-2xl font-semibold tracking-tight">{playlist.title}</h1>
             )}
-          </span>
-        }
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              disabled={!playlist.track_count}
-              onClick={() => playPlaylist.mutate({ playlistId })}
-            >
-              Play
-            </Button>
-            {canEdit && (
-              <Button
-                variant={editing ? 'default' : 'outline'}
-                onClick={() => setEditing((v) => !v)}
-              >
-                <Pencil className="mr-2 size-4" />
-                {editing ? 'Done' : 'Edit'}
-              </Button>
-            )}
-            {isOwner && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Delete playlist"
-                title="Delete playlist"
-                className="text-muted-foreground hover:text-destructive"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="size-4" />
-              </Button>
+
+            <p className="text-muted-foreground flex items-center gap-2 text-sm">
+              {`${playlist.track_count} track${playlist.track_count === 1 ? '' : 's'}`}
+              {!editing && playlist.is_public && (
+                <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium">
+                  <Globe className="size-3" aria-hidden /> Public
+                </span>
+              )}
+            </p>
+
+            {editing ? (
+              <div className="max-w-xl space-y-1.5">
+                <Textarea
+                  value={draft.description}
+                  onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                  placeholder="A short blurb (optional)"
+                  maxLength={200}
+                  rows={2}
+                  className="resize-none"
+                />
+                <div className="flex items-center justify-between gap-3">
+                  {isOwner ? (
+                    <button
+                      type="button"
+                      onClick={() => setDraft((d) => ({ ...d, isPublic: !d.isPublic }))}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                        draft.isPublic
+                          ? 'bg-primary/10 text-primary'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <Globe className="size-3.5" aria-hidden />
+                      {draft.isPublic ? 'Public' : 'Private'}
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {draft.description.length}/200
+                  </span>
+                </div>
+              </div>
+            ) : (
+              playlist.description && (
+                <p className="text-muted-foreground border-border max-w-prose border-l-2 pl-3 text-sm leading-relaxed break-words">
+                  {playlist.description}
+                </p>
+              )
             )}
           </div>
-        }
-      />
 
-      {!editing && playlist.description && (
-        // A blurb, not chrome: a left accent rule + flowing prose at a readable
-        // measure reads evenly, instead of ragged pre-wrapped text floating full-width.
-        <p className="text-muted-foreground border-border max-w-prose border-l-2 pl-3 text-sm leading-relaxed break-words">
-          {playlist.description}
-        </p>
-      )}
-
-      {/* Edit details — grows out from below the header and collapses on close
-          (grid-rows 0fr→1fr is the cheap, reversible "motion" here). Collaborators
-          get the editor too; the visibility toggle + refresh stay owner-only inside. */}
-      {canEdit && (
-        <div
-          className="ease-out-quint grid transition-[grid-template-rows] duration-300 motion-reduce:transition-none"
-          style={{ gridTemplateRows: editing ? '1fr' : '0fr' }}
-        >
-          <div className="space-y-3 overflow-hidden">
-            <EditPanel
-              key={playlistId}
-              playlist={playlist}
-              playlistId={playlistId}
-              open={editing}
-              isOwner={isOwner}
-              onDone={() => setEditing(false)}
-              onRefresh={isOwner && playlist.origin ? () => setRefreshOpen(true) : undefined}
-            />
-            {/* Its own section, distinct from the metadata form above. */}
-            <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />
+          <div className="flex shrink-0 items-center gap-2">
+            {editing ? (
+              <>
+                {isOwner && playlist.origin && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Refresh from source"
+                    title="Refresh from source"
+                    onClick={() => setRefreshOpen(true)}
+                  >
+                    <RefreshCw className="size-4" />
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={saveEdit} disabled={update.isPending || !draft.title.trim()}>
+                  {update.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  disabled={!playlist.track_count}
+                  onClick={() => playPlaylist.mutate({ playlistId })}
+                >
+                  Play
+                </Button>
+                {canEdit && (
+                  <Button variant="outline" onClick={startEdit}>
+                    <Pencil className="mr-2 size-4" />
+                    Edit
+                  </Button>
+                )}
+                {isOwner && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Delete playlist"
+                    title="Delete playlist"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         </div>
-      )}
+      </header>
+
+      {/* Collaborators — compact, only while editing; managing songs is the primary
+          task, so this sits quietly below the header. */}
+      {editing && canEdit && <CollaboratorsManager playlistId={playlistId} isOwner={isOwner} />}
 
       {/* Batch-select toolbar (edit mode). */}
       {editing && (
@@ -492,167 +573,6 @@ function PlaylistDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
-}
-
-/** Inline metadata editor (rename / describe / visibility) as a TanStack form — the
- *  public toggle is part of the draft, applied on Save and discarded on Cancel. */
-function EditPanel({
-  playlist,
-  playlistId,
-  open,
-  isOwner,
-  onDone,
-  onRefresh,
-}: {
-  playlist: PlaylistDetail
-  playlistId: string
-  open: boolean
-  isOwner: boolean
-  onDone: () => void
-  onRefresh?: () => void
-}) {
-  const update = useUpdatePlaylist()
-  const form = useForm({
-    defaultValues: {
-      title: playlist.title,
-      description: playlist.description ?? '',
-      isPublic: playlist.is_public ?? false,
-    },
-    onSubmit: async ({ value }) => {
-      if (!value.title.trim()) return
-      await update.mutateAsync({
-        id: playlistId,
-        title: value.title.trim(),
-        description: value.description,
-        isPublic: value.isPublic,
-      })
-      toast.success('Saved.')
-      onDone()
-    },
-  })
-
-  // Re-seed the draft each time the panel opens (discards a cancelled edit). The
-  // `seeded` guard keeps a background playlist refetch from resetting a live edit.
-  const seeded = useRef(false)
-  useEffect(() => {
-    if (open && !seeded.current) {
-      seeded.current = true
-      form.reset({
-        title: playlist.title,
-        description: playlist.description ?? '',
-        isPublic: playlist.is_public ?? false,
-      })
-    } else if (!open) {
-      seeded.current = false
-    }
-  }, [open, form, playlist])
-
-  return (
-    <section className="bg-card border-border/60 space-y-3 rounded-2xl border p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="from-primary to-accent text-primary-foreground shadow-primary/30 flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br shadow-sm">
-            <Pencil className="size-4" aria-hidden />
-          </span>
-          <div>
-            <p className="text-sm font-medium">Edit details</p>
-            <p className="text-muted-foreground text-xs">
-              {isOwner ? 'Rename, describe, or change visibility.' : 'Rename or describe.'}
-            </p>
-          </div>
-        </div>
-        {onRefresh && (
-          <Button variant="ghost" size="sm" onClick={onRefresh}>
-            <RefreshCw className="mr-2 size-4" />
-            Refresh from source
-          </Button>
-        )}
-      </div>
-
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          form.handleSubmit()
-        }}
-        className="space-y-3"
-      >
-        <form.Field name="title">
-          {(field) => (
-            <div className="space-y-1">
-              <label htmlFor="pl-title" className="text-sm font-medium">
-                Title
-              </label>
-              <Input
-                id="pl-title"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                onBlur={field.handleBlur}
-                maxLength={255}
-              />
-            </div>
-          )}
-        </form.Field>
-
-        <form.Field name="description">
-          {(field) => (
-            <div className="space-y-1">
-              <label htmlFor="pl-desc" className="text-sm font-medium">
-                Description
-              </label>
-              <Textarea
-                id="pl-desc"
-                value={field.state.value}
-                onChange={(e) => field.handleChange(e.target.value)}
-                placeholder="A short blurb (optional)"
-                maxLength={300}
-                rows={2}
-                className="resize-none"
-              />
-              <p className="text-muted-foreground text-right text-xs tabular-nums">
-                {field.state.value.length}/300
-              </p>
-            </div>
-          )}
-        </form.Field>
-
-        {/* Visibility is the owner's call — collaborators don't see this toggle, and
-            the backend rejects an is_public change from a non-owner. */}
-        {isOwner && (
-          <form.Field name="isPublic">
-            {(field) => (
-              <SwitchRow
-                label="Public"
-                description="Anyone with the link can view"
-                checked={field.state.value}
-                onCheckedChange={(v) => field.handleChange(v)}
-              />
-            )}
-          </form.Field>
-        )}
-
-        <div className="flex gap-2">
-          <form.Subscribe selector={(s) => [s.values.title, s.isSubmitting] as const}>
-            {([title, submitting]) => (
-              <Button type="submit" size="sm" disabled={submitting || !title.trim()}>
-                {submitting ? 'Saving…' : 'Save'}
-              </Button>
-            )}
-          </form.Subscribe>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              form.reset()
-              onDone()
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
-      </form>
-    </section>
   )
 }
 
