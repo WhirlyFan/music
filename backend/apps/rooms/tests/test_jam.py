@@ -128,3 +128,24 @@ def test_current_returns_own_room_when_not_in_jam():
     body = api.get("/api/v1/rooms/current/").json()
     assert body["host_id"] == str(user.id)
     assert body["is_shared"] is False
+
+
+@pytest.mark.django_db
+def test_guest_can_leave_and_falls_back_to_own_room():
+    host_api, host = authed()
+    code = host_api.post("/api/v1/rooms/share/").json()["code"]
+    guest_api, guest = authed()
+    guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json")
+
+    # While joined, current is the host's jam.
+    assert guest_api.get("/api/v1/rooms/current/").json()["host_id"] == str(host.id)
+
+    res = guest_api.post("/api/v1/rooms/leave/")
+    assert res.status_code == 200
+    # Leave responds with the guest's OWN room, and current now resolves there.
+    assert res.json()["host_id"] == str(guest.id)
+    assert guest_api.get("/api/v1/rooms/current/").json()["host_id"] == str(guest.id)
+    assert not RoomMember.objects.filter(user=guest, role="guest").exists()
+    # Host's jam no longer lists the guest.
+    members = host_api.get("/api/v1/rooms/current/").json()["members"]
+    assert [m["user_id"] for m in members] == [str(host.id)]

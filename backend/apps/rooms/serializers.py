@@ -16,6 +16,14 @@ class QueueItemSerializer(serializers.ModelSerializer):
         fields = ["id", "kind", "position", "track"]
 
 
+class JamMemberSerializer(serializers.Serializer):
+    """A participant in a shared room — for the member list."""
+
+    user_id = serializers.UUIDField()
+    username = serializers.CharField()
+    role = serializers.CharField()
+
+
 class RoomSerializer(serializers.ModelSerializer):
     """The room as the player needs it: now-playing + two up-next layers —
     `queue` (explicit "Next in queue") and `context` (the playlist remaining,
@@ -33,6 +41,8 @@ class RoomSerializer(serializers.ModelSerializer):
     context = serializers.SerializerMethodField()
 
     # --- Jam (sharing) ---
+    # User PK (UUIDv7). Clients compare it to the session user's id to tell host
+    # from guest; matches members[].user_id.
     host_id = serializers.UUIDField(read_only=True)
     # Server clock authority for sync (see PlaybackState): the live position is
     # `position_ms + (now - playing_since)` while playing; `generation` lets a
@@ -96,11 +106,7 @@ class RoomSerializer(serializers.ModelSerializer):
         # datetime. Use DRF's representation so it matches playing_since's format.
         return serializers.DateTimeField().to_representation(timezone.now())
 
-    @extend_schema_field(
-        serializers.ListSerializer(
-            child=serializers.DictField(child=serializers.CharField())
-        )
-    )
+    @extend_schema_field(JamMemberSerializer(many=True))
     def get_members(self, room):
         # Everyone in the Jam, host first then join order. Empty for a private room.
         return [

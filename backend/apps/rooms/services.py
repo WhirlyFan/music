@@ -124,6 +124,23 @@ def join_guest(room: Room, user) -> None:
     )
 
 
+@transaction.atomic
+def leave_room(user) -> Room | None:
+    """A guest leaves the jam they're in. Returns the room they left (so the view
+    can tell its remaining members), or None if they weren't a guest anywhere.
+    A host doesn't "leave" — they end the jam via unshare_room."""
+    membership = (
+        RoomMember.objects.filter(user=user, role=RoomMember.Role.GUEST)
+        .select_related("room")
+        .first()
+    )
+    if membership is None:
+        return None
+    room = membership.room
+    RoomMember.objects.filter(user=user, role=RoomMember.Role.GUEST).delete()
+    return room
+
+
 def current_room(user) -> Room:
     """The room the user is actively in: the Jam they've joined as a guest (most
     recent, if somehow more than one), else their own active room."""

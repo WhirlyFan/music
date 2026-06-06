@@ -64,6 +64,13 @@ class RoomViewSet(viewsets.ViewSet):
         broadcast.publish(room.id, data)
         return Response(data)
 
+    def _broadcast_room(self, room):
+        """Bump generation + broadcast a room to its group WITHOUT returning it —
+        for when the response is a different room (e.g. leaving: tell the jam its
+        members changed, but respond with the leaver's own room)."""
+        PlaybackState.objects.filter(room=room).update(generation=F("generation") + 1)
+        broadcast.publish(room.id, self._data(room))
+
     @extend_schema(responses=RoomSerializer)
     @action(detail=False, methods=["get"])
     def me(self, request):
@@ -100,6 +107,16 @@ class RoomViewSet(viewsets.ViewSet):
         if room is None:
             raise Http404("No open jam with that code.")
         return self._apply(room, lambda: services.join_guest(room, request.user))
+
+    @extend_schema(request=None, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def leave(self, request):
+        """Leave a jam (guest). Responds with the caller's own room; the jam its
+        remaining members see is updated separately."""
+        left = services.leave_room(request.user)
+        if left is not None:
+            self._broadcast_room(left)
+        return self._read(services.get_active_room(request.user))
 
     @extend_schema(request=SyncPositionSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

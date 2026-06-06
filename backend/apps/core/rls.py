@@ -26,7 +26,7 @@ def owner_scoped_policy(
         name=name,
         expression=(
             f"{user_field}_id = "
-            f"NULLIF(current_setting('rls.user_id', true), '')::integer "
+            f"NULLIF(current_setting('rls.user_id', true), '')::uuid "
             f"OR current_setting('rls.bypass', true) = 'true'"
         ),
     )

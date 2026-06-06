@@ -1,11 +1,14 @@
 import hashlib
 import secrets
+import uuid
 from datetime import timedelta
 
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
+
+from apps.core.models import BaseModel
 
 INVITE_TTL = timedelta(days=14)
 
@@ -85,6 +88,12 @@ class User(AbstractUser):
     first_name / last_name are inherited from AbstractUser (blank=True).
     """
 
+    # UUIDv7 PK, matching BaseModel (every other table). AbstractUser ships an
+    # integer PK; override it so user ids aren't enumerable and stay consistent
+    # with the rest of the schema. uuid7 is time-ordered, so it keeps the same
+    # index locality as the autoincrement int it replaces.
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7, editable=False)
+
     # Override AbstractUser.username (which is unique=True with the default
     # validator) so we can apply our own validator + uniqueness model.
     username = models.CharField(
@@ -113,7 +122,7 @@ class User(AbstractUser):
         return full or self.username
 
 
-class Invitation(models.Model):
+class Invitation(BaseModel):
     """An invite to join the platform. Any logged-in member can create one for an email;
     while the `invite_only` waffle switch is on, the custom AccountAdapter lets *only*
     emails with a pending (unaccepted, unexpired) invitation sign up. Marked accepted
@@ -133,9 +142,9 @@ class Invitation(models.Model):
         blank=True,
         related_name="sent_invitations",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
     accepted_at = models.DateTimeField(null=True, blank=True)
     expires_at = models.DateTimeField(default=_invite_expiry)
+    # created_at / updated_at come from BaseModel.
 
     class Meta:
         ordering = ["-created_at"]
