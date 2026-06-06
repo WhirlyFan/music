@@ -29,6 +29,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import permissions, serializers, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -125,20 +126,26 @@ class _UserSearchSerializer(serializers.Serializer):
 @api_view(["GET"])
 @permission_classes([permissions.IsAuthenticated])
 def search_users(request: Request) -> Response:
-    """Find people by username (or name) to befriend — `?q=`. Excludes the caller;
-    capped at 20. The friend-request flow references the picked user by id, so this
-    is the lookup that turns a typed handle into an id. Existing friends aren't
-    filtered here (keeps users decoupled from the friends app) — the client
-    cross-references its own friend list, and send_request is idempotent anyway."""
+    """Find people by username (or name) to befriend — `?q=`. Excludes the caller.
+    Paginated (25/page) so the client shows the first page and only fetches more on
+    scroll — low load by default. The friend-request flow references the picked user
+    by id, so this turns a typed handle into an id. Existing friends aren't filtered
+    here (keeps users decoupled from the friends app); send_request is idempotent."""
     q = request.query_params.get("q", "").strip()
     if not q:
-        return Response([])
+        return Response({"count": 0, "next": None, "previous": None, "results": []})
     user_model = get_user_model()
-    matches = user_model.objects.filter(
-        Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q),
-        is_active=True,
-    ).exclude(pk=request.user.pk)[:20]
-    return Response(_UserSearchSerializer(matches, many=True).data)
+    matches = (
+        user_model.objects.filter(
+            Q(username__icontains=q) | Q(first_name__icontains=q) | Q(last_name__icontains=q),
+            is_active=True,
+        )
+        .exclude(pk=request.user.pk)
+        .order_by("username")  # stable ordering across pages
+    )
+    paginator = PageNumberPagination()
+    page = paginator.paginate_queryset(matches, request)
+    return paginator.get_paginated_response(_UserSearchSerializer(page, many=True).data)
 
 
 @api_view(["GET"])

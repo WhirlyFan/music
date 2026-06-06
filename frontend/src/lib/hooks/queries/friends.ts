@@ -1,6 +1,7 @@
 import {
   keepPreviousData,
   skipToken,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -62,12 +63,21 @@ export function useUserProfile(username: string | undefined) {
   })
 }
 
-/** Find people by username/name to befriend; idle for an empty query. */
+type UserSearchPage = { count: number; next: string | null; results: FriendUser[] }
+
+/** Find people by username/name to befriend. Infinite (25/page): the first page
+ *  lands as you type, and more load only on scroll — low load by default. Idle for
+ *  an empty query. */
 export function useUserSearch(query: string) {
   const q = query.trim()
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: friendKeys.search(q),
-    queryFn: q ? () => api<FriendUser[]>(`/users/search/?q=${encodeURIComponent(q)}`) : skipToken,
+    queryFn: q
+      ? ({ pageParam }) =>
+          api<UserSearchPage>(`/users/search/?q=${encodeURIComponent(q)}&page=${pageParam}`)
+      : skipToken,
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     placeholderData: keepPreviousData,
   })
 }

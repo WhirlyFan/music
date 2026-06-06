@@ -73,6 +73,8 @@ function AddFriend() {
   const q = useDebounced(term, 300)
   const results = useUserSearch(q)
   const send = useSendFriendRequest()
+  const people = results.data?.pages.flatMap((p) => p.results) ?? []
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = results
 
   return (
     <section className="space-y-3">
@@ -91,31 +93,51 @@ function AddFriend() {
       </div>
       {q && (
         <Card>
-          {results.isLoading ? (
-            <RowSkeletons />
-          ) : results.data && results.data.length > 0 ? (
-            results.data.map((u) => (
-              <UserRow
-                key={u.id}
-                user={u}
-                action={
-                  <Button
-                    size="sm"
-                    className="rounded-full"
-                    disabled={send.isPending}
-                    onClick={() => send.mutate(u.id)}
-                  >
-                    <UserPlus className="mr-1.5 size-4" aria-hidden />
-                    Add
-                  </Button>
-                }
-              />
-            ))
-          ) : (
-            <p className="text-muted-foreground px-5 py-6 text-center text-sm">
-              No one found for “{q}”.
-            </p>
-          )}
+          {/* First 25 land as you type; scrolling near the bottom loads the next page. */}
+          <div
+            className="max-h-72 overflow-y-auto [scrollbar-width:thin]"
+            onScroll={(e) => {
+              const el = e.currentTarget
+              if (
+                hasNextPage &&
+                !isFetchingNextPage &&
+                el.scrollHeight - el.scrollTop - el.clientHeight < 64
+              ) {
+                void fetchNextPage()
+              }
+            }}
+          >
+            {results.isLoading ? (
+              <RowSkeletons />
+            ) : people.length > 0 ? (
+              <>
+                {people.map((u) => (
+                  <UserRow
+                    key={u.id}
+                    user={u}
+                    action={
+                      <Button
+                        size="sm"
+                        className="rounded-full"
+                        disabled={send.isPending}
+                        onClick={() => send.mutate(u.id)}
+                      >
+                        <UserPlus className="mr-1.5 size-4" aria-hidden />
+                        Add
+                      </Button>
+                    }
+                  />
+                ))}
+                {isFetchingNextPage && (
+                  <p className="text-muted-foreground px-5 py-2 text-center text-xs">Loading…</p>
+                )}
+              </>
+            ) : (
+              <p className="text-muted-foreground px-5 py-6 text-center text-sm">
+                No one found for “{q}”.
+              </p>
+            )}
+          </div>
         </Card>
       )}
     </section>

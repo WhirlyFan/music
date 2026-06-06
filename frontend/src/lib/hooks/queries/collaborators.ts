@@ -1,16 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
 import type { PlaylistCollaborator } from '@/lib/api/models'
 import { notificationKeys, playlistKeys } from '@/lib/hooks/keys'
 
+type CollaboratorsPage = { count: number; next: string | null; results: PlaylistCollaborator[] }
+
 /** Collaborators on a playlist (pending + accepted). Owner + any member may read.
- *  A plain (non-infinite) query on purpose: the set is small + bounded — you invite a
- *  handful of people — unlike the tracks/notifications lists, which paginate. */
+ *  Infinite (25/page): typically a handful, so only the first page loads — more only
+ *  on scroll, keeping the request cheap even for an unusually large collaborator set. */
 export function useCollaborators(playlistId: string, enabled = true) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: playlistKeys.collaborators(playlistId),
-    queryFn: () => api<PlaylistCollaborator[]>(`/catalog/playlists/${playlistId}/collaborators/`),
+    queryFn: ({ pageParam }) =>
+      api<CollaboratorsPage>(`/catalog/playlists/${playlistId}/collaborators/?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled: enabled && !!playlistId,
   })
 }

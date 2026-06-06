@@ -360,8 +360,9 @@ class PlaylistViewSet(
                 PlaylistCollaboratorSerializer(c).data, status=status.HTTP_201_CREATED
             )
         playlist = self._member_playlist(pk)
-        qs = playlist.collaborators.select_related("user").all()
-        return Response(PlaylistCollaboratorSerializer(qs, many=True).data)
+        qs = playlist.collaborators.select_related("user").order_by("-created_at")
+        page = self.paginate_queryset(qs)  # 25/page; the client loads more on scroll
+        return self.get_paginated_response(PlaylistCollaboratorSerializer(page, many=True).data)
 
     @extend_schema(request=None, responses=None)
     @action(detail=True, methods=["delete"], url_path="collaborators/(?P<user_id>[^/.]+)")

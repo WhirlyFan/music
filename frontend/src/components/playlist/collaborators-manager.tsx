@@ -29,7 +29,8 @@ export function CollaboratorsManager({
     ?.username
   const collaborators = useCollaborators(playlistId)
   const remove = useRemoveCollaborator(playlistId)
-  const members = collaborators.data ?? []
+  const members = collaborators.data?.pages.flatMap((p) => p.results) ?? []
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = collaborators
 
   return (
     <section className="bg-card border-border/60 space-y-2.5 rounded-2xl border p-4 shadow-sm">
@@ -53,7 +54,19 @@ export function CollaboratorsManager({
       </div>
 
       {members.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
+        <ul
+          className="flex max-h-40 flex-wrap gap-1.5 overflow-y-auto [scrollbar-width:thin]"
+          onScroll={(e) => {
+            const el = e.currentTarget
+            if (
+              hasNextPage &&
+              !isFetchingNextPage &&
+              el.scrollHeight - el.scrollTop - el.clientHeight < 48
+            ) {
+              void fetchNextPage()
+            }
+          }}
+        >
           {members.map((c) => {
             const isMe = c.user.username === myUsername
             const canRemove = isOwner || isMe
@@ -104,6 +117,8 @@ function InlineInvite({ playlistId }: { playlistId: string }) {
   const q = useDebounced(term, 300)
   const results = useUserSearch(q)
   const invite = useInviteCollaborator(playlistId)
+  const people = results.data?.pages.flatMap((p) => p.results) ?? []
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = results
 
   return (
     <div className="space-y-1.5">
@@ -120,9 +135,21 @@ function InlineInvite({ playlistId }: { playlistId: string }) {
           className="h-8 rounded-full pl-8 text-sm"
         />
       </div>
-      {q && results.data && results.data.length > 0 && (
-        <ul className="border-border/60 divide-border/60 divide-y rounded-lg border">
-          {results.data.slice(0, 5).map((u) => (
+      {q && people.length > 0 && (
+        <ul
+          className="border-border/60 divide-border/60 max-h-44 divide-y overflow-y-auto rounded-lg border [scrollbar-width:thin]"
+          onScroll={(e) => {
+            const el = e.currentTarget
+            if (
+              hasNextPage &&
+              !isFetchingNextPage &&
+              el.scrollHeight - el.scrollTop - el.clientHeight < 48
+            ) {
+              void fetchNextPage()
+            }
+          }}
+        >
+          {people.map((u) => (
             <li key={u.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5">
               <span className="truncate text-xs">@{u.username}</span>
               <Button

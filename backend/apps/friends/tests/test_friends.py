@@ -116,10 +116,10 @@ def test_user_search_excludes_self_and_matches_username():
     me = UserFactory(username="alice")
     UserFactory(username="bob")
     api = _authed(me)
-    results = api.get("/api/v1/users/search/?q=b").data
+    results = api.get("/api/v1/users/search/?q=b").data["results"]  # paginated
     names = {u["username"] for u in results}
     assert "bob" in names and "alice" not in names
-    assert api.get("/api/v1/users/search/?q=").data == []
+    assert api.get("/api/v1/users/search/?q=").data["results"] == []
 
 
 @pytest.mark.django_db
