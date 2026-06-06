@@ -1,5 +1,6 @@
-import { Check, Copy, Crown, LogOut, Radio, UserMinus, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Check, Copy, Crown, Link2, LogOut, Radio, UserMinus, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import type { Room } from '@/lib/api/models'
 import { dicebearAvatarUrl } from '@/lib/auth/avatar'
+import { roomKeys } from '@/lib/hooks/keys'
 import {
   useKickMember,
   useLeaveRoom,
@@ -20,13 +22,12 @@ import {
   useShareRoom,
   useUnshareRoom,
 } from '@/lib/hooks/mutations/rooms'
-
-type Member = { user_id: string; username: string; role: string }
+import { useJamMembers } from '@/lib/hooks/queries/rooms'
 
 /**
- * Jam controls. Listening together is built on the room: the host shares a code,
- * guests join and follow in sync. Host sees the code + members + the guest-control
- * toggle + "End jam"; a guest sees who's listening + "Leave".
+ * Jam controls. The host shares a code, guests join and follow in sync. The
+ * roster is fetched on demand via an infinite query (paginated, scrollable) —
+ * it's kept off the broadcast frames, which carry only members_count.
  */
 export function JamDialog({
   room,
@@ -39,25 +40,36 @@ export function JamDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const qc = useQueryClient()
   const share = useShareRoom()
   const unshare = useUnshareRoom()
   const leave = useLeaveRoom()
   const setGuestControl = useSetGuestControl()
   const kick = useKickMember()
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null)
 
   const isHost = !!myUserId && room.host_id === myUserId
   const shared = room.is_shared ?? false
-  const members = (room.members ?? []) as Member[]
+  const count = room.members_count ?? 0
   const link = room.code ? `${window.location.origin}/?jam=${room.code}` : ''
 
-  const copy = async () => {
+  const membersQuery = useJamMembers(open && shared)
+  const members = membersQuery.data?.pages.flatMap((p) => p.results) ?? []
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = membersQuery
+
+  // Refetch the roster when the dialog opens or the count changes (someone
+  // joined / left / was kicked) — the frame only tells us the count moved.
+  useEffect(() => {
+    if (open && shared) void qc.invalidateQueries({ queryKey: roomKeys.members() })
+  }, [open, shared, count, qc])
+
+  const copy = async (kind: 'code' | 'link', text: string) => {
     try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1600)
+      await navigator.clipboard.writeText(text)
+      setCopied(kind)
+      setTimeout(() => setCopied(null), 1600)
     } catch {
-      toast.error('Couldn’t copy — select the code manually.')
+      toast.error('Couldn’t copy — select it manually.')
     }
   }
 
@@ -83,7 +95,6 @@ export function JamDialog({
           </div>
         </DialogHeader>
 
-        {/* Not a jam yet → the host starts one. */}
         {!shared && isHost && (
           <Button
             variant="shadow"
@@ -96,7 +107,6 @@ export function JamDialog({
           </Button>
         )}
 
-        {/* Active jam — code, members, controls. */}
         {shared && (
           <div className="space-y-5">
             {isHost && (
@@ -112,29 +122,54 @@ export function JamDialog({
                     </span>
                   ))}
                 </div>
-                <Button variant="outline" className="w-full" onClick={copy}>
-                  {copied ? (
-                    <>
-                      <Check className="mr-2 size-4" /> Copied invite link
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="mr-2 size-4" /> Copy invite link
-                    </>
-                  )}
-                </Button>
+                {/* Copy the raw code (to type into Join) OR the full invite link. */}
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => copy('code', room.code ?? '')}
+                  >
+                    {copied === 'code' ? (
+                      <Check className="mr-2 size-4" />
+                    ) : (
+                      <Copy className="mr-2 size-4" />
+                    )}
+                    {copied === 'code' ? 'Copied' : 'Copy code'}
+                  </Button>
+                  <Button variant="outline" className="flex-1" onClick={() => copy('link', link)}>
+                    {copied === 'link' ? (
+                      <Check className="mr-2 size-4" />
+                    ) : (
+                      <Link2 className="mr-2 size-4" />
+                    )}
+                    {copied === 'link' ? 'Copied' : 'Copy link'}
+                  </Button>
+                </div>
               </div>
             )}
 
             <div className="space-y-2">
               <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
-                <Users className="size-3.5" /> Listening · {members.length}
+                <Users className="size-3.5" /> Listening · {count}
               </p>
-              <ul className="space-y-1.5">
+              {/* Scrollable roster — pages in as you scroll (handles big jams). */}
+              <ul
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  if (
+                    hasNextPage &&
+                    !isFetchingNextPage &&
+                    el.scrollHeight - el.scrollTop - el.clientHeight < 48
+                  ) {
+                    void fetchNextPage()
+                  }
+                }}
+                className="max-h-52 [scrollbar-width:thin] [scrollbar-color:var(--border)_transparent] space-y-1.5 overflow-y-auto"
+              >
                 {members.map((m, i) => (
                   <li
                     key={m.user_id}
-                    style={{ animationDelay: `${i * 60}ms` }}
+                    style={{ animationDelay: `${Math.min(i, 8) * 50}ms` }}
                     className="group motion-safe:animate-fade-in flex items-center gap-2.5"
                   >
                     <div className="relative shrink-0">
@@ -170,6 +205,9 @@ export function JamDialog({
                     )}
                   </li>
                 ))}
+                {membersQuery.isPending && (
+                  <li className="text-muted-foreground py-1 text-sm">Loading…</li>
+                )}
               </ul>
             </div>
 

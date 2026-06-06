@@ -39,6 +39,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
 
         self.group = broadcast.group_name(self.room_id)
         await self.channel_layer.group_add(self.group, self.channel_name)
+        # Per-user group for targeted signals (e.g. being kicked).
+        self.user_group = broadcast.user_group(self.user.id)
+        await self.channel_layer.group_add(self.user_group, self.channel_name)
         await self.accept()
 
         data = await self._snapshot()
@@ -53,6 +56,9 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         group = getattr(self, "group", None)
         if group is not None:
             await self.channel_layer.group_discard(group, self.channel_name)
+        user_group = getattr(self, "user_group", None)
+        if user_group is not None:
+            await self.channel_layer.group_discard(user_group, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
         # The socket is read-only; the only client→server message is a keepalive.
@@ -64,6 +70,10 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json(
             {"type": "room.update", "room": event["room"], "generation": event["generation"]}
         )
+
+    # {"type": "membership.revoked", ...} → this handler (I was kicked).
+    async def membership_revoked(self, event):
+        await self.send_json({"type": "membership.revoked", "room_id": event["room_id"]})
 
     # --- helpers ---
 

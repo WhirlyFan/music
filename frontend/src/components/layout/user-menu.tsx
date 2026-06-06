@@ -1,8 +1,8 @@
 import { useNavigate } from '@tanstack/react-router'
 import { LogOut, Radio, Settings, UserPlus } from 'lucide-react'
 import { useState } from 'react'
-import { toast } from 'sonner'
 
+import { InviteFriendDialog } from '@/components/player/invite-friend-dialog'
 import { JoinJamDialog } from '@/components/player/join-jam-dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -12,19 +12,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { ApiError } from '@/lib/api/client'
 import { avatarInitials, dicebearAvatarUrl } from '@/lib/auth/avatar'
-import { useInvite, useLogout } from '@/lib/hooks/mutations/auth'
-import { promptText } from '@/lib/overlay'
-
-/** Pull the backend's specific message (e.g. "already has an account") off a 400. */
-function inviteErrorMessage(e: unknown): string {
-  if (e instanceof ApiError && typeof e.detail === 'object' && e.detail) {
-    const detail = (e.detail as { detail?: string }).detail
-    if (detail) return detail
-  }
-  return 'Couldn’t send the invite — try again.'
-}
+import { useLogout } from '@/lib/hooks/mutations/auth'
 
 type Props = {
   username: string
@@ -40,23 +29,8 @@ type Props = {
 export function UserMenu({ username, firstName, lastName }: Props) {
   const navigate = useNavigate()
   const logout = useLogout()
-  const invite = useInvite()
   const [joinOpen, setJoinOpen] = useState(false)
-
-  const handleInvite = async () => {
-    const email = (
-      await promptText({
-        title: 'Invite a friend',
-        label: 'Their email address',
-        confirmLabel: 'Send invite',
-      })
-    )?.trim()
-    if (!email) return
-    invite.mutate(email, {
-      onSuccess: () => toast.success(`Invite sent to ${email}.`),
-      onError: (e) => toast.error(inviteErrorMessage(e)),
-    })
-  }
+  const [inviteOpen, setInviteOpen] = useState(false)
 
   const handleLogout = async () => {
     await logout.mutateAsync()
@@ -69,6 +43,7 @@ export function UserMenu({ username, firstName, lastName }: Props) {
   return (
     <>
       <JoinJamDialog open={joinOpen} onOpenChange={setJoinOpen} />
+      <InviteFriendDialog open={inviteOpen} onOpenChange={setInviteOpen} />
       <DropdownMenu>
         {/* 44x44 minimum touch target per WCAG 2.5.5 — the trigger area is
           padded; the avatar visual stays at 36px so the design doesn't
@@ -93,7 +68,7 @@ export function UserMenu({ username, firstName, lastName }: Props) {
             Settings
           </DropdownMenuItem>
 
-          <DropdownMenuItem onSelect={handleInvite}>
+          <DropdownMenuItem onSelect={() => setInviteOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Invite a friend
           </DropdownMenuItem>

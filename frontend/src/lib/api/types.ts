@@ -389,6 +389,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rooms/kick/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Host removes a guest from their jam (broadcasts; the kicked guest's
+         *     client falls back to their own room).
+         */
+        post: operations["v1_rooms_kick_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rooms/leave/": {
         parameters: {
             query?: never;
@@ -421,6 +441,27 @@ export interface paths {
          *     `request.user`'s active room — there is no other-user access.
          */
         get: operations["v1_rooms_me_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rooms/members/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Paginated member list for the room the user is in (host first, then
+         *     join order). Backs the jam modal's infinite-scroll roster — kept off the
+         *     broadcast frames, which carry only members_count.
+         */
+        get: operations["v1_rooms_members_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -773,16 +814,14 @@ export interface components {
             /** Format: uri */
             url: string;
         };
-        /** @description A participant in a shared room — for the member list. */
-        JamMember: {
-            /** Format: uuid */
-            user_id: string;
-            username: string;
-            role: string;
-        };
         /** @description Join a Jam by its code. */
         JoinRoom: {
             code: string;
+        };
+        /** @description Host removes a guest from the jam, by user id. */
+        KickMember: {
+            /** Format: uuid */
+            user_id: string;
         };
         /**
          * @description * `context` - From context
@@ -943,6 +982,12 @@ export interface components {
             item_id: string;
         };
         /**
+         * @description * `host` - Host
+         *     * `guest` - Guest
+         * @enum {string}
+         */
+        RoleEnum: "host" | "guest";
+        /**
          * @description The room as the player needs it: now-playing + two up-next layers —
          *     `queue` (explicit "Next in queue") and `context` (the playlist remaining,
          *     "Next from: …"). Already-played context tracks are not surfaced (they stay in
@@ -970,7 +1015,14 @@ export interface components {
             readonly generation: number;
             /** Format: date-time */
             readonly server_time: string;
-            readonly members: components["schemas"]["JamMember"][];
+            readonly members_count: number;
+        };
+        /** @description A participant in a shared room — for the paginated member list. */
+        RoomMember: {
+            /** Format: uuid */
+            readonly user_id: string;
+            readonly username: string;
+            role?: components["schemas"]["RoleEnum"];
         };
         SaveAsPlaylist: {
             title: string;
@@ -1494,6 +1546,31 @@ export interface operations {
             };
         };
     };
+    v1_rooms_kick_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KickMember"];
+                "application/x-www-form-urlencoded": components["schemas"]["KickMember"];
+                "multipart/form-data": components["schemas"]["KickMember"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
     v1_rooms_leave_create: {
         parameters: {
             query?: never;
@@ -1528,6 +1605,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Room"];
+                };
+            };
+        };
+    };
+    v1_rooms_members_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoomMember"][];
                 };
             };
         };

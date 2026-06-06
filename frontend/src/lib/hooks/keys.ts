@@ -51,6 +51,7 @@ export const playlistKeys = {
 export const roomKeys = {
   all: () => ['room'] as const,
   me: () => ['room', 'me'] as const,
+  members: () => ['room', 'members'] as const,
 }
 
 export const searchKeys = {

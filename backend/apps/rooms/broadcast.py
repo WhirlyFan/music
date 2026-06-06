@@ -19,6 +19,26 @@ def group_name(room_id) -> str:
     return f"room.{room_id}"
 
 
+def user_group(user_id) -> str:
+    return f"user.{user_id}"
+
+
+def notify_revoked(user_id, room_id) -> None:
+    """Tell a specific user their membership in a room was revoked (kicked), so
+    their client drops back to its own room. Targeted (per-user group) rather
+    than broadcast to the room."""
+    layer = get_channel_layer()
+    if layer is None:
+        return
+    try:
+        async_to_sync(layer.group_send)(
+            user_group(user_id),
+            {"type": "membership.revoked", "room_id": str(room_id)},
+        )
+    except Exception:  # noqa: BLE001 — best-effort
+        log.exception("revoke notify failed for user %s", user_id)
+
+
 def publish(room_id, room_data: dict) -> None:
     """Fan a serialized room out to its group. Fire-and-forget: a channel-layer
     hiccup must never fail the mutation that triggered it."""

@@ -19,6 +19,11 @@ def authed(user=None):
     return api, user
 
 
+def members_of(api):
+    """The jam roster via the paginated members endpoint (host first)."""
+    return api.get("/api/v1/rooms/members/").json()["results"]
+
+
 @pytest.mark.django_db
 def test_share_creates_code_and_host_member():
     api, user = authed()
@@ -27,9 +32,11 @@ def test_share_creates_code_and_host_member():
     body = res.json()
     assert body["is_shared"] is True
     assert body["code"] and len(body["code"]) == 6
+    assert body["members_count"] == 1
     # Host is recorded as a member with the host role.
-    assert [m["role"] for m in body["members"]] == ["host"]
-    assert body["members"][0]["user_id"] == str(user.id)
+    roster = members_of(api)
+    assert [m["role"] for m in roster] == ["host"]
+    assert roster[0]["user_id"] == str(user.id)
 
 
 @pytest.mark.django_db
@@ -39,7 +46,8 @@ def test_share_is_idempotent_keeps_code():
     second = api.post("/api/v1/rooms/share/").json()
     assert first["code"] == second["code"]
     # No duplicate host membership.
-    assert len(second["members"]) == 1
+    assert second["members_count"] == 1
+    assert len(members_of(api)) == 1
 
 
 @pytest.mark.django_db
@@ -52,7 +60,7 @@ def test_join_by_code_adds_guest_member():
     assert res.status_code == 200
     body = res.json()
     assert body["host_id"] == str(host.id)
-    roles = {m["user_id"]: m["role"] for m in body["members"]}
+    roles = {m["user_id"]: m["role"] for m in members_of(guest_api)}
     assert roles[str(host.id)] == "host"
     assert roles[str(guest.id)] == "guest"
 
@@ -64,9 +72,9 @@ def test_join_is_case_insensitive_and_idempotent():
     guest_api, guest = authed()
 
     guest_api.post("/api/v1/rooms/join/", {"code": code.lower()}, format="json")
-    body = guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json").json()
+    guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json")
     # Joined once despite two requests + a lowercased code.
-    assert sum(m["role"] == "guest" for m in body["members"]) == 1
+    assert sum(m["role"] == "guest" for m in members_of(guest_api)) == 1
 
 
 @pytest.mark.django_db
@@ -105,7 +113,8 @@ def test_unshare_drops_guests_and_clears_code():
     body = host_api.post("/api/v1/rooms/unshare/").json()
     assert body["is_shared"] is False
     assert body["code"] == ""
-    assert body["members"] == []
+    assert body["members_count"] == 0
+    assert members_of(host_api) == []
     assert not Room.objects.filter(code=code, is_shared=True).exists()
 
 
@@ -179,7 +188,8 @@ def test_host_can_kick_guest():
         "/api/v1/rooms/kick/", {"user_id": str(guest.id)}, format="json"
     ).json()
     # Guest is gone from the jam; the host remains.
-    assert [m["user_id"] for m in body["members"]] == [str(host.id)]
+    assert body["members_count"] == 1
+    assert [m["user_id"] for m in members_of(host_api)] == [str(host.id)]
     assert not RoomMember.objects.filter(user=guest, role="guest").exists()
     # Kicked guest's current falls back to their own room.
     assert guest_api.get("/api/v1/rooms/current/").json()["host_id"] == str(guest.id)
@@ -202,5 +212,4 @@ def test_guest_can_leave_and_falls_back_to_own_room():
     assert guest_api.get("/api/v1/rooms/current/").json()["host_id"] == str(guest.id)
     assert not RoomMember.objects.filter(user=guest, role="guest").exists()
     # Host's jam no longer lists the guest.
-    members = host_api.get("/api/v1/rooms/current/").json()["members"]
-    assert [m["user_id"] for m in members] == [str(host.id)]
+    assert [m["user_id"] for m in members_of(host_api)] == [str(host.id)]

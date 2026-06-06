@@ -1,8 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import { api } from '@/lib/api/client'
-import type { Room } from '@/lib/api/models'
+import type { Room, RoomMember } from '@/lib/api/models'
 import { roomKeys } from '@/lib/hooks/keys'
+
+// The members endpoint paginates (DRF), but its schema comes through as a plain
+// array, so type the page shape here.
+type MembersPage = { next: string | null; results: RoomMember[] }
 
 /** The room the user is actively in — the jam they've joined as a guest, else
  *  their own room. Source of truth for the player; rehydrates on load so
@@ -12,6 +16,18 @@ export function useRoom(enabled = true) {
   return useQuery({
     queryKey: roomKeys.me(),
     queryFn: () => api<Room>('/rooms/current/'),
+    enabled,
+  })
+}
+
+/** Paginated roster of the jam you're in (host first). Kept off the broadcast
+ *  frames — the modal loads it on demand and pages through as it scrolls. */
+export function useJamMembers(enabled = true) {
+  return useInfiniteQuery({
+    queryKey: roomKeys.members(),
+    queryFn: ({ pageParam }) => api<MembersPage>(`/rooms/members/?page=${pageParam}`),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => (lastPage.next ? allPages.length + 1 : undefined),
     enabled,
   })
 }

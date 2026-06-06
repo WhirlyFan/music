@@ -6,6 +6,7 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from apps.catalog.models import Playlist, Track
@@ -22,6 +23,7 @@ from .serializers import (
     PlaySerializer,
     QueueItemRefSerializer,
     QueueSerializer,
+    RoomMemberSerializer,
     RoomSerializer,
     SaveAsPlaylistSerializer,
     SyncPositionSerializer,
@@ -99,6 +101,19 @@ class RoomViewSet(viewsets.ViewSet):
         else their own room. This is what the player subscribes to."""
         return self._read(services.current_room(request.user))
 
+    @extend_schema(responses=RoomMemberSerializer(many=True))
+    @action(detail=False, methods=["get"])
+    def members(self, request):
+        """Paginated member list for the room the user is in (host first, then
+        join order). Backs the jam modal's infinite-scroll roster — kept off the
+        broadcast frames, which carry only members_count."""
+        room = services.current_room(request.user)
+        qs = room.members.select_related("user").order_by("joined_at")
+        paginator = PageNumberPagination()
+        paginator.page_size = 30
+        page = paginator.paginate_queryset(qs, request, view=self)
+        return paginator.get_paginated_response(RoomMemberSerializer(page, many=True).data)
+
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
     def share(self, request):
@@ -130,8 +145,13 @@ class RoomViewSet(viewsets.ViewSet):
         client falls back to their own room)."""
         s = KickMemberSerializer(data=request.data)
         s.is_valid(raise_exception=True)
+        user_id = s.validated_data["user_id"]
         room = services.get_active_room(request.user)
-        return self._apply(room, lambda: services.kick_member(room, s.validated_data["user_id"]))
+        resp = self._apply(room, lambda: services.kick_member(room, user_id))
+        # Targeted nudge so the kicked client falls back to its own room (it's no
+        # longer in the roster, and the frame only carries a count now).
+        broadcast.notify_revoked(user_id, room.id)
+        return resp
 
     @extend_schema(request=JoinRoomSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])

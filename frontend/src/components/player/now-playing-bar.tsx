@@ -103,7 +103,7 @@ export function NowPlayingBar() {
   const isHost = room?.host_id === myUserId
   const canDrive = !isShared || isHost || (room?.allow_guest_control ?? false)
   const canEditQueue = !isShared || isHost
-  const memberCount = room?.members?.length ?? 0
+  const memberCount = room?.members_count ?? 0
 
   // Publish the player pill + queue-panel heights so the search pill can sit just
   // above them. We measure the queue's STABLE full height (the inner box) once;
@@ -428,20 +428,18 @@ export function NowPlayingBar() {
           )}
         </div>
 
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => setJamOpen(true)}
-          aria-label="Jam"
-          className="relative"
-        >
-          <Radio className={`size-4 ${isShared ? 'text-primary' : ''}`} />
+        {/* Wrapper so the count badge isn't clipped by the Button's
+            overflow-hidden (which the ripple needs). */}
+        <span className="relative inline-flex">
+          <Button size="icon" variant="ghost" onClick={() => setJamOpen(true)} aria-label="Jam">
+            <Radio className={`size-4 ${isShared ? 'text-primary' : ''}`} />
+          </Button>
           {isShared && memberCount > 0 && (
-            <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full text-[10px] leading-none font-semibold tabular-nums ring-2">
+            <span className="bg-primary text-primary-foreground ring-background motion-safe:animate-pop-in pointer-events-none absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2">
               {memberCount}
             </span>
           )}
-        </Button>
+        </span>
         <Button
           size="icon"
           variant="ghost"

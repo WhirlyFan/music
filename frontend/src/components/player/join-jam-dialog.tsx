@@ -22,6 +22,7 @@ export function JoinJamDialog({
 }) {
   const join = useJoinRoom()
   const [code, setCode] = useState('')
+  const [wiggle, setWiggle] = useState(false)
 
   const submit = () => {
     const c = code.trim()
@@ -31,7 +32,11 @@ export function JoinJamDialog({
         setCode('')
         onOpenChange(false)
       },
-      onError: () => toast.error('That jam code didn’t work — it may have ended.'),
+      onError: () => {
+        setWiggle(true)
+        setTimeout(() => setWiggle(false), 450)
+        toast.error('That jam code didn’t work — it may have ended.')
+      },
     })
   }
 
@@ -80,7 +85,7 @@ export function JoinJamDialog({
             aria-label="Jam code"
             autoComplete="off"
             autoCapitalize="characters"
-            className="border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 w-full rounded-xl border py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] uppercase focus-visible:ring-2 focus-visible:outline-none"
+            className={`border-input bg-background focus-visible:ring-ring placeholder:text-muted-foreground/40 w-full rounded-xl border py-3 text-center font-mono text-2xl font-bold tracking-[0.4em] uppercase focus-visible:ring-2 focus-visible:outline-none ${wiggle ? 'border-destructive animate-wiggle' : ''}`}
           />
           <Button
             type="submit"

@@ -5,7 +5,7 @@ from rest_framework import serializers
 from apps.catalog.serializers import TrackSerializer
 
 from . import services
-from .models import QueueItem, Room
+from .models import QueueItem, Room, RoomMember
 
 
 class QueueItemSerializer(serializers.ModelSerializer):
@@ -16,12 +16,14 @@ class QueueItemSerializer(serializers.ModelSerializer):
         fields = ["id", "kind", "position", "track"]
 
 
-class JamMemberSerializer(serializers.Serializer):
-    """A participant in a shared room — for the member list."""
+class RoomMemberSerializer(serializers.ModelSerializer):
+    """A participant in a shared room — for the paginated member list."""
 
-    user_id = serializers.UUIDField()
-    username = serializers.CharField()
-    role = serializers.CharField()
+    username = serializers.CharField(source="user.username", read_only=True)
+
+    class Meta:
+        model = RoomMember
+        fields = ["user_id", "username", "role"]
 
 
 class RoomSerializer(serializers.ModelSerializer):
@@ -57,7 +59,10 @@ class RoomSerializer(serializers.ModelSerializer):
     # Server's current time, stamped per response, so clients can correct for
     # client/server clock skew when computing the live position.
     server_time = serializers.SerializerMethodField()
-    members = serializers.SerializerMethodField()
+    # Just the count in the frame (kept light so broadcasts don't carry the whole
+    # roster); the member list itself is a separate paginated endpoint
+    # (GET /rooms/members/) fetched with an infinite query.
+    members_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Room
@@ -78,7 +83,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "playing_since",
             "generation",
             "server_time",
-            "members",
+            "members_count",
         ]
 
     @extend_schema_field(TrackSerializer)
@@ -110,15 +115,10 @@ class RoomSerializer(serializers.ModelSerializer):
         # datetime. Use DRF's representation so it matches playing_since's format.
         return serializers.DateTimeField().to_representation(timezone.now())
 
-    @extend_schema_field(JamMemberSerializer(many=True))
-    def get_members(self, room):
-        # Everyone in the Jam, host first then join order. Empty for a private room.
-        return [
-            {"user_id": str(m.user_id), "username": m.user.username, "role": m.role}
-            for m in sorted(
-                room.members.all(), key=lambda m: (m.role != "host", m.joined_at)
-            )
-        ]
+    @extend_schema_field(serializers.IntegerField())
+    def get_members_count(self, room):
+        # Uses the prefetched members (no extra query). 0 for a private room.
+        return len(room.members.all())
 
 
 class PlaySerializer(serializers.Serializer):
