@@ -36,7 +36,10 @@ def emit(kind: str, *, recipient, actor=None, **payload) -> Notification | None:
     note = Notification.objects.create(
         recipient=recipient, actor=actor, kind=kind, payload=payload or {}
     )
-    transaction.on_commit(lambda: _push(recipient.id))
+    # Carry the kind + payload on the nudge so the client can invalidate the exact
+    # domain caches that changed (friends list, a playlist's collaborators/tracks/…)
+    # for live cross-client updates — not just the notification list.
+    transaction.on_commit(lambda: _push(recipient.id, kind, note.payload))
     return note
 
 
@@ -49,15 +52,17 @@ def emit_many(kind: str, *, recipients, actor=None, **payload) -> list[Notificat
     return [n for n in notes if n is not None]
 
 
-def _push(recipient_id) -> None:
+def _push(recipient_id, kind: str = "", payload: dict | None = None) -> None:
     """Nudge the recipient's live socket(s) to refetch. Best-effort — the durable
-    row is already committed, so a missed push just means 'seen on next load'."""
+    row is already committed, so a missed push just means 'seen on next load'.
+    `kind`/`payload` ride along so the client can invalidate the right domain caches."""
     try:
         layer = get_channel_layer()
         if layer is None:
             return
         async_to_sync(layer.group_send)(
-            notification_group(recipient_id), {"type": "notification.new"}
+            notification_group(recipient_id),
+            {"type": "notification.new", "kind": kind, "payload": payload or {}},
         )
     except Exception:  # noqa: BLE001 — live push is best-effort
         log.warning("notification live-push failed for %s", recipient_id, exc_info=True)

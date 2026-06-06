@@ -22,6 +22,14 @@ class NotificationConsumer(AsyncJsonWebsocketConsumer):
         if group is not None:
             await self.channel_layer.group_discard(group, self.channel_name)
 
-    # {"type": "notification.new"} fanned to the group → this handler → the client.
+    # {"type": "notification.new", ...} fanned to the group → this handler → client.
+    # We forward the kind + payload so the client can invalidate the exact domain
+    # caches that changed (cross-client live updates), not just the notification list.
     async def notification_new(self, event):
-        await self.send_json({"type": "notification.new"})
+        await self.send_json(
+            {
+                "type": "notification.new",
+                "kind": event.get("kind", ""),
+                "payload": event.get("payload", {}),
+            }
+        )

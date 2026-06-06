@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import { notificationKeys } from '@/lib/hooks/keys'
+import { friendKeys, notificationKeys, playlistKeys } from '@/lib/hooks/keys'
 
 // Same WS origin derivation as the room socket (prod connects to the backend's own
 // domain via VITE_WS_BASE; dev derives same-origin ws://).
@@ -29,20 +29,41 @@ export function useNotificationSocket(enabled = true) {
     let backoff = 1000
     let retry: ReturnType<typeof setTimeout> | undefined
 
-    const refetch = () => void qc.invalidateQueries({ queryKey: notificationKeys.all() })
+    const invalidate = (key: readonly unknown[]) => void qc.invalidateQueries({ queryKey: key })
 
     const connect = () => {
       ws = new WebSocket(`${WS_ORIGIN}/ws/notifications/`)
       ws.onopen = () => {
         backoff = 1000
-        refetch() // catch up on anything that arrived while we were disconnected
+        // On (re)connect we may have missed events while down — refetch broadly so
+        // the bell AND the domain lists (friends, playlists) catch up.
+        invalidate(notificationKeys.all())
+        invalidate(friendKeys.all())
+        invalidate(playlistKeys.all())
       }
       ws.onmessage = (e) => {
+        let msg: { type?: string; kind?: string; payload?: Record<string, unknown> }
         try {
-          const msg = JSON.parse(e.data as string) as { type?: string }
-          if (msg.type === 'notification.new') refetch()
+          msg = JSON.parse(e.data as string)
         } catch {
-          /* ignore malformed frames */
+          return // ignore malformed frames
+        }
+        if (msg.type !== 'notification.new') return
+        // Always refresh the bell.
+        invalidate(notificationKeys.all())
+        // Then the exact domain cache the event changed, so an open friends list or
+        // collaborators list updates live (e.g. pending → accepted) on the OTHER
+        // client — the kind + payload ride along on the nudge for this.
+        const kind = msg.kind ?? ''
+        const payload = msg.payload ?? {}
+        if (kind.startsWith('friend')) {
+          invalidate(friendKeys.all())
+        }
+        if (kind.startsWith('playlist')) {
+          const pid = typeof payload.playlist_id === 'string' ? payload.playlist_id : null
+          // detail(id) is a prefix of collaborators/activity/tracks → one call covers
+          // the whole playlist view; fall back to the broad key if no id rode along.
+          invalidate(pid ? playlistKeys.detail(pid) : playlistKeys.all())
         }
       }
       ws.onclose = () => {
