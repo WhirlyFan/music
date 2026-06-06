@@ -242,9 +242,11 @@ export function NowPlayingBar() {
 
   const queue = room?.queue ?? [] // explicit "Add to queue" (plays first)
   const contextLabel = room?.context_label ?? ''
-  // The full context isn't in the room frame (kept tiny) — it's the paginated query,
-  // fetched when the queue panel opens. Counts below come from frame metadata.
-  const context = contextQuery.data?.pages.flatMap((p: ContextPage) => p.results) ?? []
+  // The full context comes from the paginated query (while the panel is open);
+  // seed the first paint from the small window the frame carries so it isn't empty
+  // before page 1 lands.
+  const loadedContext = contextQuery.data?.pages.flatMap((p: ContextPage) => p.results) ?? []
+  const context = loadedContext.length ? loadedContext : (room?.context_window ?? [])
   const contextCount = room?.context_count ?? 0
   // Counts come from the frame's metadata (exact, gap-safe) — NOT the loaded slice,
   // which may be only the first page of a long list.
@@ -358,7 +360,8 @@ export function NowPlayingBar() {
                 items={queue}
                 onPlay={(id) => jump.mutate(id)}
                 onRemove={(id) => removeItem.mutate(id)}
-                readOnly={!canEditQueue}
+                canPlay={canDrive}
+                canRemove={canEditQueue}
               />
             )}
             <QueueSection
@@ -368,7 +371,8 @@ export function NowPlayingBar() {
               onPlay={(id) => jump.mutate(id)}
               onRemove={(id) => removeItem.mutate(id)}
               emptyHint={queue.length === 0 ? 'Nothing queued.' : undefined}
-              readOnly={!canEditQueue}
+              canPlay={canDrive}
+              canRemove={canEditQueue}
             />
             {contextQuery.isFetchingNextPage && (
               <p className="text-muted-foreground py-1 text-center text-xs">Loading…</p>
@@ -572,7 +576,8 @@ function QueueSection({
   onRemove,
   currentId = null,
   emptyHint,
-  readOnly = false,
+  canPlay = true,
+  canRemove = false,
 }: {
   label: string
   items: QueueItem[]
@@ -580,7 +585,10 @@ function QueueSection({
   onRemove: (itemId: string) => void
   currentId?: string | null
   emptyHint?: string
-  readOnly?: boolean
+  // Playing a row is a playback action (a guest with control can); removing is a
+  // host-only queue edit — gated separately.
+  canPlay?: boolean
+  canRemove?: boolean
 }) {
   const curIdx = currentId ? items.findIndex((i) => i.id === currentId) : -1
   return (
@@ -604,12 +612,12 @@ function QueueSection({
             >
               <button
                 type="button"
-                onClick={() => !readOnly && onPlay(item.id)}
-                disabled={readOnly}
+                onClick={() => canPlay && onPlay(item.id)}
+                disabled={!canPlay}
                 className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm ${
                   played ? 'opacity-50' : ''
-                } ${isCurrent ? 'font-medium' : ''} ${readOnly ? 'cursor-default' : ''}`}
-                title={readOnly ? item.track.title : `Play ${item.track.title}`}
+                } ${isCurrent ? 'font-medium' : ''} ${!canPlay ? 'cursor-default' : ''}`}
+                title={canPlay ? `Play ${item.track.title}` : item.track.title}
               >
                 {isCurrent ? (
                   <Play className="text-primary size-3 shrink-0" />
@@ -623,7 +631,7 @@ function QueueSection({
                   {item.track.primary_artist}
                 </span>
               </button>
-              {!readOnly && (
+              {canRemove && (
                 <button
                   type="button"
                   onClick={() => onRemove(item.id)}

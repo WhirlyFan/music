@@ -43,16 +43,17 @@ class RoomSerializer(serializers.ModelSerializer):
     position_ms = serializers.IntegerField(source="playback.position_ms", read_only=True)
     context_label = serializers.CharField(source="playback.context_label", read_only=True)
     queue = serializers.SerializerMethodField()
-    # The played-from playlist is NOT inlined in the frame — only lightweight
-    # metadata. The track list itself is the paginated /rooms/context/ endpoint
-    # (fetched + cached client-side when the queue panel opens), so broadcasts and
-    # the heartbeat stay tiny regardless of playlist size.
+    # The full context (the played-from playlist) is NOT inlined — for a 1000-track
+    # list it would re-ship on every broadcast frame. Instead the frame carries
+    # metadata + a small window; the full list is the paginated /rooms/context/
+    # endpoint, fetched once and cached client-side.
     context_count = serializers.SerializerMethodField()
     # Items still ahead of the pointer — exact (gap-safe), drives the Next button.
     context_ahead = serializers.SerializerMethodField()
     context_pos = serializers.IntegerField(
         source="playback.context_pos", read_only=True, allow_null=True
     )
+    context_window = serializers.SerializerMethodField()
     # Changes only when the context list's membership/order changes, so a jam guest
     # refetches the full list on play/shuffle/remove but not on play/pause/seek.
     context_version = serializers.SerializerMethodField()
@@ -90,6 +91,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "context_count",
             "context_ahead",
             "context_pos",
+            "context_window",
             "context_version",
             "host_id",
             "code",
@@ -119,6 +121,12 @@ class RoomSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.IntegerField())
     def get_context_ahead(self, room):
         return services.context_ahead(room)
+
+    @extend_schema_field(QueueItemSerializer(many=True))
+    def get_context_window(self, room):
+        # A small head (current + lookahead) for the panel's first paint; the full
+        # list is GET /rooms/context/ (paginated, cached client-side).
+        return QueueItemSerializer(services.context_window(room), many=True).data
 
     @extend_schema_field(serializers.CharField())
     def get_context_version(self, room):

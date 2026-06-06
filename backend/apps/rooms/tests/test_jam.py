@@ -178,6 +178,34 @@ def test_guest_control_gating_and_toggle():
 
 
 @pytest.mark.django_db
+def test_guest_with_control_can_jump_in_the_jam():
+    from apps.catalog.tests.factories import TrackFactory
+
+    host_api, host = authed()
+    tracks = [TrackFactory() for _ in range(3)]
+    host_api.post(
+        "/api/v1/rooms/play/",
+        {"track_ids": [str(t.id) for t in tracks], "start_index": 0},
+        format="json",
+    )
+    code = host_api.post("/api/v1/rooms/share/").json()["code"]
+    guest_api, _ = authed()
+    guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json")
+
+    target = guest_api.get("/api/v1/rooms/current/").json()["context_window"][2]["id"]
+
+    # No guest control → jumping (a playback action) is gated.
+    assert guest_api.post("/api/v1/rooms/jump/", {"item_id": target}, format="json").status_code == 403
+
+    # With control → the guest jumps the JAM (host's room), not their own.
+    host_api.post("/api/v1/rooms/guest-control/", {"enabled": True}, format="json")
+    r = guest_api.post("/api/v1/rooms/jump/", {"item_id": target}, format="json")
+    assert r.status_code == 200
+    assert r.json()["host_id"] == str(host.id)
+    assert r.json()["current"]["id"] == str(tracks[2].id)
+
+
+@pytest.mark.django_db
 def test_host_can_kick_guest():
     host_api, host = authed()
     code = host_api.post("/api/v1/rooms/share/").json()["code"]
