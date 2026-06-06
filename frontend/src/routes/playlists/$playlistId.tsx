@@ -667,8 +667,12 @@ function SortableTrackRow({
   onToggleSelect: () => void
 }) {
   const { track } = item
+  // Drive dnd-kit's reorder animation with the app's springy curve (same as the
+  // gooey menu) so neighbours glide to make room with a little overshoot — the
+  // gravity-sim "feel" without forcing its 2D centre-pull physics onto a 1D list.
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: track.id,
+    transition: { duration: 220, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' },
   })
   const style = { transform: CSS.Transform.toString(transform), transition }
 
