@@ -16,10 +16,10 @@ the planned Jam/shared-session feature needs cross-user reads.
 ```
               ┌──────────────────────────────────────────┐
               │ Django request                            │
-              │   request.user.id = 42                    │
+              │   request.user.id = 0190e6b4-…-1a2b3c4d   │
               │                                           │
               │   RLSContextMiddleware:                   │
-              │     SET LOCAL rls.user_id = '42'          │
+              │     SET LOCAL rls.user_id = '0190e6b4-…'  │
               └─────────────────┬─────────────────────────┘
                                 │ runs every query on this conn
                                 ▼
@@ -28,7 +28,7 @@ the planned Jam/shared-session feature needs cross-user reads.
               │   (NO BYPASSRLS)                          │
               │                                           │
               │   SELECT * FROM catalog_playlist          │
-              │   WHERE created_by_id = 42                │  ← RLS policy adds this
+              │   WHERE created_by_id = '0190e6b4-…'      │  ← RLS policy adds this
               │     OR current_setting('rls.bypass')      │     transparently
               │       = 'true'                            │
               └──────────────────────────────────────────┘
@@ -71,14 +71,15 @@ def owner_scoped_policy(user_field="owner", *, name="owner_isolation"):
         name=name,
         expression=(
             f"{user_field}_id = "
-            f"NULLIF(current_setting('rls.user_id', true), '')::integer "
+            f"NULLIF(current_setting('rls.user_id', true), '')::uuid "
             f"OR current_setting('rls.bypass', true) = 'true'"
         ),
     )
 ```
 
 Two clauses:
-- `owner_id = current_setting('rls.user_id')::int` — the normal case
+- `owner_id = current_setting('rls.user_id')::uuid` — the normal case (the
+  user PK is a UUIDv7, so the session var is cast to `uuid`, not `int`)
 - `OR current_setting('rls.bypass') = 'true'` — the staff `/admin/` escape hatch
 
 Models declare it in `Meta.rls_policies` and inherit `RLSModel` (alongside our
@@ -90,14 +91,32 @@ class Playlist(BaseModel, RLSModel):
     created_by = models.ForeignKey(...)
     is_public = models.BooleanField(default=False)
     class Meta:
-        rls_policies = [owner_scoped_policy("created_by"), public_readable_policy()]
+        rls_policies = [
+            owner_scoped_policy("created_by"),
+            public_readable_policy(),
+            collaborator_readable_policy(),
+            collaborator_writable_policy(),
+        ]
 ```
 
 `public_readable_policy()` (also in `apps/core/rls.py`) is a **SELECT-only**
 policy adding `OR is_public` — Postgres ORs permissive policies, so reads become
-"owner OR public OR bypass" while writes stay owner-only. The `ensure_rls_policies`
-`post_migrate` signal (`apps/core/signals.py`) enables RLS + creates the policies
-on every `migrate` (idempotent), so there's no hand-written policy migration.
+"owner OR public OR bypass" while writes stay owner-only.
+
+`collaborator_readable_policy()` / `collaborator_writable_policy()` extend that to
+shared playlists via an `EXISTS` subquery against `catalog_playlistcollaborator`
+(see `_collaborator_expression`). READ matches a **pending OR accepted** invitee
+(so you can preview a playlist you've been invited to, then accept it); WRITE is
+**UPDATE-only** and requires an **accepted** membership — INSERT/DELETE stay the
+owner's privilege. So the full picture is reads = "owner OR public OR invited
+collaborator OR bypass", updates = "owner OR accepted collaborator OR bypass",
+create/delete = owner-only. The subquery must qualify `catalog_playlist.id` —
+`catalog_playlistcollaborator` has its own `id`, so an unqualified `id` would bind
+to the wrong row.
+
+The `ensure_rls_policies` `post_migrate` signal (`apps/core/signals.py`) enables
+RLS + creates the policies on every `migrate` (idempotent), so there's no
+hand-written policy migration.
 
 ## Middleware
 
@@ -143,12 +162,15 @@ The tests cover the matrix:
 
 | Test | What it proves |
 |---|---|
-| `test_rls_policy_is_present_on_table` | `migrate` enabled RLS + both policies |
+| `test_rls_policy_is_present_on_table` | `migrate` enabled RLS + the policies |
 | `test_anonymous_returns_zero_rows` | No session var + non-BYPASSRLS role → zero rows (not an error) |
 | `test_user_isolation` | User A sees A's rows; switching the session var alone switches visibility |
 | `test_viewset_without_app_layer_filter_still_safe` | An unfiltered `.objects.all()` still doesn't leak |
 | `test_admin_bypass_shows_all_rows` | `rls.bypass='true'` makes everything visible |
 | `test_public_playlist_readable_cross_user_but_not_writable` | `is_public` rows are readable cross-user but not writable |
+| `test_accepted_collaborator_can_read_and_update_private_playlist` | an accepted collaborator reads + updates a private playlist |
+| `test_pending_collaborator_can_read_but_not_update` | a pending invitee can preview (read) but not write |
+| `test_non_collaborator_cannot_see_private_playlist` | a non-collaborator gets zero rows for a private playlist |
 
 ## Footguns
 
@@ -175,14 +197,15 @@ Common extensions, in rough order of likelihood:
 
 | Need | Policy change |
 |---|---|
-| Org/tenant scoping | Add `org_id = current_setting('rls.org_id')::int` |
-| Sharing — "user X can see Y's note" | `OR EXISTS (SELECT 1 FROM shares WHERE note_id = id AND shared_with_id = current_setting('rls.user_id')::int)` |
-| Public posts | `OR is_public = true` |
+| Org/tenant scoping | Add `org_id = current_setting('rls.org_id')::uuid` |
+| Sharing — "user X can see Y's playlist" | **Already live** via the collaborator policies above — an `OR EXISTS (SELECT 1 FROM catalog_playlistcollaborator …)` subquery. Model new sharing the same way. |
+| Public posts | `OR is_public = true` (this is `public_readable_policy`) |
 | Soft delete invisibility | `AND deleted_at IS NULL` |
 
-For sharing specifically — see [permissions.md](permissions.md) for the
-guardian-vs-rules decision matrix on the *app* layer that pairs with the
-DB-layer RLS change.
+Session-var casts are `::uuid` (the user PK is a UUIDv7); only a non-user scope
+key like `org_id` would differ. For sharing specifically — see
+[permissions.md](permissions.md) for the guardian-vs-rules decision matrix on the
+*app* layer that pairs with the DB-layer RLS change.
 
 ## See also
 
