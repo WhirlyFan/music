@@ -67,6 +67,7 @@ LOCAL_APPS = [
     "apps.core",
     "apps.catalog",
     "apps.rooms",
+    "apps.notifications",
 ]
 
 # `daphne` MUST be first: in Channels 4 it provides the ASGI `runserver` that

@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { GlobalSearchPill } from '@/components/layout/global-search-pill'
 import { QuickActionsFab } from '@/components/layout/quick-actions-fab'
 import { ThemeToggle } from '@/components/layout/theme-toggle'
+import { NotificationBell } from '@/components/layout/notification-bell'
 import { TopNav } from '@/components/layout/top-nav'
 import { UserMenu } from '@/components/layout/user-menu'
 import { InviteFriendDialog } from '@/components/player/invite-friend-dialog'
@@ -25,6 +26,7 @@ import { hasVerifiedPrimaryEmail, isSessionAuthenticated } from '@/lib/auth/guar
 import { emailKeys, sessionKeys } from '@/lib/hooks/keys'
 import { useJoinRoom } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
+import { useNotificationSocket } from '@/lib/hooks/useNotificationSocket'
 
 type SessionUser = { email?: string; username?: string; first_name?: string; last_name?: string }
 type SessionData = { user?: SessionUser }
@@ -120,6 +122,8 @@ function RootLayout() {
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const user = (session?.data as SessionData | undefined)?.user
+  // One global socket for live events, independent of any room/page.
+  useNotificationSocket(authed)
 
   // Shareable jam link (/?jam=CODE): once authed, join that jam then strip the
   // param. join is idempotent, and the ref guards against re-firing on re-render.
@@ -160,13 +164,16 @@ function RootLayout() {
       {/* The top bar is gone (only Home + Playlists remain). Floating chrome
           instead: brand + Playlists top-left (authed), account/theme top-right. */}
       {authed && <TopNav />}
-      <div className="fixed top-3 right-4 z-40">
+      <div className="fixed top-3 right-4 z-40 flex items-center gap-1">
         {user?.username && user.email ? (
-          <UserMenu
-            username={user.username}
-            firstName={user.first_name}
-            lastName={user.last_name}
-          />
+          <>
+            <NotificationBell />
+            <UserMenu
+              username={user.username}
+              firstName={user.first_name}
+              lastName={user.last_name}
+            />
+          </>
         ) : (
           // Logged out: theme stays globally reachable here (authed users get it
           // inside the gooey FAB instead).

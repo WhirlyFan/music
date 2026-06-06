@@ -59,6 +59,12 @@ export const searchKeys = {
   songs: (q: string) => ['search', 'songs', q] as const,
 }
 
+export const notificationKeys = {
+  all: () => ['notifications'] as const,
+  list: () => ['notifications', 'list'] as const,
+  unread: () => ['notifications', 'unread'] as const,
+}
+
 // Import result keyed by source URL — so /import?url=… is shareable + refresh-safe
 // (cached per URL; only a hard refresh / first visit re-runs the ingest).
 export const importKeys = {

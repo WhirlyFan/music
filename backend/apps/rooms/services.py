@@ -192,9 +192,16 @@ def join_guest(room: Room, user) -> list[Room]:
         .distinct()
     )
     RoomMember.objects.filter(user=user, role=RoomMember.Role.GUEST).exclude(room=room).delete()
-    RoomMember.objects.get_or_create(
+    _, created = RoomMember.objects.get_or_create(
         room=room, user=user, defaults={"role": RoomMember.Role.GUEST}
     )
+    if created:
+        # Tell the host someone joined their jam (durable + live). Local import to
+        # avoid a rooms↔notifications import cycle.
+        from apps.notifications.events import emit
+        from apps.notifications.models import Notification
+
+        emit(Notification.Kind.JAM_JOIN, recipient=room.host, actor=user, room_id=str(room.id))
     return left
 
 
@@ -478,8 +485,6 @@ def remove(room: Room, item_id) -> bool:
     return True
 
 
-@transaction.atomic
-@transaction.atomic
 def _seeded_shuffle(items: list[QueueItem], seed: int):
     """Assign new positions for a Spotify-style shuffle, deterministically from
     `seed`. Items are taken in a stable order (current position) first, so the
