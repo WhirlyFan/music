@@ -1,0 +1,8 @@
+{% extends "account/email/base_message.txt" %}
+{% load i18n %}
+{% block content %}{% autoescape off %}{% blocktrans with site_name=current_site.name %}Confirm this email address so we can use it for your {{ site_name }} account. If this wasn't you, you can safely ignore this email.{% endblocktrans %}
+
+{% if code %}{% blocktrans %}Your verification code is below — enter it in the browser window you have open:{% endblocktrans %}
+
+{{ code }}{% else %}{% blocktrans %}Confirm it by opening the link below:{% endblocktrans %}
+{{ activate_url }}{% endif %}{% endautoescape %}{% endblock content %}
