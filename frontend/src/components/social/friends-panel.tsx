@@ -1,5 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Check, Settings, UserPlus, Users, UserX, X } from 'lucide-react'
+import { Check, UserPlus, Users, UserX, X } from 'lucide-react'
 import { useState } from 'react'
 
 import { Button } from '@/components/ui/button'
@@ -19,19 +18,12 @@ import {
 } from '@/lib/hooks/queries/friends'
 import { useDebounced } from '@/lib/use-debounced'
 
-export const Route = createFileRoute('/profile')({
-  component: ProfilePage,
-  head: () => ({ meta: [{ title: 'Profile — music' }] }),
-})
-
-type SessionUser = { username?: string; first_name?: string; last_name?: string; email?: string }
-
-function ProfilePage() {
+/** The friends hub: search-to-add, incoming/outgoing requests, and your friends list.
+ *  Self-contained (fetches its own data) so it can drop into Settings. */
+export function FriendsPanel() {
   const session = useSession()
-  const user = (session.data?.data as { user?: SessionUser } | undefined)?.user
-  const username = user?.username ?? ''
-  const fullName = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()
-
+  const myUsername = (session.data?.data as { user?: { username?: string } } | undefined)?.user
+    ?.username
   const friends = useFriends()
   const requests = useFriendRequests()
   const incoming = requests.data?.incoming ?? []
@@ -39,15 +31,7 @@ function ProfilePage() {
   const friendCount = friends.data?.length ?? 0
 
   return (
-    <div className="motion-safe:animate-fade-in mx-auto max-w-2xl space-y-8">
-      <ProfileHero
-        username={username}
-        fullName={fullName}
-        email={user?.email}
-        friendCount={friendCount}
-        loadingCount={friends.isLoading}
-      />
-
+    <div className="space-y-6">
       <AddFriend />
 
       {incoming.length > 0 && (
@@ -71,8 +55,7 @@ function ProfilePage() {
           <RowSkeletons />
         ) : friends.data && friends.data.length > 0 ? (
           friends.data.map((f) => {
-            // The friend is whichever side of the row isn't me.
-            const other = f.requester.username === username ? f.addressee : f.requester
+            const other = f.requester.username === myUsername ? f.addressee : f.requester
             return <FriendRow key={f.id} id={f.id} user={other} />
           })
         ) : (
@@ -85,65 +68,6 @@ function ProfilePage() {
   )
 }
 
-/** The showcase header: avatar in a glowing gradient ring, name, handle, a friend
- *  count chip, and a quiet jump to Settings. */
-function ProfileHero({
-  username,
-  fullName,
-  email,
-  friendCount,
-  loadingCount,
-}: {
-  username: string
-  fullName: string
-  email?: string
-  friendCount: number
-  loadingCount: boolean
-}) {
-  return (
-    <header className="border-border/70 bg-card relative overflow-hidden rounded-3xl border shadow-sm">
-      {/* Soft brand glow bleeding from the top-right — the non-flat signature. */}
-      <div
-        aria-hidden
-        className="from-primary/25 via-accent/10 pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-gradient-to-br to-transparent blur-3xl"
-      />
-      <div className="relative flex flex-col items-center gap-4 px-6 py-8 text-center sm:flex-row sm:gap-5 sm:text-left">
-        {/* Gradient ring around the person-on-glass avatar. */}
-        <span className="from-primary to-accent shadow-primary/30 inline-flex shrink-0 rounded-full bg-gradient-to-br p-[3px] shadow-lg">
-          <UserAvatar
-            username={username}
-            size="size-20"
-            icon="size-9"
-            className="border-background border-2"
-          />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{fullName || username}</h1>
-          <p className="text-muted-foreground truncate text-sm">@{username}</p>
-          <div className="mt-3 flex items-center justify-center gap-2 sm:justify-start">
-            <span className="bg-primary/10 text-primary inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium">
-              <Users className="size-3.5" aria-hidden />
-              {loadingCount ? '—' : friendCount} {friendCount === 1 ? 'friend' : 'friends'}
-            </span>
-            {email && (
-              <span className="text-muted-foreground hidden truncate text-xs sm:inline">
-                {email}
-              </span>
-            )}
-          </div>
-        </div>
-        <Button asChild variant="outline" size="sm" className="shrink-0 rounded-full">
-          <Link to="/settings">
-            <Settings className="mr-1.5 size-4" aria-hidden />
-            Edit
-          </Link>
-        </Button>
-      </div>
-    </header>
-  )
-}
-
-/** Username search → results with an Add button. */
 function AddFriend() {
   const [term, setTerm] = useState('')
   const q = useDebounced(term, 300)
@@ -207,12 +131,7 @@ function IncomingRow({ id, user }: { id: string; user: FriendUser }) {
       user={user}
       action={
         <span className="flex gap-2">
-          <Button
-            size="sm"
-            className="rounded-full"
-            disabled={busy}
-            onClick={() => accept.mutate(id)}
-          >
+          <Button size="sm" className="rounded-full" disabled={busy} onClick={() => accept.mutate(id)}>
             <Check className="mr-1 size-4" aria-hidden />
             Accept
           </Button>
@@ -294,8 +213,7 @@ const Card = ({ children }: { children: React.ReactNode }) => (
   </div>
 )
 
-/** Section with a gradient icon badge header + a card body — the house style
- *  (mirrors the settings icon badges), so it doesn't read as a flat list. */
+/** Section with a gradient icon badge header + a card body — the house style. */
 function Section({
   icon: Icon,
   title,

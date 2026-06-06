@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { AtSign, KeyRound, Loader2, Mail, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, Loader2, Mail, Pencil, ShieldCheck } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
 import { GoogleIcon } from '@/components/auth/google-button'
 import { settingsCard, SettingsPageShell } from '@/components/layout/settings-page-shell'
+import { FriendsPanel } from '@/components/social/friends-panel'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { ApiError } from '@/lib/api/client'
 import { providerRedirect } from '@/lib/auth/api'
 import { useAuthenticators } from '@/lib/auth/mfa'
@@ -20,6 +22,7 @@ export const Route = createFileRoute('/settings')({
 })
 
 type AuthenticatorEntry = { type?: string }
+type SessionUser = { email?: string; username?: string; first_name?: string; last_name?: string }
 
 // 3–30 chars, letters/digits/_/- — mirrors the backend rule (apps/users/views.py).
 const USERNAME_RE = /^[a-zA-Z0-9_-]{3,30}$/
@@ -32,39 +35,24 @@ function SettingsPage() {
   const data = (authenticators.data?.data as AuthenticatorEntry[] | undefined) ?? []
   const types = new Set(data.map((a) => a.type))
   const mfaEnrolled = types.has('totp') || types.has('webauthn')
-  const user = (session.data?.data as { user?: { email?: string; username?: string } } | undefined)
-    ?.user
+  const user = (session.data?.data as { user?: SessionUser } | undefined)?.user
 
   return (
-    // No breadcrumbs on the top-level settings page — a single-item trail
-    // is redundant with the page title and confuses users who click it and
-    // get sent to themselves. Breadcrumbs are intentional UI, not chrome.
-    <SettingsPageShell
-      title="Settings"
-      description="Manage your account, security, and preferences."
-    >
-      <Section title="Account" description="Your sign-in identity.">
-        <SettingsRow
-          icon={<UserRound className="size-4" aria-hidden="true" />}
-          title="Profile"
-          description="Your public profile and friends."
-          action={
-            <Button asChild variant="outline" size="sm">
-              <Link to="/profile">View</Link>
-            </Button>
-          }
-        />
-        <SettingsRow
-          icon={<Mail className="size-4" aria-hidden="true" />}
-          title="Email"
-          description={user?.email ?? 'The address you sign in and receive mail at.'}
-          action={
-            <Button asChild variant="outline" size="sm">
-              <Link to="/account/email">Change</Link>
-            </Button>
-          }
-        />
-        <UsernameRow username={user?.username} />
+    <SettingsPageShell title="Settings" description="Manage your account, security, and friends.">
+      {/* Profile banner — identity at a glance; Edit reveals username + email so the
+          account section doesn't need separate rows for them. */}
+      <ProfileBanner user={user} />
+
+      {/* FriendsPanel renders its own cards, so it isn't wrapped in a Section card. */}
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-lg font-medium">Friends</h2>
+          <p className="text-muted-foreground text-sm">People you listen and collaborate with.</p>
+        </div>
+        <FriendsPanel />
+      </section>
+
+      <Section title="Account" description="How you sign in.">
         <SettingsRow
           icon={<KeyRound className="size-4" aria-hidden="true" />}
           title="Password"
@@ -107,31 +95,94 @@ function SettingsPage() {
   )
 }
 
-/** Inline-editable handle. Display shows the current username + Change; editing swaps
- *  in an input with Save/Cancel. Validates the format client-side, lets the server have
- *  the final say on uniqueness (409 → "taken"). */
-function UsernameRow({ username }: { username?: string }) {
-  const change = useChangeUsername()
+/** Identity banner: avatar + name + handle, with an Edit that reveals inline username
+ *  editing and the email (the two things that used to be their own rows). */
+function ProfileBanner({ user }: { user?: SessionUser }) {
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState('')
+  const username = user?.username ?? ''
+  const fullName = `${user?.first_name ?? ''} ${user?.last_name ?? ''}`.trim()
 
-  function start() {
-    setValue(username ?? '')
-    setEditing(true)
-  }
+  return (
+    <header className="border-border/70 bg-card relative overflow-hidden rounded-3xl border shadow-sm">
+      <div
+        aria-hidden
+        className="from-primary/25 via-accent/10 pointer-events-none absolute -top-24 -right-16 size-64 rounded-full bg-gradient-to-br to-transparent blur-3xl"
+      />
+      <div className="relative flex items-center gap-4 px-6 py-6">
+        <span className="from-primary to-accent shadow-primary/30 inline-flex shrink-0 rounded-full bg-gradient-to-br p-[3px] shadow-lg">
+          {username ? (
+            <UserAvatar
+              username={username}
+              size="size-16"
+              icon="size-7"
+              className="border-background border-2"
+              link
+            />
+          ) : (
+            <Skeleton className="size-16 rounded-full" />
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-xl font-semibold tracking-tight">{fullName || username}</h2>
+          {username ? (
+            <p className="text-muted-foreground truncate text-sm">@{username}</p>
+          ) : (
+            <Skeleton className="mt-1 h-4 w-24" />
+          )}
+          {user?.email && (
+            <p className="text-muted-foreground truncate text-xs">{user.email}</p>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0 rounded-full"
+          onClick={() => setEditing((v) => !v)}
+        >
+          <Pencil className="mr-1.5 size-4" aria-hidden />
+          {editing ? 'Done' : 'Edit'}
+        </Button>
+      </div>
+
+      {editing && (
+        <div className="border-border/60 space-y-4 border-t px-6 py-4">
+          <UsernameField username={username} />
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Email</label>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground inline-flex min-h-9 flex-1 items-center gap-2 truncate text-sm">
+                <Mail className="size-4 shrink-0" aria-hidden />
+                {user?.email ?? '—'}
+              </span>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/account/email">Change</Link>
+              </Button>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              Changing your email requires verifying the new address.
+            </p>
+          </div>
+        </div>
+      )}
+    </header>
+  )
+}
+
+/** Inline username editor — input + Save. Format validated client-side; the server
+ *  has the final say on uniqueness (409 → "taken"). */
+function UsernameField({ username }: { username: string }) {
+  const change = useChangeUsername()
+  const [value, setValue] = useState(username)
 
   function save() {
     const next = value.trim()
-    if (next === username) return setEditing(false)
+    if (next === username) return
     if (!USERNAME_RE.test(next)) {
       toast.error('3–30 characters: letters, numbers, “_” or “-”.')
       return
     }
     change.mutate(next.toLowerCase(), {
-      onSuccess: () => {
-        toast.success('Username updated.')
-        setEditing(false)
-      },
+      onSuccess: () => toast.success('Username updated.'),
       onError: (e) => {
         const taken = e instanceof ApiError && e.status === 409
         toast.error(taken ? 'That username is taken.' : 'Couldn’t update your username.')
@@ -140,52 +191,28 @@ function UsernameRow({ username }: { username?: string }) {
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 p-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <IconBadge>
-          <AtSign className="size-4" aria-hidden="true" />
-        </IconBadge>
-        <div className="min-w-0 space-y-1">
-          <p className="text-sm font-medium">Username</p>
-          {editing ? (
-            <Input
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              autoFocus
-              maxLength={30}
-              aria-label="New username"
-              className="h-8 w-48"
-            />
-          ) : (
-            <p className="text-muted-foreground truncate text-xs">
-              {username ? `@${username}` : 'Your public handle.'}
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="flex shrink-0 gap-2">
-        {editing ? (
-          <>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={save} disabled={change.isPending}>
-              {change.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : 'Save'}
-            </Button>
-          </>
-        ) : (
-          <Button size="sm" variant="outline" onClick={start}>
-            Change
-          </Button>
-        )}
+    <div className="space-y-1.5">
+      <label htmlFor="settings-username" className="text-sm font-medium">
+        Username
+      </label>
+      <div className="flex items-center gap-2">
+        <Input
+          id="settings-username"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          maxLength={30}
+          aria-label="Username"
+          className="h-9 max-w-xs"
+        />
+        <Button size="sm" onClick={save} disabled={change.isPending || value.trim() === username}>
+          {change.isPending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : 'Save'}
+        </Button>
       </div>
     </div>
   )
 }
 
-/** Connect / disconnect Google for the signed-in user. Connect uses allauth's
- *  process=connect redirect, returning to /settings; disconnect calls the headless
- *  manage-providers endpoint (allauth refuses if it'd lock you out of every login). */
+/** Connect / disconnect Google for the signed-in user. */
 function GoogleConnectionRow({ loading: parentLoading }: { loading?: boolean }) {
   const { google, isPending } = useProviderAccounts()
   const disconnect = useDisconnectProvider()
@@ -258,9 +285,8 @@ function Section({
   )
 }
 
-/** The round gradient icon badge used on each settings row — matches the dialog +
- *  auth-card header icons. `brand` swaps in a neutral tile so a multicolor logo
- *  (e.g. Google) sits on a plain surface instead of the gradient. */
+/** The round gradient icon badge used on each settings row. `brand` swaps in a
+ *  neutral tile so a multicolor logo (e.g. Google) sits on a plain surface. */
 function IconBadge({ children, brand = false }: { children: React.ReactNode; brand?: boolean }) {
   return (
     <span
@@ -310,17 +336,13 @@ function SettingsRow({
             ) : null}
           </div>
           {loading ? (
-            // h-4 matches the loaded description's text-xs line box (16px), so the
-            // row doesn't grow when the real text replaces the skeleton.
             <Skeleton className="h-4 w-44" />
           ) : (
             <p className="text-muted-foreground truncate text-xs">{description}</p>
           )}
         </div>
       </div>
-      <div className="shrink-0">
-        {loading ? <Skeleton className="h-9 w-20 rounded-lg" /> : action}
-      </div>
+      <div className="shrink-0">{loading ? <Skeleton className="h-9 w-20 rounded-lg" /> : action}</div>
     </div>
   )
 }
