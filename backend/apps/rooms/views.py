@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, F, Prefetch
+from django.db.models import Count, F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
@@ -10,8 +10,8 @@ from rest_framework.response import Response
 from apps.catalog.models import Playlist, Track
 from apps.catalog.serializers import PlaylistSerializer
 
-from . import broadcast, services
-from .models import PlaybackState, QueueItem, Room
+from . import broadcast, services, snapshot
+from .models import PlaybackState
 from .serializers import (
     JoinRoomSerializer,
     PlayNowSerializer,
@@ -37,28 +37,10 @@ class RoomViewSet(viewsets.ViewSet):
 
     permission_classes = [permissions.IsAuthenticated]
 
-    def _load(self, room_id) -> Room:
-        """Fully-prefetched room by id — the exact shape RoomSerializer needs
-        (and, later, what the WebSocket broadcast re-serializes)."""
-        return (
-            Room.objects.select_related(
-                "playback", "playback__current_item", "playback__current_item__track"
-            )
-            .prefetch_related(
-                Prefetch(
-                    "items",
-                    queryset=QueueItem.objects.select_related("track").order_by("position"),
-                ),
-                "items__track__playback_sources",
-                "playback__current_item__track__playback_sources",
-                "members__user",
-            )
-            .get(pk=room_id)
-        )
-
     def _data(self, room) -> dict:
-        """Serialize a room in the player's shape (re-loads it fully prefetched)."""
-        return RoomSerializer(self._load(room.id)).data
+        """Serialize a room in the player's shape (re-loads it fully prefetched).
+        Shared with the WebSocket consumer via apps.rooms.snapshot."""
+        return snapshot.serialize_room(room.id)
 
     def _read(self, room):
         """Plain read — no generation bump, no broadcast."""
