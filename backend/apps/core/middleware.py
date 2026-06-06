@@ -72,6 +72,7 @@ class RequireMfaForStaffMiddleware:
 
         return self.get_response(request)
 
+
 # Paths exempt from the verified-email gate. allauth endpoints stay reachable
 # (the user needs to be able to hit /_allauth/account/email/verify to
 # complete verification). The frontend's verify-email holding page also
