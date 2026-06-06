@@ -1,6 +1,17 @@
 import { Check, UserPlus, Users, UserX, X } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -213,22 +224,47 @@ function OutgoingRow({ id, user }: { id: string; user: FriendUser }) {
 
 function FriendRow({ id, user }: { id: string; user: FriendUser }) {
   const remove = useRemoveFriend()
+  const [confirm, setConfirm] = useState(false)
   return (
-    <UserRow
-      user={user}
-      action={
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-muted-foreground hover:text-destructive rounded-full"
-          disabled={remove.isPending}
-          onClick={() => remove.mutate(id)}
-          aria-label={`Remove ${user.username}`}
-        >
-          <UserX className="size-4" aria-hidden />
-        </Button>
-      }
-    />
+    <>
+      <UserRow
+        user={user}
+        action={
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive rounded-full"
+            disabled={remove.isPending}
+            onClick={() => setConfirm(true)}
+            aria-label={`Remove ${user.username}`}
+          >
+            <UserX className="size-4" aria-hidden />
+          </Button>
+        }
+      />
+      <AlertDialog open={confirm} onOpenChange={setConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove @{user.username}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You’ll no longer be friends. You can send a new request anytime.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() =>
+                remove.mutate(id, {
+                  onSuccess: () => toast.success(`Removed @${user.username}.`),
+                })
+              }
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 

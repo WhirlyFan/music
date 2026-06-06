@@ -21,6 +21,7 @@ import {
   GripVertical,
   ListPlus,
   Lock,
+  MoreHorizontal,
   Pencil,
   RefreshCw,
   SearchX,
@@ -46,9 +47,16 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Breadcrumbs } from '@/components/ui/breadcrumbs'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, SkeletonText, SkeletonZone, useSkeletonZone } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import type { PaginatedPlaylistTrackList, PlaylistTrack } from '@/lib/api/models'
 import { playlistKeys } from '@/lib/hooks/keys'
@@ -295,20 +303,21 @@ function PlaylistDetailPage() {
               {/* One visibility label, same spot in both modes. Owner edits it as a
                   toggle; everyone else (and view mode) sees a static Public/Private. */}
               {editing && isOwner ? (
-                <button
-                  type="button"
-                  aria-pressed={draft.isPublic}
-                  title="Toggle who can see this playlist"
-                  onClick={() => setDraft((d) => ({ ...d, isPublic: !d.isPublic }))}
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                    draft.isPublic
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-muted text-foreground/70 hover:text-foreground'
-                  }`}
-                >
-                  {draft.isPublic ? <Globe className="size-3" aria-hidden /> : <Lock className="size-3" aria-hidden />}
-                  {draft.isPublic ? 'Public' : 'Private'}
-                </button>
+                <span className="inline-flex items-center gap-1.5">
+                  <Switch
+                    checked={draft.isPublic}
+                    onCheckedChange={(v) => setDraft((d) => ({ ...d, isPublic: v }))}
+                    aria-label="Make playlist public"
+                  />
+                  <span className="text-foreground/80 inline-flex items-center gap-1 text-[11px] font-medium">
+                    {draft.isPublic ? (
+                      <Globe className="size-3" aria-hidden />
+                    ) : (
+                      <Lock className="size-3" aria-hidden />
+                    )}
+                    {draft.isPublic ? 'Public' : 'Private'}
+                  </span>
+                </span>
               ) : (
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
@@ -344,19 +353,35 @@ function PlaylistDetailPage() {
             )}
           </div>
 
+          {/* The primary filled button stays in the same (rightmost) slot across
+              modes — Play → Save — so it doesn't jump. Edit → Cancel sits to its left;
+              destructive/rare actions (Refresh, Delete) live in the edit "⋯" menu. */}
           <div className="flex shrink-0 items-center gap-2">
             {editing ? (
               <>
-                {isOwner && playlist.origin && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Refresh from source"
-                    title="Refresh from source"
-                    onClick={() => setRefreshOpen(true)}
-                  >
-                    <RefreshCw className="size-4" />
-                  </Button>
+                {isOwner && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label="More actions">
+                        <MoreHorizontal className="size-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {playlist.origin && (
+                        <DropdownMenuItem onSelect={() => setRefreshOpen(true)}>
+                          <RefreshCw className="mr-2 size-4" />
+                          Refresh from source
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => setDeleteOpen(true)}
+                      >
+                        <Trash2 className="mr-2 size-4" />
+                        Delete playlist
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
                 <Button variant="ghost" onClick={() => setEditing(false)}>
                   Cancel
@@ -367,30 +392,18 @@ function PlaylistDetailPage() {
               </>
             ) : (
               <>
-                <Button
-                  disabled={!playlist.track_count}
-                  onClick={() => playPlaylist.mutate({ playlistId })}
-                >
-                  Play
-                </Button>
                 {canEdit && (
                   <Button variant="outline" onClick={startEdit}>
                     <Pencil className="mr-2 size-4" />
                     Edit
                   </Button>
                 )}
-                {isOwner && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Delete playlist"
-                    title="Delete playlist"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                )}
+                <Button
+                  disabled={!playlist.track_count}
+                  onClick={() => playPlaylist.mutate({ playlistId })}
+                >
+                  Play
+                </Button>
               </>
             )}
           </div>
