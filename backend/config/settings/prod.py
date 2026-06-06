@@ -94,7 +94,7 @@ CONTENT_SECURITY_POLICY = {
         "object-src": [NONE],
         "base-uri": [SELF],
         "frame-ancestors": [NONE],  # defense-in-depth alongside X-Frame-Options
-        "form-action": [SELF],
+        "form-action": [SELF, "https://accounts.google.com"],
         # "report-uri": "https://<your-collector>",  # wire a Sentry/report endpoint
     },
 }
