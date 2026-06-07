@@ -74,8 +74,7 @@ pub fn run() {
             });
 
             let url = format!("http://127.0.0.1:{port}/");
-            let oauth_jar = jar.clone();
-            tauri::WebviewWindowBuilder::new(
+            let webview = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::External(url.parse().expect("proxy url")),
@@ -84,44 +83,50 @@ pub fn run() {
             .inner_size(1280.0, 800.0)
             .min_inner_size(900.0, 600.0)
             .center()
-            // OAuth harvest: Google login can't complete through the proxy (the
-            // cross-domain bounce to Google + back to the prod callback bypasses
-            // it). So the desktop "sign in" sends the webview to the prod site,
-            // where the full flow works; when it lands back on an authenticated
-            // prod page we lift the `sessionid` cookie into the proxy jar and
-            // return to the local app — now authenticated, with no backend change.
-            .on_page_load(move |webview, payload| {
-                if payload.event() != tauri::webview::PageLoadEvent::Finished {
-                    return;
-                }
-                let u = payload.url();
-                if u.host_str() != Some("music.whirlyfan.com") {
-                    return;
-                }
-                let path = u.path();
-                // Pre-auth / in-flight pages have no usable session yet.
-                if path == "/login"
-                    || path == "/signup"
-                    || path.starts_with("/account")
-                    || path.starts_with("/_allauth")
-                    || path.starts_with("/accounts")
-                {
-                    return;
-                }
-                let Ok(cookies) = webview.cookies_for_url(u.clone()) else {
-                    return;
-                };
-                let Some(sess) = cookies.iter().find(|c| c.name() == "sessionid") else {
-                    return; // not authenticated yet — let the page be
-                };
-                let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
-                oauth_jar.add_cookie_str(&format!("sessionid={}; Path=/", sess.value()), &api);
-                log::info!("harvested prod session into proxy jar; returning to local app");
-                if let Ok(local) = format!("http://127.0.0.1:{port}/").parse() {
-                    let _ = webview.navigate(local);
-                }
-            })
             .build()?;
+
+            // OAuth harvest (background poll). Google login can't complete through
+            // the proxy (the bounce to Google + back to the prod callback bypasses
+            // it), so the desktop "sign in" sends the webview to the prod site where
+            // the full flow works. Tauri's page-load events don't fire reliably
+            // across that cross-origin redirect chain, so instead we POLL the
+            // webview's prod cookies: the moment a `sessionid` appears we lift it
+            // into the proxy jar and, if the webview is still on prod, bring it home
+            // — now authenticated, with no backend change.
+            let harvest_jar = jar.clone();
+            tauri::async_runtime::spawn(async move {
+                let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
+                let local: tauri::Url = format!("http://127.0.0.1:{port}/").parse().unwrap();
+                let mut have_session = false;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    // cookies() returns ALL cookies (incl. HttpOnly/secure) across URLs;
+                    // cookies_for_url's URL filter returns empty for the prod domain here.
+                    let cookies = match webview.cookies() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log::error!("[harvest] cookies() failed: {e}");
+                            continue;
+                        }
+                    };
+                    let Some(sess) = cookies.iter().find(|c| c.name() == "sessionid") else {
+                        have_session = false;
+                        continue;
+                    };
+                    harvest_jar
+                        .add_cookie_str(&format!("sessionid={}; Path=/", sess.value()), &api);
+                    if !have_session {
+                        have_session = true;
+                        log::info!("[harvest] sessionid found → injected into proxy jar");
+                    }
+                    if let Ok(cur) = webview.url() {
+                        if cur.host_str() == Some("music.whirlyfan.com") {
+                            log::info!("[harvest] returning webview to local app");
+                            let _ = webview.navigate(local.clone());
+                        }
+                    }
+                }
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
