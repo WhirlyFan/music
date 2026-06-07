@@ -112,6 +112,16 @@ export function useRemoveItem() {
   )
 }
 
+/** Drag-reorder the user queue: move an item to an absolute index. */
+export function useReorderQueue() {
+  return useRoomMutation((args: { itemId: string; position: number }) =>
+    api<Room>('/rooms/reorder/', {
+      method: 'POST',
+      body: { item_id: args.itemId, position: args.position },
+    }),
+  )
+}
+
 /** Shuffle the whole context and play from the top (Spotify-style). */
 export function useShuffle() {
   return useRoomMutation(() => api<Room>('/rooms/shuffle/', { method: 'POST' }), {

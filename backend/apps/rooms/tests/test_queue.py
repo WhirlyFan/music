@@ -243,6 +243,30 @@ def test_prewarm_video_ids_skips_unmatched_tracks():
 
 
 @pytest.mark.django_db
+def test_reorder_queue_moves_item_within_the_up_next_list():
+    user = UserFactory()
+    room = services.get_active_room(user)
+    a, b, c = TrackFactory(), TrackFactory(), TrackFactory()
+    # First enqueue becomes current (queue item); the rest are the shown "up next".
+    services.enqueue(room, a, added_by=user)
+    i_b = services.enqueue(room, b, added_by=user)
+    i_c = services.enqueue(room, c, added_by=user)
+    # Reload fresh each step (the view does the same per request); the test's `room`
+    # would otherwise serve stale cached relations.
+    assert [i.id for i in services.upcoming(room_snapshot.load_room(room.id))["queue"]] == [
+        i_b.id,
+        i_c.id,
+    ]
+
+    services.reorder_queue(room_snapshot.load_room(room.id), i_c.id, 0)  # drag c to the top
+
+    assert [i.id for i in services.upcoming(room_snapshot.load_room(room.id))["queue"]] == [
+        i_c.id,
+        i_b.id,
+    ]
+
+
+@pytest.mark.django_db
 def test_room_frame_carries_prewarm_list():
     user = UserFactory()
     room = services.get_active_room(user)

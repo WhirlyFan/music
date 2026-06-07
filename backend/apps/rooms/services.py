@@ -473,6 +473,33 @@ def remove(room: Room, item_id) -> bool:
     return True
 
 
+@transaction.atomic
+def reorder_queue(room: Room, item_id, position: int) -> None:
+    """Drag-reorder the user QUEUE: move `item_id` to absolute `position` within the
+    'Next in queue' list (the non-current QUEUE items the client shows). CONTEXT is
+    untouched — it's the stable played-from list with its own pointer. Renumbers the
+    queued items, keeping them after the currently-playing one (if it's itself a queue
+    item) so Next still plays them in the shown order."""
+    playback = getattr(room, "playback", None)
+    cur_id = playback.current_item_id if playback else None
+    items = [it for it in _queue(room).order_by("position") if it.id != cur_id]
+    moving = next((it for it in items if str(it.id) == str(item_id)), None)
+    if moving is None:
+        return
+    items.remove(moving)
+    items.insert(max(0, min(position, len(items))), moving)
+    # Keep the reordered items strictly after the current queue item, if there is one.
+    base = 0
+    if cur_id is not None:
+        cur = _queue(room).filter(id=cur_id).first()
+        if cur is not None:
+            base = cur.position + 1
+    for i, it in enumerate(items):
+        if it.position != base + i:
+            it.position = base + i
+            it.save(update_fields=["position"])
+
+
 def _seeded_shuffle(items: list[QueueItem], seed: int):
     """Assign new positions for a Spotify-style shuffle, deterministically from
     `seed`. Items are taken in a stable order (current position) first, so the

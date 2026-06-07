@@ -26,6 +26,7 @@ from .serializers import (
     PlaySerializer,
     QueueItemRefSerializer,
     QueueItemSerializer,
+    QueueReorderSerializer,
     QueueSerializer,
     RoomMemberSerializer,
     RoomSerializer,
@@ -349,6 +350,20 @@ class RoomViewSet(viewsets.ViewSet):
         s.is_valid(raise_exception=True)
         room = services.get_active_room(request.user)
         return self._apply(room, lambda: services.remove(room, s.validated_data["item_id"]))
+
+    @extend_schema(request=QueueReorderSerializer, responses=RoomSerializer)
+    @action(detail=False, methods=["post"])
+    def reorder(self, request):
+        """Drag-reorder the user queue (host-only queue edit, like remove/clear)."""
+        s = QueueReorderSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        room = services.get_active_room(request.user)
+        return self._apply(
+            room,
+            lambda: services.reorder_queue(
+                room, s.validated_data["item_id"], s.validated_data["position"]
+            ),
+        )
 
     @extend_schema(request=None, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
