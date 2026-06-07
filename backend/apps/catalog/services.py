@@ -255,9 +255,13 @@ def ingest_spotify(url: str, *, user=None) -> dict:
     return _ingest_collection(Source.SPOTIFY, spotify, url, user=user)
 
 
-def ingest_youtube(url: str, *, user=None) -> dict:
+def ingest_youtube(url: str, *, user=None, metadata: dict | None = None) -> dict:
     """YouTube playlist/video → loose Tracks, each with its video as an ACTIVE
-    playback source already set (no search/match needed — it's playable now)."""
+    playback source already set (no search/match needed — it's playable now).
+
+    `metadata` is the desktop's yt-dlp extraction (the shape of
+    `youtube.ingest_with_meta()`), run on the user's own IP. When omitted we fall
+    back to a cloud-side extraction (legacy — the cloud should not call YouTube)."""
     yt = Source.objects.get(code=Source.YOUTUBE)
 
     def set_direct_source(track: Track, row: dict) -> None:
@@ -275,18 +279,20 @@ def ingest_youtube(url: str, *, user=None) -> dict:
             status=PlaybackSource.Status.ACTIVE,
         )
 
-    return _record(yt, youtube.ingest_with_meta(url), url, user=user, on_track=set_direct_source)
+    parsed = metadata if metadata is not None else youtube.ingest_with_meta(url)
+    return _record(yt, parsed, url, user=user, on_track=set_direct_source)
 
 
-def ingest(url: str, *, user=None) -> dict:
-    """Dispatch a pasted URL to the right source ingester by host."""
+def ingest(url: str, *, user=None, youtube_metadata: dict | None = None) -> dict:
+    """Dispatch a pasted URL to the right source ingester by host. `youtube_metadata`
+    (desktop-supplied yt-dlp extraction) is used only for YouTube URLs."""
     host = urlparse(url).netloc.lower()
     if "apple.com" in host:
         return ingest_apple(url, user=user)
     if "spotify.com" in host:
         return ingest_spotify(url, user=user)
     if "youtube.com" in host or "youtu.be" in host:
-        return ingest_youtube(url, user=user)
+        return ingest_youtube(url, user=user, metadata=youtube_metadata)
     raise UnsupportedSourceError("Paste an Apple Music, Spotify, or YouTube link.")
 
 

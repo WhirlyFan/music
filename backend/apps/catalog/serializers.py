@@ -187,8 +187,53 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
         return obj.collaborators.filter(status=PlaylistCollaborator.Status.ACCEPTED).count()
 
 
+class YouTubeCandidateSerializer(serializers.Serializer):
+    """One yt-dlp search candidate, in the shape `ingest.youtube.search()` returns.
+    The desktop runs the search on the user's own IP and posts these; the cloud
+    scores + persists them (it no longer calls YouTube)."""
+
+    video_id = serializers.CharField(max_length=32)
+    title = serializers.CharField(required=False, allow_blank=True, default="")
+    uploader = serializers.CharField(required=False, allow_blank=True, default="")
+    duration_sec = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+
+class MatchSerializer(serializers.Serializer):
+    """Body for match-on-play. `candidates` is the desktop's YouTube search result;
+    absent → the cloud searches (legacy fallback, retired once every client sends
+    its own)."""
+
+    candidates = YouTubeCandidateSerializer(many=True, required=False)
+
+
+class YouTubeIngestTrackSerializer(serializers.Serializer):
+    """One track from a desktop-side YouTube ingest (the shape of `youtube._entry()`)."""
+
+    video_id = serializers.CharField(max_length=32)
+    title = serializers.CharField(required=False, allow_blank=True, default="")
+    artist = serializers.CharField(required=False, allow_blank=True, default="")
+    duration = serializers.IntegerField(required=False, allow_null=True, default=None)  # ms
+    artwork = serializers.CharField(required=False, allow_blank=True, default="")
+    external_id = serializers.CharField(required=False, allow_blank=True, default="")
+    source_url = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class YouTubeMetadataSerializer(serializers.Serializer):
+    """A desktop-side YouTube ingest result (the shape of `youtube.ingest_with_meta()`)."""
+
+    title = serializers.CharField(required=False, allow_blank=True, default="")
+    external_id = serializers.CharField(required=False, allow_blank=True, default="")
+    kind = serializers.ChoiceField(choices=["playlist", "video"], required=False, default="video")
+    tracks = YouTubeIngestTrackSerializer(many=True)
+    cover = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class IngestSerializer(serializers.Serializer):
     url = serializers.URLField()
+    # Optional client-supplied YouTube metadata (the desktop ran yt-dlp on the
+    # user's own IP). Honored only for youtube.com/youtu.be URLs; absent → the
+    # cloud extracts (legacy fallback).
+    youtube_metadata = YouTubeMetadataSerializer(required=False)
 
 
 class ImportResultSerializer(serializers.Serializer):
