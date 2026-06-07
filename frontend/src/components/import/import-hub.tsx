@@ -238,6 +238,7 @@ export function SearchResults({ q }: { q: string }) {
  *  count + actions, then the track rows (shared SongRow). No playlist is created
  *  until "Save as playlist". Rendered by the /import route from the last result. */
 export function ImportResultView({ result }: { result: ImportResult }) {
+  const navigate = useNavigate()
   const play = usePlay()
   const playNow = usePlayNow()
   const queueTracks = useQueueTracks()
@@ -262,7 +263,17 @@ export function ImportResultView({ result }: { result: ImportResult }) {
         artworkUrl: result.cover ?? undefined,
         sourcePlaylist: result.source_playlist, // stamp origin → enables refresh
       },
-      { onSuccess: () => toast.success(`Saved “${name}”.`) },
+      {
+        onSuccess: (playlist) => {
+          toast.success(`Saved “${name}”.`)
+          // Land on the new playlist; the create invalidates the list cache, so
+          // the top-left "playlists" pill (gated on having any) also appears.
+          void navigate({
+            to: '/playlists/$playlistId',
+            params: { playlistId: playlist.id },
+          })
+        },
+      },
     )
   }
 
