@@ -105,7 +105,19 @@ CONTENT_SECURITY_POLICY = {
         "default-src": [SELF],
         "script-src": [SELF],
         "style-src": [SELF, "'unsafe-inline'"],  # admin inline styles
-        "img-src": [SELF, "data:", "https://api.dicebear.com"],  # user avatars
+        "img-src": [
+            SELF,
+            "data:",
+            "https://api.dicebear.com",  # user avatars
+            # Cover art loaded directly from the source CDNs (browser HTTP-caches
+            # the bytes; TanStack Query caches the URLs). Wildcards cover the
+            # rotating subdomains: Spotify (i.scdn.co, charts-images.scdn.co,
+            # pickasso.spotifycdn.com, …), Apple (is1-ssl.mzstatic.com, …).
+            "https://*.scdn.co",
+            "https://*.spotifycdn.com",
+            "https://*.mzstatic.com",
+            "https://i.ytimg.com",  # YouTube thumbnail fallback
+        ],
         "font-src": [SELF],
         "connect-src": [SELF, "wss://api.whirlyfan.com"],  # jam WebSocket (cross-origin)
         "object-src": [NONE],
