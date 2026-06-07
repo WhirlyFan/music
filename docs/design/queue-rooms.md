@@ -83,7 +83,7 @@ Playlist (existing)          ← now strictly user-owned + intentional
 - **Event protocol** (client → server → broadcast to group):
   `join` / `leave`, `add_to_queue`, `remove`, `reorder`, `play`, `pause`, `seek`, `next` / `prev`, `track_changed`.
 - **Sync:** server is the **clock authority** — it stores `current_item`, `position_ms`, `is_playing`, `updated_at`. On join/any event it broadcasts state; clients compute offset (`now − updated_at`) and `seekTo`; a periodic heartbeat does **drift correction** (re-seek if off by >~300 ms).
-- **Each client plays the ad-free audio stream** for the current track's `video_id` (resolved on demand via yt-dlp and proxied by the backend — `GET /catalog/tracks/{id}/stream/`), driven by the synced events (set `src` + `seek` + play/pause on an `<audio>` element). WS carries *control*, not audio.
+- **Each client plays the ad-free audio stream** for the current track's `video_id` — resolved + cached **locally** by the desktop engine (bundled yt-dlp, off the user's own IP), served from the local `/stream/{video_id}`. The cloud carries no audio. Driven by the synced events (set `src` + `seek` + play/pause on an `<audio>` element); WS carries *control*, not audio.
 - **Host controls:** `allow_guest_control` toggle — guests can **always add to queue**; play/pause/seek/reorder gated by the flag. Host can remove members/items.
 - **Attribution:** `QueueItem.added_by` → "added by Alice."
 

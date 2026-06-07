@@ -1,15 +1,14 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
-from django.http import Http404, StreamingHttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, mixins, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from . import collab, match, realtime, streaming
+from . import collab, match, realtime
 from .ingest.spotify import SpotifyError
 from .models import (
     PlaybackSource,
@@ -436,44 +435,6 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response(TrackSerializer(tracks, many=True).data)
 
-    @extend_schema(exclude=True)
-    @action(detail=False, methods=["get"], url_path="yt-diag")
-    def yt_diag(self, request):
-        """TEMPORARY debug endpoint — REMOVE once YouTube playback is sorted.
-
-        Render Shell is paywalled, so this lets us run the per-client yt-dlp probe
-        from a browser: GET /api/v1/catalog/tracks/yt-diag/?v=<videoId>. It reports,
-        for each configured player client, whether it can resolve a stream in prod
-        (with the real cookies + PO-token sidecar + datacenter IP) — telling us which
-        client clears YouTube's bot wall. Authenticated; returns no secret values.
-        """
-        from yt_dlp import YoutubeDL
-
-        from .ingest import youtube
-
-        vid = (request.query_params.get("v") or "oFCmz7PN2ls").strip()
-        results = {}
-        for client in youtube._AUDIO_CLIENTS:
-            opts = youtube._opts(format=youtube._AUDIO_FORMAT, retries=1)
-            opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = [
-                client
-            ]
-            try:
-                with YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
-                results[client] = f"OK (stream url present: {bool(info.get('url'))})"
-            except Exception as e:  # noqa: BLE001 — diagnostic: report whatever failed
-                results[client] = f"FAIL: {str(e).splitlines()[-1][:200]}"
-        return Response(
-            {
-                "clients": list(youtube._AUDIO_CLIENTS),
-                "cookies_loaded": bool(youtube._cookiefile()),
-                "pot_base": (getattr(settings, "YOUTUBE_POT_BASE_URL", "") or ""),
-                "video_id": vid,
-                "results": results,
-            }
-        )
-
     @extend_schema(request=None, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"])
     def match(self, request, pk=None):
@@ -495,68 +456,6 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         if ps is None:
             return Response({"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PlaybackSourceSerializer(ps).data)
-
-    @extend_schema(exclude=True)  # binary audio proxy — no typed client needed
-    @action(detail=True, methods=["get"])
-    def stream(self, request, pk=None):
-        """Serve this track's audio. A disk cache fronts the YouTube proxy: a hit
-        is served from local disk (with Range), so other jam listeners, replays,
-        and seeks never re-hit YouTube. On a miss we warm the cache in the
-        background and live-proxy this request. 404 until the track has an active
-        source (Play matches first).
-        """
-        track = get_object_or_404(Track, pk=pk)
-        ps = track.playback_sources.filter(
-            status=PlaybackSource.Status.ACTIVE,
-            locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
-        ).first()
-        if ps is None:
-            raise Http404("Track has no active YouTube source.")
-        video_id = ps.locator
-        range_header = request.headers.get("Range")
-
-        # Fast path: serve from the disk cache (Range-aware). Fall through to the
-        # live proxy if the file was evicted between the check and the read.
-        cached = streaming.cached_path(video_id)
-        if cached is not None:
-            try:
-                return streaming.serve_cached(
-                    cached, streaming.cached_content_type(video_id), range_header
-                )
-            except FileNotFoundError:
-                pass
-
-        # NOTE: artwork is resolved off this hot path (the client calls
-        # refresh-artwork separately) — never make the audio wait on an image fetch.
-        try:
-            audio = streaming.resolved_audio(video_id)
-        except Exception:  # noqa: BLE001 — yt-dlp/YouTube failure (rate limit, format, …)
-            # Don't 500 with a stack trace: this is an upstream extraction failure,
-            # not our bug. The client's <audio> onError surfaces a clear message.
-            return Response(
-                {"detail": "Couldn't load this track's audio from YouTube — try again shortly."},
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-        # Warm the disk cache so the next request (other listeners, replays, seeks)
-        # is served locally — one YouTube fetch for the whole jam.
-        streaming.warm_cache(video_id, audio["url"], dict(audio.get("http_headers") or {}))
-
-        headers = dict(audio.get("http_headers") or {})
-        if range_header:
-            headers["Range"] = range_header
-        upstream = streaming.open_upstream(audio["url"], headers)
-
-        resp = StreamingHttpResponse(
-            streaming.stream_chunks(upstream),
-            status=getattr(upstream, "status", 200),
-            content_type=upstream.headers.get("Content-Type", "audio/mp4"),
-        )
-        for header in ("Content-Length", "Content-Range"):
-            if upstream.headers.get(header):
-                resp[header] = upstream.headers[header]
-        resp["Accept-Ranges"] = "bytes"
-        return resp
 
     @extend_schema(request=None, responses=TrackSerializer)
     @action(detail=True, methods=["post"], url_path="refresh-artwork")

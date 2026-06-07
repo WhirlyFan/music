@@ -37,11 +37,12 @@ YOUTUBE_POT_BASE_URL = env("YOUTUBE_POT_BASE_URL", default="")
 # updating the value and redeploying — cookies expire / get invalidated.
 YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
 
-# Route yt-dlp extraction AND the audio fetch through this proxy
-# (http://user:pass@host:port). YouTube bot-walls datacenter IPs; a residential
-# proxy (e.g. your home connection exposed via a tunnel) makes requests look
-# residential and clears the wall. The resolved audio URL is IP-locked to the
-# proxy, so streaming.py fetches through it too. Empty = direct (dev / unset).
+# Route yt-dlp extraction (search + playlist/video metadata ingest) through this
+# proxy (http://user:pass@host:port). YouTube bot-walls datacenter IPs; a
+# residential proxy (e.g. your home connection exposed via a tunnel) makes requests
+# look residential and clears the wall. Audio is resolved + fetched on each desktop
+# node now, off the user's own IP — the cloud no longer touches audio bytes. Empty
+# = direct (dev / unset).
 YOUTUBE_PROXY = env("YOUTUBE_PROXY", default="")
 
 # --- Apps ---
@@ -514,16 +515,6 @@ LOGGING = {
         "django_guid": {"level": "WARNING"},
     },
 }
-
-# --- Audio proxy cache (on-disk LRU) ---
-# The googlevideo URL is IP-locked to this backend, so clients can't fetch it
-# directly — every <audio> goes through /stream/. The first request for a track
-# warms this disk cache in the background; subsequent requests (other jam
-# listeners, replays, Range seeks) are served from disk, collapsing N listeners
-# into a single YouTube fetch. Ephemeral by design (a cache); wiped on deploy is
-# fine. LRU-evicted to stay under the cap.
-AUDIO_CACHE_DIR = env("AUDIO_CACHE_DIR", default=str(BASE_DIR / ".cache" / "audio"))
-AUDIO_CACHE_MAX_BYTES = env.int("AUDIO_CACHE_MAX_BYTES", default=500 * 1024 * 1024)
 
 # --- Defaults ---
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

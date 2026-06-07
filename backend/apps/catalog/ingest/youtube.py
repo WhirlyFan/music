@@ -117,45 +117,12 @@ def _opts(**extra) -> dict:
         opts["cookiefile"] = cookiefile
     proxy = (getattr(settings, "YOUTUBE_PROXY", "") or "").strip()
     if proxy:
-        # Route extraction through a residential proxy so YouTube sees a home IP,
-        # not the datacenter (which it bot-walls). streaming.py fetches the audio
-        # through the same proxy too — the resolved URL is IP-locked to it.
+        # Route extraction (search + playlist/video metadata ingest) through a
+        # residential proxy so YouTube sees a home IP, not the datacenter it
+        # bot-walls. Audio itself is resolved + fetched on each desktop node now,
+        # off the user's own IP — the cloud no longer touches audio bytes.
         opts["proxy"] = proxy
     return opts
-
-
-# Prefer a *progressive* m4a/AAC stream (itag 140) over anything else. YouTube's
-# SABR rollout now makes the default clients hand back an HLS manifest for
-# "bestaudio", which a plain <audio> element can't play in Chrome and which Web
-# Audio can't tap in Safari (playback goes silent while the timeline advances).
-# AAC-in-m4a is the one progressive format every browser plays; the fallbacks
-# only kick in if 140 is ever missing.
-_AUDIO_FORMAT = "140/bestaudio[ext=m4a][protocol^=https]/bestaudio[protocol^=https]/bestaudio"
-# Client order matters. `web_embedded` needs no cookies/PO token and serves a
-# fetchable progressive itag-140 stream — but it's the *unauthenticated* embedded
-# player, so it doesn't apply our session cookies and YouTube bot-walls it from
-# datacenter IPs ("confirm you're not a bot"). `tv` DOES send the YOUTUBE_COOKIES
-# session (which clears that wall) and, with a GVS PO token from the bgutil
-# sidecar, returns a fetchable stream too. List `tv` first so the authenticated
-# path wins; web_embedded stays as a fallback (yt-dlp merges both clients'
-# formats and _AUDIO_FORMAT still prefers itag 140).
-_AUDIO_CLIENTS = ("tv", "web_embedded")
-
-
-def resolve_audio(video_id: str) -> dict:
-    """Resolve the direct audio stream for a YouTube video (no download).
-
-    Returns {url, http_headers}. The URL is **IP-locked + time-limited** — only
-    the server that resolved it can fetch it, and only for a few hours — so we
-    proxy it from the same backend and cache it briefly (see streaming.py).
-    """
-    opts = _opts(format=_AUDIO_FORMAT, retries=3)
-    opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = list(
-        _AUDIO_CLIENTS
-    )
-    with YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
-    return {"url": info["url"], "http_headers": dict(info.get("http_headers") or {})}
 
 
 def _entry(e: dict) -> dict:
