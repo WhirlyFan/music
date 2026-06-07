@@ -150,10 +150,17 @@ class PlaybackState(BaseModel):
     playing_since = models.DateTimeField(null=True, blank=True)
     generation = models.IntegerField(default=0)
     # Synced start: in a shared room a freshly-chosen track waits here
-    # (is_playing=false, no clock) while its audio warms the server cache, so all
-    # members can fetch from disk and start together. Flips to is_playing on the
-    # cache-ready signal. Always false in a solo room (starts immediately).
+    # (is_playing=false, no clock) until every PRESENT node reports its audio is
+    # ready (each desktop node caches locally now, so the server can't tell from
+    # its own cache) OR `start_deadline` passes — so a slow node is waited for but
+    # a crashed/disconnected one can't stall the jam. Flips to is_playing then; a
+    # late node catches up to the clock on its next frame. Always false in a solo
+    # room (starts immediately). See apps.rooms.coordination.
     pending_start = models.BooleanField(default=False)
+    # Hard cap on the synced-start wait: the server starts a pending shared room no
+    # later than this, even if some node never reports ready (failure tolerance).
+    # None unless a track is pending. See coordination.GRACE_SECONDS.
+    start_deadline = models.DateTimeField(null=True, blank=True)
     # Seed for the room's NEXT shuffle. Because shuffle is server-side and seeded,
     # the result is deterministic from (seed, current context) — so prewarm can
     # warm the exact track a shuffle will land on. shuffle() rotates this after it

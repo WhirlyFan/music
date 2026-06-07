@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import random
 import secrets
+from datetime import timedelta
 
 from django.db import transaction
 from django.db.models import F, Max, Min
@@ -25,6 +26,7 @@ from django.utils import timezone
 from apps.catalog import streaming
 from apps.catalog.models import PlaybackSource
 
+from . import coordination
 from .models import PlaybackState, QueueItem, Room, RoomMember, _new_shuffle_seed
 
 CONTEXT = QueueItem.Kind.CONTEXT
@@ -53,6 +55,7 @@ def set_position(room: Room, position_ms: int, is_playing: bool) -> None:
         is_playing=is_playing,
         playing_since=timezone.now() if is_playing else None,
         pending_start=False,
+        start_deadline=None,
     )
 
 
@@ -173,9 +176,7 @@ def set_guest_control(room: Room, enabled: bool) -> Room:
 
 def find_open_jam(code: str) -> Room | None:
     """The active shared room for a join code (case-insensitive), or None."""
-    return Room.objects.filter(
-        code=code.strip().upper(), is_shared=True, is_active=True
-    ).first()
+    return Room.objects.filter(code=code.strip().upper(), is_shared=True, is_active=True).first()
 
 
 @transaction.atomic
@@ -272,23 +273,26 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
     playback.current_item = item
     playback.position_ms = 0
 
-    # Synced start: in a SHARED room, a freshly-chosen track that isn't cached yet
-    # waits (pending_start) while its audio warms the server cache, then everyone
-    # starts together from disk. Solo rooms (and already-cached tracks) start now.
-    pending = False
-    if item is not None and playback.room.is_shared:
-        vid = _video_id(item.track)
-        if vid and not streaming.is_cached(vid):
-            pending = True
-            # Spawn the warm AFTER commit, so the cache-ready signal sees the
-            # committed pending_start row (no race with this transaction).
-            transaction.on_commit(lambda v=vid: streaming.warm_video(v, gate=True))
+    # Synced start: in a SHARED room a freshly-chosen track waits (pending_start)
+    # until every PRESENT node reports its audio ready — or the deadline passes —
+    # so the jam starts together even though each node caches locally now. Solo
+    # rooms start immediately. Server cache state is irrelevant: nodes don't fetch
+    # from the server, so we coordinate on client readiness, not server warming.
+    pending = item is not None and playback.room.is_shared
+    if pending:
+        # Arm the bounded-wait timer AFTER commit, so it sees the committed pending
+        # row (no race with this transaction). See apps.rooms.coordination.
+        transaction.on_commit(lambda rid=playback.room_id: coordination.schedule_deadline(rid))
 
     playback.is_playing = item is not None and not pending
     playback.pending_start = pending
     # Anchor the server clock at the track's start (None when stopped/pending) so
     # every client computes the live position as position_ms + (now - playing_since).
     playback.playing_since = timezone.now() if playback.is_playing else None
+    # Hard cap on the synced-start wait — a node that never reports can't stall it.
+    playback.start_deadline = (
+        timezone.now() + timedelta(seconds=coordination.GRACE_SECONDS) if pending else None
+    )
     if item is not None and item.kind == CONTEXT:
         playback.context_pos = item.position  # advancing through the context moves the pointer
     if label is not None:
@@ -302,6 +306,7 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
             "is_playing",
             "playing_since",
             "pending_start",
+            "start_deadline",
             "updated_at",
         ]
     )
@@ -343,7 +348,13 @@ def play_now(room: Room, track, *, added_by=None) -> QueueItem:
         playback.playing_since = timezone.now()
         playback.pending_start = False
         playback.save(
-            update_fields=["position_ms", "is_playing", "playing_since", "pending_start", "updated_at"]
+            update_fields=[
+                "position_ms",
+                "is_playing",
+                "playing_since",
+                "pending_start",
+                "updated_at",
+            ]
         )
         return cur
     _ctx(room).delete()

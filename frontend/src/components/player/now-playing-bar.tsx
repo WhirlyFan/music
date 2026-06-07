@@ -12,7 +12,7 @@ import {
   VolumeX,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { FullScreenPlayer } from '@/components/player/full-screen-player'
@@ -57,7 +57,8 @@ export function NowPlayingBar() {
   const { data: room } = useRoom(authed)
   // Live updates: feed broadcast frames into the same room cache useRoom reads,
   // so a jam stays in sync without polling. No-op until we have a room id.
-  useRoomSocket(room?.id, authed, myUserId)
+  // `reportReady` is the synced-start readiness signal (below).
+  const { reportReady } = useRoomSocket(room?.id, authed, myUserId)
   const refreshArtwork = useRefreshArtwork()
 
   const matchTrack = useMatchTrack()
@@ -143,6 +144,31 @@ export function NowPlayingBar() {
   const playing = localPlaying
   const canEditQueue = !isShared || isHost
   const memberCount = room?.members_count ?? 0
+
+  // Synced-start readiness: when a shared jam parks a freshly-chosen track
+  // (pending_start), tell the server once THIS node's audio is buffered enough to
+  // play. The server starts the track when every present node is ready (or a
+  // deadline passes), so nobody starts before the rest have the audio — and a node
+  // that never reports can't stall it. Deduped per (track, generation) so we report
+  // each parked track exactly once; a new generation re-arms it.
+  const pendingStart = room?.pending_start ?? false
+  const generation = room?.generation
+  const reportedReadyRef = useRef<string | null>(null)
+  const maybeReportReady = useCallback(() => {
+    if (!isShared || !pendingStart || typeof generation !== 'number') return
+    const tag = `${itemId ?? ''}:${generation}`
+    if (reportedReadyRef.current === tag) return
+    reportedReadyRef.current = tag
+    reportReady(generation)
+  }, [isShared, pendingStart, generation, itemId, reportReady])
+
+  // Cover the already-buffered case: the audio was ready before the pending frame
+  // arrived (a track we'd already cached), so the element's onCanPlay won't fire
+  // again — report straight away.
+  useEffect(() => {
+    const el = audioRef.current
+    if (el && el.readyState >= 3) maybeReportReady()
+  }, [maybeReportReady])
 
   // Publish the player pill + queue-panel heights so the search pill can sit just
   // above them. We measure the queue's STABLE full height (the inner box) once;
@@ -691,6 +717,10 @@ export function NowPlayingBar() {
           key={itemId ?? track.id}
           ref={audioRef}
           src={audioSrc}
+          // Buffer ahead even while parked (pending_start) so canplay fires and we
+          // can report synced-start readiness without the user pressing play.
+          preload="auto"
+          onCanPlay={maybeReportReady}
           onLoadStart={() => {
             // Just resetting the scrubber. Do NOT mark buffering here: a restored
             // track loads its source without ever playing (no onPlaying/onPause to
