@@ -85,7 +85,8 @@ def test_enrich_from_spotify_adopts_real_metadata(track, monkeypatch):
     assert track.artwork_url == "https://i.scdn.co/image/REAL"  # real cover, not the thumb
     assert track.album_name == "Lord Willin'"
     assert track.isrc == "USXXX0000001"
-    assert "open.spotify.com/track/abc123" in track.source_url  # origin now resolvable
+    # Spotify is metadata-only; YouTube stays the source/provenance — source_url is untouched.
+    assert track.source_url == "https://www.youtube.com/watch?v=VID"
 
 
 @pytest.mark.django_db

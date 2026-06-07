@@ -81,13 +81,13 @@ def _best_spotify_row(track: Track, rows: list[dict]) -> dict | None:
 
 
 def enrich_from_spotify(track: Track) -> bool:
-    """Find the underlying song on Spotify and adopt its real metadata — for a
-    YouTube-sourced track whose `source_url` isn't a Spotify/Apple link, so
-    `_origin_artwork` can't recover a proper cover. Searches by title + artist,
-    takes the album art, fills any blank metadata (album / isrc / preview), and
-    points `source_url` at the Spotify track so future cover lookups resolve from
-    the origin. Returns True if a confident match was applied. Never raises — this
-    is opportunistic enrichment, triggered by an explicit refresh (not on play)."""
+    """Pull real metadata for a YouTube-sourced track from Spotify — album art +
+    any *empty* details. Spotify is purely a metadata source here; YouTube stays
+    the audio source and the track's provenance (`source_url`), so we never touch
+    that. Searches by title + artist; on a confident match takes the album art (the
+    point of a cover refresh) and fills only blank fields (album / isrc / preview).
+    Returns True if anything was applied. Never raises — opportunistic enrichment,
+    triggered by an explicit refresh (not on play)."""
     query = " ".join(p for p in (track.title, track.primary_artist) if p).strip()
     if not query:
         return False
@@ -105,8 +105,6 @@ def enrich_from_spotify(track: Track) -> bool:
     for field, key in (("album_name", "album"), ("isrc", "isrc"), ("preview_url", "preview")):
         if best.get(key) and not getattr(track, field):
             updates[field] = best[key]
-    if best.get("source_url") and "open.spotify.com" not in (track.source_url or ""):
-        updates["source_url"] = best["source_url"]
     if not updates:
         return False
     for field, value in updates.items():
