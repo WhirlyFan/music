@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
@@ -434,6 +435,44 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         except SpotifyError as e:
             return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response(TrackSerializer(tracks, many=True).data)
+
+    @extend_schema(exclude=True)
+    @action(detail=False, methods=["get"], url_path="yt-diag")
+    def yt_diag(self, request):
+        """TEMPORARY debug endpoint — REMOVE once YouTube playback is sorted.
+
+        Render Shell is paywalled, so this lets us run the per-client yt-dlp probe
+        from a browser: GET /api/v1/catalog/tracks/yt-diag/?v=<videoId>. It reports,
+        for each configured player client, whether it can resolve a stream in prod
+        (with the real cookies + PO-token sidecar + datacenter IP) — telling us which
+        client clears YouTube's bot wall. Authenticated; returns no secret values.
+        """
+        from yt_dlp import YoutubeDL
+
+        from .ingest import youtube
+
+        vid = (request.query_params.get("v") or "oFCmz7PN2ls").strip()
+        results = {}
+        for client in youtube._AUDIO_CLIENTS:
+            opts = youtube._opts(format=youtube._AUDIO_FORMAT, retries=1)
+            opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = [
+                client
+            ]
+            try:
+                with YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(f"https://www.youtube.com/watch?v={vid}", download=False)
+                results[client] = f"OK (stream url present: {bool(info.get('url'))})"
+            except Exception as e:  # noqa: BLE001 — diagnostic: report whatever failed
+                results[client] = f"FAIL: {str(e).splitlines()[-1][:200]}"
+        return Response(
+            {
+                "clients": list(youtube._AUDIO_CLIENTS),
+                "cookies_loaded": bool(youtube._cookiefile()),
+                "pot_base": (getattr(settings, "YOUTUBE_POT_BASE_URL", "") or ""),
+                "video_id": vid,
+                "results": results,
+            }
+        )
 
     @extend_schema(request=None, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"])
