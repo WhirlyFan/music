@@ -236,9 +236,16 @@ export function NowPlayingBar() {
     // play, or when the playhead has diverged enough to be a deliberate seek (or
     // real drift) rather than buffering jitter. The >1.5s gate keeps us from
     // stuttering on normal sub-second skew while still following a host's seek.
+    // While we're the seek authority (just moved the playhead ourselves), don't snap
+    // to the server frame — it's the lagging echo of our own seek and would yank us
+    // back. A genuine new track or a resume-from-paused still applies.
+    const localAuthority = performance.now() < localSeekUntil.current
     const target = intendedSeconds(room)
     const diverged = Math.abs(el.currentTime - target) > 1.5
-    if (Number.isFinite(target) && (newItem || (serverPlaying && el.paused) || diverged)) {
+    if (
+      Number.isFinite(target) &&
+      (newItem || (serverPlaying && el.paused) || (diverged && !localAuthority))
+    ) {
       el.currentTime = target
     }
     // Follow play/pause. play() may reject until this client has a user gesture.
@@ -265,7 +272,11 @@ export function NowPlayingBar() {
   // stays driven by the element's own onTimeUpdate (below).
   useEffect(() => {
     if (!isShared || !serverPlaying) return
-    const base = intendedSeconds(room)
+    // While we're the seek authority, anchor the bar to OUR playhead, not the server
+    // frame (which is still echoing our own seeks back) — so it doesn't stutter.
+    const localAuthority = performance.now() < localSeekUntil.current
+    const base =
+      localAuthority && audioRef.current ? audioRef.current.currentTime : intendedSeconds(room)
     if (!Number.isFinite(base)) return
     const startWall = performance.now()
     const tick = () => setCurrentTime(base + (performance.now() - startWall) / 1000)
@@ -332,6 +343,22 @@ export function NowPlayingBar() {
   // tracks. Reset on the next track's onLoadStart.
   const endHandled = useRef(false)
   const lastTick = useRef(0)
+  // While THIS client is actively seeking, it's the authority on its own playhead:
+  // ignore the (delayed, possibly out-of-order) echo of the seeks we just broadcast,
+  // so rapid arrow-seeks don't jump around chasing stale server frames. Window is
+  // pushed forward on each seek, so a burst stays local until it settles + the echo
+  // catches up.
+  const localSeekUntil = useRef(0)
+  // Debounce the authoritative jam-clock sync so a burst of arrow-seeks re-stamps the
+  // shared timeline once (the final spot), not on every keystroke.
+  const seekSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSeekMs = useRef(0)
+  useEffect(
+    () => () => {
+      if (seekSyncTimer.current) clearTimeout(seekSyncTimer.current)
+    },
+    [],
+  )
   // Desktop reports the real (full-extraction) audio duration when it resolves a
   // track, correcting the approximate flat-search value stored at match/ingest. Pick
   // that up once per track when the audio is ready, so the bar matches the audio.
@@ -375,10 +402,16 @@ export function NowPlayingBar() {
           dur > 0 ? Math.min(el.currentTime + delta, dur) : el.currentTime + delta,
         )
         el.currentTime = target
-        setCurrentTime(target) // optimistic; jam interpolation re-anchors off the sync
+        setCurrentTime(target) // immediate local response
+        localSeekUntil.current = performance.now() + 1200 // we own the playhead briefly
         // Preserve play/pause (a skip shouldn't start a paused track), but move the
-        // shared playhead so a jam follows.
-        syncPlayback.mutate({ positionMs: Math.round(target * 1000), isPlaying: !el.paused })
+        // shared playhead so a jam follows — debounced so a burst syncs once.
+        pendingSeekMs.current = Math.round(target * 1000)
+        const playing = !el.paused
+        if (seekSyncTimer.current) clearTimeout(seekSyncTimer.current)
+        seekSyncTimer.current = setTimeout(() => {
+          syncPlayback.mutate({ positionMs: pendingSeekMs.current, isPlaying: playing })
+        }, 300)
       },
       // Output volume is per-client (not shared), so anyone — including a passive
       // jam guest — can adjust their own. The volume effect applies + persists it.
@@ -544,6 +577,7 @@ export function NowPlayingBar() {
     if (!el) return
     el.currentTime = seconds
     setCurrentTime(seconds) // optimistic so the thumb doesn't snap back while buffering
+    localSeekUntil.current = performance.now() + 1200 // we own the playhead until the echo lands
     // Scrubbing to a spot means "play from here" — start playback locally and
     // move the shared playhead (is_playing: true) so the whole jam follows.
     void el.play().catch(() => {})
