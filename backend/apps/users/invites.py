@@ -16,7 +16,6 @@ from django.contrib.sites.models import Site
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.utils.http import urlencode
 
 from .models import INVITE_TTL, Invitation, User
 
@@ -65,7 +64,10 @@ def redeem_invitation(token: str, request) -> Invitation:
 
 
 def _send_invite_email(inv: Invitation, invited_by, raw_token: str) -> None:
-    link = f"{settings.FRONTEND_ORIGIN}/signup?{urlencode({'invite': raw_token})}"
+    # Backend-rendered landing page (not the dead web frontend): the invitee has no
+    # app yet, so the page welcomes them, says which email to sign in with, and links
+    # to download the desktop app. Signup happens in-app (invite-gated by email).
+    link = f"{settings.BACKEND_ORIGIN}/invite/{raw_token}/"
     inviter = getattr(invited_by, "display_name", None) or "A member"
     site = Site.objects.get_current()
     ctx = {

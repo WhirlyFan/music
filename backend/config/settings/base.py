@@ -325,11 +325,22 @@ FRONTEND_ORIGIN = env("FRONTEND_ORIGIN", default="http://localhost")
 # rendered page), not the web frontend, so the desktop app doesn't depend on the
 # (dead) web app for that flow. Defaults to FRONTEND_ORIGIN for local dev; set
 # DJANGO_BACKEND_ORIGIN=https://api.whirlyfan.com in prod.
-BACKEND_ORIGIN = env("DJANGO_BACKEND_ORIGIN", default=FRONTEND_ORIGIN)
+BACKEND_ORIGIN = env("DJANGO_BACKEND_ORIGIN", default=FRONTEND_ORIGIN) or FRONTEND_ORIGIN
+# Where invitees download the desktop app (the invite landing page's CTA). The web
+# app is retired, so an invitee with no app yet needs somewhere to get it. Set
+# DESKTOP_DOWNLOAD_URL in env to the real release location.
+DESKTOP_DOWNLOAD_URL = env(
+    "DESKTOP_DOWNLOAD_URL", default="https://github.com/WhirlyFan/music/releases/latest"
+)
 HEADLESS_FRONTEND_URLS = {
     "account_confirm_email": f"{BACKEND_ORIGIN}/account/verify-email/{{key}}/",
-    "account_reset_password_from_key": (f"{FRONTEND_ORIGIN}/account/password/reset/key/{{key}}"),
-    "account_signup": f"{FRONTEND_ORIGIN}/signup",
+    # Password reset is a backend-rendered page (like email verification), not the
+    # dead web frontend. The desktop user resets in their browser, then returns to
+    # the app and logs in with the new password.
+    "account_reset_password_from_key": f"{BACKEND_ORIGIN}/account/password/reset/key/{{key}}/",
+    # "Sign up" links in edge-case emails (unknown-account / account-already-exists)
+    # send people to get the app — signup itself happens in-app and is invite-gated.
+    "account_signup": DESKTOP_DOWNLOAD_URL,
     # Where allauth sends the browser when a social login fails (and the flow's
     # own `next`/callback_url is unavailable). REQUIRED once a social provider is
     # enabled — allauth raises ImproperlyConfigured (→ 500 on the OAuth callback)

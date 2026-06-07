@@ -15,7 +15,7 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView
 from health_check.views import HealthCheckView
 
-from apps.users.views import verify_email_page
+from apps.users.views import invite_landing, reset_password_page, verify_email_page
 
 
 def _docs_gate(view):
@@ -85,6 +85,20 @@ urlpatterns = [
         "account/verify-email/<str:key>/",
         verify_email_page,
         name="verify-email-page",
+    ),
+    # Backend-rendered password-reset page (reset email links here, not the web
+    # frontend). GET = form, POST = set the new password. See reset_password_page.
+    path(
+        "account/password/reset/key/<str:key>/",
+        reset_password_page,
+        name="reset-password-page",
+    ),
+    # Backend-rendered invite landing (invite email links here). Welcomes the
+    # invitee and links to download the desktop app — signup happens in-app.
+    path(
+        "invite/<str:token>/",
+        invite_landing,
+        name="invite-landing",
     ),
     path("api/schema/", _docs_gate(SpectacularAPIView.as_view()), name="schema"),
     path("health/", AppHealthCheckView.as_view(), name="health-check"),
