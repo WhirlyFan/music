@@ -69,9 +69,11 @@ import { useRouteSearch } from '@/lib/hooks/queries/ui'
 import { usePlaylistSocket } from '@/lib/hooks/usePlaylistSocket'
 import { useDebounced } from '@/lib/use-debounced'
 
-/** A YouTube-thumbnail fallback cover — offer to re-resolve the real art. */
-function isYouTubeArt(url?: string | null): boolean {
-  return !!url && url.includes('i.ytimg.com')
+/** No real album cover yet — either missing, or just a YouTube thumbnail. True for
+ *  YouTube imports AND Spotify tracks Spotify had no art for; the refresh button
+ *  offers to fetch the real cover (+ fill metadata), and hides once one is set. */
+function needsRealCover(url?: string | null): boolean {
+  return !url || url.includes('i.ytimg.com')
 }
 
 export const Route = createFileRoute('/playlists/$playlistId')({
@@ -502,7 +504,9 @@ function PlaylistDetailPage() {
               item={item}
               editing={editing}
               selected={selected.has(item.track.id)}
-              refreshing={refreshArtwork.isPending}
+              // Scope the spinner to the row actually being refreshed — the mutation
+              // is shared across rows, so `isPending` alone spins them all.
+              refreshing={refreshArtwork.isPending && refreshArtwork.variables === item.track.id}
               adderUsername={
                 hasCollaborators && item.added_by && item.added_by !== myUsername
                   ? item.added_by
@@ -785,11 +789,11 @@ function TrackRow({
         onClick={() => onPlayFrom?.(track.id)}
       >
         <TrackArtwork track={track} />
-        {isYouTubeArt(track.artwork_url) && (
+        {needsRealCover(track.artwork_url) && (
           <button
             type="button"
-            aria-label={`Retry cover art for ${track.title}`}
-            title="Cover is from YouTube — retry the original"
+            aria-label={`Fetch cover art for ${track.title}`}
+            title="Find the real cover + details from Spotify"
             disabled={refreshing}
             onClick={(e) => {
               e.stopPropagation()
