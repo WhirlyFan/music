@@ -95,17 +95,9 @@ export function QuickActionsFab() {
     bottom = Math.max(bottom, playerStackTop + PILL_H + GAP) // above the search pill
   }
 
-  // Reference the #goo SVG filter by the current document's ABSOLUTE url, not a bare
-  // `url(#goo)`. Safari/WebKit (the desktop WebView) resolves a bare fragment against
-  // the current route URL, so the goo silently breaks on every non-root SPA route.
-  // Recomputed per render — this component re-renders on navigation (`path` above).
-  const gooFilter =
-    typeof window !== 'undefined' ? `url(${window.location.href.split('#')[0]}#goo)` : 'url(#goo)'
-
   return (
     <GooeyMenu
       items={items}
-      gooFilter={gooFilter}
       className="ease-out-quint fixed right-4 z-50 transition-[bottom] duration-[280ms] motion-reduce:transition-none"
       style={{ bottom }}
     />

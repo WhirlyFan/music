@@ -9,33 +9,37 @@ const RADIUS = 116 // px each item travels — far enough that the goo bridge br
 const DURATION = 0.55 // s — slow enough that the liquid stretch reads
 const STAGGER = 45 // ms between items, so they pull apart like droplets
 
-const reducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+// Goo canvas. The blobs are SVG <circle>s filtered as a GROUP inside this <svg>,
+// NOT HTML elements under a CSS `filter: url(#goo)` — the Safari engine (the desktop
+// Tauri WebView) silently drops a CSS SVG-filter reference on an HTML element, which
+// is why the goo "worked as a website" (Chrome) but died in the app. WebKit applies
+// filters to SVG content reliably. The canvas is centered on the 56px FAB and big
+// enough that the fanned-out blobs (RADIUS + their own radius) stay inside it.
+const SVG = 320
+const C = SVG / 2 // FAB / blob center within the canvas
+const TRIGGER_R = 28 // the resting FAB blob (size-14 = 56px)
+const ITEM_R = 24 // each item blob (size-12 = 48px)
 
 /**
  * Expanding FAB with a real gooey effect (the canonical SVG goo filter:
  * feGaussianBlur + a high-contrast feColorMatrix so overlapping shapes melt
- * together). Two stacked layers ride the same transforms: a **blob layer** under
- * `filter:url(#goo)` (plain colored circles — no shadow, which would escape the
- * goo) that stretches/merges as items travel, and a crisp **icon layer** on top.
- * Items fan up-and-left, suiting a bottom-right placement; at rest the radius is
- * wide enough that the liquid bridge thins out and the buttons read as distinct.
- * A11y on the icon layer: haspopup/expanded, Escape + click-outside, tab-gating.
- * Reduced motion → snap (no travel), goo still applies statically.
+ * together). At rest the item blobs sit on top of the trigger blob (one merged
+ * shape); on open they translate out and the liquid bridge stretches then snaps.
+ * A crisp HTML icon layer rides the same offsets on top.
+ *
+ * NOTE: animation is intentionally NOT gated on `prefers-reduced-motion` here —
+ * the Tauri WebView mis-reports that query as "reduce", which would (wrongly) snap
+ * every transition. Global reduced-motion is still honored elsewhere via Tailwind's
+ * motion-safe/${''}motion-reduce variants on real CSS media queries.
  */
 export function GooeyMenu({
   items,
   className,
   style,
-  // How to reference the #goo filter. Safari/WebKit (the desktop WebView) resolves a
-  // bare `url(#goo)` against the CURRENT ROUTE URL, so in this SPA the filter silently
-  // fails on any non-root route. The caller passes an absolute-URL reference to fix it.
-  gooFilter = 'url(#goo)',
 }: {
   items: GooeyItem[]
   className?: string
   style?: React.CSSProperties
-  gooFilter?: string
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -54,7 +58,8 @@ export function GooeyMenu({
     }
   }, [open])
 
-  // Fan from straight-up (90°) to up-left (170°).
+  // Fan from straight-up (90°) to up-left (170°). Closed → at center (0,0), so the
+  // item blobs collapse onto the trigger blob and read as one shape.
   const n = items.length
   const point = (i: number) => {
     if (!open) return { x: 0, y: 0 }
@@ -63,56 +68,55 @@ export function GooeyMenu({
     return { x: Math.cos(a) * RADIUS, y: -Math.sin(a) * RADIUS }
   }
   const travel = (i: number) =>
-    reducedMotion()
-      ? 'none'
-      : `transform ${DURATION}s cubic-bezier(0.34,1.4,0.64,1) ${i * STAGGER}ms`
-  const blobStyle = (i: number) => {
-    const { x, y } = point(i)
-    return {
-      transform: `translate(-50%, -50%) translate(${x}px, ${y}px) scale(${open ? 1 : 0.4})`,
-      transition: travel(i),
-    }
-  }
+    `transform ${DURATION}s cubic-bezier(0.34,1.4,0.64,1) ${i * STAGGER}ms`
 
   return (
     <div ref={ref} className={cn('relative size-14', className)} style={style}>
-      {/* Goo filter — blur then crush the alpha so near shapes melt together.
-          The region is deliberately huge: the blobs fan ~RADIUS px beyond this 56px
-          box, and the SVG default filter region (~-10%…120%) clips them — hard in
-          WebKit (the desktop app's WKWebView), so the goo bridge vanished / glitched.
-          sRGB interpolation keeps the alpha-crush crisp in WebKit too. */}
-      <svg aria-hidden width="0" height="0" className="absolute">
+      {/* Blob layer: SVG circles filtered as a group (see note above). Centered on
+          the FAB; pointer-events-none so the crisp buttons below handle interaction. */}
+      <svg
+        aria-hidden
+        width={SVG}
+        height={SVG}
+        viewBox={`0 0 ${SVG} ${SVG}`}
+        className="pointer-events-none absolute top-1/2 left-1/2"
+        style={{ transform: 'translate(-50%, -50%)' }}
+      >
         <defs>
           <filter
             id="goo"
-            x="-250%"
-            y="-250%"
-            width="600%"
-            height="600%"
+            filterUnits="userSpaceOnUse"
+            x="0"
+            y="0"
+            width={SVG}
+            height={SVG}
             colorInterpolationFilters="sRGB"
           >
             <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
             <feColorMatrix
               in="blur"
-              mode="matrix"
+              type="matrix"
               values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9"
-              result="goo"
             />
           </filter>
         </defs>
+        <g filter="url(#goo)" className="text-primary" fill="currentColor">
+          <circle cx={C} cy={C} r={TRIGGER_R} />
+          {items.map((item, i) => {
+            const { x, y } = point(i)
+            // Translate a wrapping <g> (not the circle) — the most reliably
+            // transition-able transform target across engines.
+            return (
+              <g
+                key={item.label}
+                style={{ transform: `translate(${x}px, ${y}px)`, transition: travel(i) }}
+              >
+                <circle cx={C} cy={C} r={ITEM_R} />
+              </g>
+            )
+          })}
+        </g>
       </svg>
-
-      {/* Blob layer — colored circles under the goo filter (no shadows). */}
-      <div className="pointer-events-none absolute inset-0" style={{ filter: gooFilter }}>
-        <span className="bg-primary absolute inset-0 rounded-full" />
-        {items.map((item, i) => (
-          <span
-            key={item.label}
-            className="bg-primary absolute top-1/2 left-1/2 size-12 rounded-full"
-            style={blobStyle(i)}
-          />
-        ))}
-      </div>
 
       {/* Icon / interaction layer — crisp, on top of the blobs. */}
       {items.map((item, i) => {
@@ -134,7 +138,7 @@ export function GooeyMenu({
               transform: `translate(-50%, -50%) translate(${x}px, ${y}px)`,
               opacity: open ? 1 : 0,
               pointerEvents: open ? 'auto' : 'none',
-              transition: reducedMotion() ? 'none' : `${travel(i)}, opacity 0.2s ${i * STAGGER}ms`,
+              transition: `${travel(i)}, opacity 0.2s ${i * STAGGER}ms`,
             }}
           >
             {item.icon}
