@@ -277,6 +277,10 @@ def ingest_youtube(url: str, *, user=None, metadata: dict | None = None) -> dict
             locator=video_id,
             origin=PlaybackSource.Origin.DIRECT,
             status=PlaybackSource.Status.ACTIVE,
+            # YouTube's own duration (ms) for the video — the authoritative audio
+            # length the player shows + ends on (never the browser's el.duration,
+            # which doubles on some AAC streams). Matched sources carry this too.
+            duration_ms=row.get("duration"),
         )
 
     parsed = metadata if metadata is not None else youtube.ingest_with_meta(url)
