@@ -357,10 +357,11 @@ export function NowPlayingBar() {
   // Routed through the same togglePlay/seek paths as the buttons, so jam permissions
   // and guest-mute behavior carry over. `actions` is refreshed every render so the
   // single listener always calls the latest closures (no re-subscribe churn).
-  const actions = useRef<{ toggle: () => void; seekBy: (delta: number) => void }>({
-    toggle: () => {},
-    seekBy: () => {},
-  })
+  const actions = useRef<{
+    toggle: () => void
+    seekBy: (delta: number) => void
+    nudgeVolume: (delta: number) => void
+  }>({ toggle: () => {}, seekBy: () => {}, nudgeVolume: () => {} })
   useEffect(() => {
     actions.current = {
       toggle: togglePlay,
@@ -379,6 +380,10 @@ export function NowPlayingBar() {
         // shared playhead so a jam follows.
         syncPlayback.mutate({ positionMs: Math.round(target * 1000), isPlaying: !el.paused })
       },
+      // Output volume is per-client (not shared), so anyone — including a passive
+      // jam guest — can adjust their own. The volume effect applies + persists it.
+      nudgeVolume: (delta: number) =>
+        setVolume((v) => Math.min(1, Math.max(0, +(v + delta).toFixed(2)))),
     }
   })
   useEffect(() => {
@@ -403,6 +408,12 @@ export function NowPlayingBar() {
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
         actions.current.seekBy(-10)
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        actions.current.nudgeVolume(0.05)
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        actions.current.nudgeVolume(-0.05)
       }
     }
     window.addEventListener('keydown', onKey)
