@@ -125,13 +125,15 @@ def _opts(**extra) -> dict:
 # AAC-in-m4a is the one progressive format every browser plays; the fallbacks
 # only kick in if 140 is ever missing.
 _AUDIO_FORMAT = "140/bestaudio[ext=m4a][protocol^=https]/bestaudio[protocol^=https]/bestaudio"
-# The `web_embedded` client is the one that still serves a progressive itag-140
-# stream whose URL we can actually fetch (200). The default clients return only
-# HLS/SABR; `mweb`/`web` hand back a 403-locked URL (they need a GVS PO token
-# bound to visitor_data we don't have). web_embedded needs neither and works for
-# any embeddable video — the rare embedding-disabled track will 404 here, which
-# surfaces as the transient "couldn't load audio" message rather than silence.
-_AUDIO_CLIENTS = ("web_embedded",)
+# Client order matters. `web_embedded` needs no cookies/PO token and serves a
+# fetchable progressive itag-140 stream — but it's the *unauthenticated* embedded
+# player, so it doesn't apply our session cookies and YouTube bot-walls it from
+# datacenter IPs ("confirm you're not a bot"). `tv` DOES send the YOUTUBE_COOKIES
+# session (which clears that wall) and, with a GVS PO token from the bgutil
+# sidecar, returns a fetchable stream too. List `tv` first so the authenticated
+# path wins; web_embedded stays as a fallback (yt-dlp merges both clients'
+# formats and _AUDIO_FORMAT still prefers itag 140).
+_AUDIO_CLIENTS = ("tv", "web_embedded")
 
 
 def resolve_audio(video_id: str) -> dict:
