@@ -353,6 +353,62 @@ export function NowPlayingBar() {
     return () => clearInterval(id)
   }, [audioSrc, canDrive, room?.is_playing, effectiveDuration, next])
 
+  // Global player hotkeys (desktop-first): Space = play/pause, ←/→ = seek ∓10s.
+  // Routed through the same togglePlay/seek paths as the buttons, so jam permissions
+  // and guest-mute behavior carry over. `actions` is refreshed every render so the
+  // single listener always calls the latest closures (no re-subscribe churn).
+  const actions = useRef<{ toggle: () => void; seekBy: (delta: number) => void }>({
+    toggle: () => {},
+    seekBy: () => {},
+  })
+  useEffect(() => {
+    actions.current = {
+      toggle: togglePlay,
+      seekBy: (delta: number) => {
+        if (!canDrive) return // guests follow the host's playhead
+        const el = audioRef.current
+        if (!el) return
+        const dur = effectiveDuration || el.duration || 0
+        const target = Math.max(
+          0,
+          dur > 0 ? Math.min(el.currentTime + delta, dur) : el.currentTime + delta,
+        )
+        el.currentTime = target
+        setCurrentTime(target) // optimistic; jam interpolation re-anchors off the sync
+        // Preserve play/pause (a skip shouldn't start a paused track), but move the
+        // shared playhead so a jam follows.
+        syncPlayback.mutate({ positionMs: Math.round(target * 1000), isPlaying: !el.paused })
+      },
+    }
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
+      if (!audioRef.current) return // nothing loaded → don't hijack keys
+      const t = e.target as HTMLElement | null
+      if (
+        t &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      )
+        return // typing — leave the keys alone
+      if (e.code === 'Space') {
+        e.preventDefault()
+        actions.current.toggle()
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        actions.current.seekBy(10)
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        actions.current.seekBy(-10)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
   useEffect(() => {
