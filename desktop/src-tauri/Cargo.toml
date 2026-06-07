@@ -27,7 +27,11 @@ tauri-plugin-log = "2"
 # to the cloud with a server-side cookie jar so the webview is same-origin and the
 # existing cookie+CSRF auth works unchanged. See docs/tauri-migration.md (Phase E).
 tokio = { version = "1", features = ["full"] }
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 reqwest = { version = "0.12", default-features = false, features = ["cookies", "rustls-tls"] }
 include_dir = "0.7"
 mime_guess = "2"
+# WebSocket proxy (jams/notifications/playlist live-updates). tokio-tungstenite 0.24
+# matches axum's, so there's one tungstenite in the tree; connect + rustls for wss://.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
+futures-util = "0.3"

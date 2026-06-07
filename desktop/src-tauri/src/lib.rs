@@ -11,7 +11,8 @@
 
 use axum::{
     body::Body,
-    extract::State,
+    extract::ws::{Message as AxMsg, WebSocket, WebSocketUpgrade},
+    extract::{OriginalUri, State},
     http::{Request, Response, StatusCode},
     Router,
 };
@@ -29,6 +30,7 @@ const TRUSTED_ORIGIN: &str = "https://music.whirlyfan.com";
 #[derive(Clone)]
 struct AppState {
     client: reqwest::Client,
+    jar: std::sync::Arc<reqwest::cookie::Jar>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,7 +50,10 @@ pub fn run() {
                 .cookie_provider(jar.clone())
                 .build()
                 .expect("build reqwest client");
-            let state = AppState { client };
+            let state = AppState {
+                client,
+                jar: jar.clone(),
+            };
 
             // Bind first so we know the port before pointing the window at it.
             let listener = tauri::async_runtime::block_on(async {
@@ -58,7 +63,10 @@ pub fn run() {
             let port = listener.local_addr().expect("local_addr").port();
             log::info!("local proxy listening on 127.0.0.1:{port}");
 
-            let router = Router::new().fallback(handle).with_state(state);
+            let router = Router::new()
+                .route("/ws/*rest", axum::routing::any(ws_handler))
+                .fallback(handle)
+                .with_state(state);
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = axum::serve(listener, router).await {
                     log::error!("local proxy server exited: {e}");
@@ -246,4 +254,97 @@ fn text(status: StatusCode, msg: &str) -> Response<Body> {
         .header("content-type", "text/plain")
         .body(Body::from(msg.to_owned()))
         .unwrap()
+}
+
+/// Upgrade a webview WebSocket and bridge it to the cloud's wss:// endpoint,
+/// forwarding the proxy jar's session cookie + a trusted Origin so Channels
+/// authenticates the connection. Used for jam/playlist/notification sockets.
+async fn ws_handler(
+    State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
+    ws: WebSocketUpgrade,
+) -> axum::response::Response {
+    let pq = uri
+        .path_and_query()
+        .map(|x| x.as_str())
+        .unwrap_or("/")
+        .to_owned();
+    ws.on_upgrade(move |socket| bridge_ws(socket, pq, state))
+}
+
+async fn bridge_ws(client: WebSocket, pq: String, state: AppState) {
+    use axum::http::header::{COOKIE, ORIGIN};
+    use futures_util::{SinkExt, StreamExt};
+    use reqwest::cookie::CookieStore;
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use tokio_tungstenite::tungstenite::Message as TgMsg;
+
+    let upstream_url = format!("wss://api.whirlyfan.com{pq}");
+    let mut request = match upstream_url.into_client_request() {
+        Ok(r) => r,
+        Err(e) => {
+            log::error!("ws: bad upstream url: {e}");
+            return;
+        }
+    };
+    {
+        let h = request.headers_mut();
+        h.insert(ORIGIN, axum::http::HeaderValue::from_static(TRUSTED_ORIGIN));
+        let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
+        if let Some(cookie) = state.jar.cookies(&api) {
+            h.insert(COOKIE, cookie);
+        }
+    }
+
+    let (upstream, _resp) = match tokio_tungstenite::connect_async(request).await {
+        Ok(x) => x,
+        Err(e) => {
+            log::error!("ws: upstream connect failed: {e}");
+            return; // dropping `client` closes the webview socket
+        }
+    };
+
+    let (mut up_tx, mut up_rx) = upstream.split();
+    let (mut cl_tx, mut cl_rx) = client.split();
+
+    // webview → cloud
+    let c2u = tokio::spawn(async move {
+        while let Some(Ok(msg)) = cl_rx.next().await {
+            let out = match msg {
+                AxMsg::Text(t) => TgMsg::Text(t.into()),
+                AxMsg::Binary(b) => TgMsg::Binary(b.into()),
+                AxMsg::Ping(p) => TgMsg::Ping(p.into()),
+                AxMsg::Pong(p) => TgMsg::Pong(p.into()),
+                AxMsg::Close(_) => {
+                    let _ = up_tx.send(TgMsg::Close(None)).await;
+                    break;
+                }
+            };
+            if up_tx.send(out).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // cloud → webview
+    let u2c = tokio::spawn(async move {
+        while let Some(Ok(msg)) = up_rx.next().await {
+            let out = match msg {
+                TgMsg::Text(t) => AxMsg::Text(t.as_str().to_owned()),
+                TgMsg::Binary(b) => AxMsg::Binary(b.to_vec()),
+                TgMsg::Ping(p) => AxMsg::Ping(p.to_vec()),
+                TgMsg::Pong(p) => AxMsg::Pong(p.to_vec()),
+                TgMsg::Close(_) => {
+                    let _ = cl_tx.send(AxMsg::Close(None)).await;
+                    break;
+                }
+                TgMsg::Frame(_) => continue,
+            };
+            if cl_tx.send(out).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let _ = tokio::join!(c2u, u2c);
 }
