@@ -6,8 +6,12 @@ Writes the top candidates as PlaybackSource rows and promotes the best to
 
 from __future__ import annotations
 
+import logging
+
 from .ingest import applemusic, spotify
 from .models import PlaybackSource, Source, Track
+
+log = logging.getLogger(__name__)
 
 # A duration this far off (ms) scores zero — filters covers / extended edits.
 _DURATION_TOLERANCE_MS = 30_000
@@ -58,6 +62,57 @@ def backfill_artwork(track: Track, video_id: str) -> None:
     if art:
         track.artwork_url = art
         track.save(update_fields=["artwork_url"])
+
+
+def _best_spotify_row(track: Track, rows: list[dict]) -> dict | None:
+    """Pick the Spotify result that's really the same recording: closest duration
+    within tolerance when we know the track's length, else the top hit only if its
+    title overlaps ours. Conservative — better no match than a wrong one."""
+    if not rows:
+        return None
+    if track.duration_ms:
+        scored = [(abs((r.get("duration") or 0) - track.duration_ms), r) for r in rows]
+        delta, row = min(scored, key=lambda s: s[0])
+        if delta <= _DURATION_TOLERANCE_MS:
+            return row
+    top = rows[0]
+    needle = (track.title or "").lower()[:24]
+    return top if needle and needle in (top.get("title") or "").lower() else None
+
+
+def enrich_from_spotify(track: Track) -> bool:
+    """Find the underlying song on Spotify and adopt its real metadata — for a
+    YouTube-sourced track whose `source_url` isn't a Spotify/Apple link, so
+    `_origin_artwork` can't recover a proper cover. Searches by title + artist,
+    takes the album art, fills any blank metadata (album / isrc / preview), and
+    points `source_url` at the Spotify track so future cover lookups resolve from
+    the origin. Returns True if a confident match was applied. Never raises — this
+    is opportunistic enrichment, triggered by an explicit refresh (not on play)."""
+    query = " ".join(p for p in (track.title, track.primary_artist) if p).strip()
+    if not query:
+        return False
+    try:
+        rows = spotify.search_tracks(query, limit=5)
+    except Exception:  # noqa: BLE001 — Spotify down / not configured; leave the track as-is
+        log.warning("spotify enrich search failed for %s", track.id, exc_info=True)
+        return False
+    best = _best_spotify_row(track, rows)
+    if best is None:
+        return False
+    updates: dict = {}
+    if best.get("artwork"):
+        updates["artwork_url"] = best["artwork"]  # the point of the refresh — real cover
+    for field, key in (("album_name", "album"), ("isrc", "isrc"), ("preview_url", "preview")):
+        if best.get(key) and not getattr(track, field):
+            updates[field] = best[key]
+    if best.get("source_url") and "open.spotify.com" not in (track.source_url or ""):
+        updates["source_url"] = best["source_url"]
+    if not updates:
+        return False
+    for field, value in updates.items():
+        setattr(track, field, value)
+    track.save(update_fields=[*updates, "updated_at"])
+    return True
 
 
 def match_track_to_youtube(track: Track, *, candidates: list[dict] | None = None):

@@ -465,9 +465,12 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
     @extend_schema(request=None, responses=TrackSerializer)
     @action(detail=True, methods=["post"], url_path="refresh-artwork")
     def refresh_artwork(self, request, pk=None):
-        """Self-heal a broken cover: clear it and re-resolve from the origin
-        (Spotify/Apple), falling back to the YouTube thumbnail. The frontend calls
-        this when an <img> fails to load (the CDN URL rotted)."""
+        """Recover a real cover + metadata. Clears the art and re-resolves from the
+        origin (Spotify/Apple), falling back to the YouTube thumbnail. For a
+        YouTube-sourced track (no Spotify/Apple origin, so only a thumbnail), we then
+        search Spotify for the underlying song and adopt its real album art +
+        metadata if found. Called when an <img> fails, or from the cover-retry button
+        on YouTube-thumbnail art."""
         track = get_object_or_404(Track, pk=pk)
         track.artwork_url = ""
         track.save(update_fields=["artwork_url"])
@@ -477,4 +480,9 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         ).first()
         match.backfill_artwork(track, ps.locator if ps else "")
         track.refresh_from_db()
+        # Only a YouTube thumbnail (or nothing) → the song has no real origin
+        # metadata; look it up on Spotify by title + artist.
+        if not track.artwork_url or "i.ytimg.com" in track.artwork_url:
+            match.enrich_from_spotify(track)
+            track.refresh_from_db()
         return Response(TrackSerializer(track).data)
