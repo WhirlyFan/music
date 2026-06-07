@@ -1,0 +1,33 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.2", features = [] }
+tauri-plugin-log = "2"
+# Local reverse-proxy: serve the embedded SPA + forward /api, /_allauth, /accounts
+# to the cloud with a server-side cookie jar so the webview is same-origin and the
+# existing cookie+CSRF auth works unchanged. See docs/tauri-migration.md (Phase E).
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+reqwest = { version = "0.12", default-features = false, features = ["cookies", "rustls-tls"] }
+include_dir = "0.7"
+mime_guess = "2"
