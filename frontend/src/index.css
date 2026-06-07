@@ -166,6 +166,20 @@
       'Segoe UI',
       Roboto,
       sans-serif;
+    /* This is a desktop app, not a web page — its chrome shouldn't be text-selectable
+       (and a stray drag/keypress shouldn't paint a big highlight over the UI, e.g. the
+       FAB's transparent goo SVG). Form fields + anything opting into `.select-text`
+       stay selectable below, so typing and editing work normally. */
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'],
+  .select-text {
+    -webkit-user-select: text;
+    user-select: text;
   }
 }
 
