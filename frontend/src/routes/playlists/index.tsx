@@ -1,11 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ListMusic, SearchX, TriangleAlert } from 'lucide-react'
 import { useEffect } from 'react'
-import { toast } from 'sonner'
 
 import { CoverCluster } from '@/components/playlists/cover-cluster'
 import { EmptyState } from '@/components/ui/empty-state'
-import { useDeletePlaylist } from '@/lib/hooks/mutations/catalog'
 import { useInfinitePlaylists } from '@/lib/hooks/queries/catalog'
 import { useRouteSearch } from '@/lib/hooks/queries/ui'
 import { useDebounced } from '@/lib/use-debounced'
@@ -22,7 +20,6 @@ function PlaylistsPage() {
   const { value: search } = useRouteSearch('/playlists')
   const q = useDebounced(search, 300)
   const playlists = useInfinitePlaylists(q)
-  const del = useDeletePlaylist()
 
   // The spiral lays out every playlist once, so we need the full set — eagerly page
   // through to the end (typically one or two pages). A finite cluster shouldn't grow
@@ -60,9 +57,6 @@ function PlaylistsPage() {
             loading={playlists.isLoading}
             items={items}
             onOpen={(id) => navigate({ to: '/playlists/$playlistId', params: { playlistId: id } })}
-            onDelete={(id) =>
-              del.mutate(id, { onSuccess: () => toast.success('Playlist deleted.') })
-            }
           />
           {empty && (
             <div className="pointer-events-none absolute inset-0 grid place-items-center">

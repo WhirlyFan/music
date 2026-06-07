@@ -1,24 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { MoreVertical, Music, Trash2 } from 'lucide-react'
+import { Music } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, useSkeletonZone } from '@/components/ui/skeleton'
 import { TiltCard } from '@/components/ui/tilt-card'
@@ -115,12 +98,10 @@ type Body = {
 export function CoverCluster({
   items,
   onOpen,
-  onDelete,
   loading = false,
 }: {
   items: CoverItem[]
   onOpen: (id: string) => void
-  onDelete: (id: string) => void
   loading?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -505,7 +486,7 @@ export function CoverCluster({
             }}
             className="absolute top-0 left-0 hover:z-10"
           >
-            <CoverTile item={item} onDelete={onDelete} />
+            <CoverTile item={item} />
           </div>
         ))}
       </div>
@@ -524,9 +505,8 @@ export function CoverCluster({
   )
 }
 
-function CoverTile({ item, onDelete }: { item?: CoverItem; onDelete?: (id: string) => void }) {
+function CoverTile({ item }: { item?: CoverItem }) {
   const ripple = useRipple()
-  const [confirmOpen, setConfirmOpen] = useState(false)
   const skeleton = useSkeletonZone()
 
   if (skeleton || !item) return <Skeleton className="size-full rounded-md" />
@@ -544,50 +524,6 @@ function CoverTile({ item, onDelete }: { item?: CoverItem; onDelete?: (id: strin
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
           <p className="truncate text-sm font-medium text-white">{item.title}</p>
-        </div>
-
-        {/* Per-cover actions — stops the pointer so it never starts a drag. */}
-        <div
-          className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label={`Actions for ${item.title}`}
-                className="size-7 bg-black/40 text-white hover:bg-black/60 hover:text-white"
-              >
-                <MoreVertical className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => setConfirmOpen(true)}
-              >
-                <Trash2 className="mr-2 size-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete “{item.title}”?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  The playlist is removed. The songs stay in your catalog, so re-importing them
-                  later is instant.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => onDelete?.(item.id)}>Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
 
         <Ripples ripples={ripple.ripples} onDone={ripple.remove} />
