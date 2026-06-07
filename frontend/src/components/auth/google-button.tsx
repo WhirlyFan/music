@@ -50,12 +50,11 @@ export function GoogleButton({
       variant="outline"
       className="w-full gap-2"
       onClick={() => {
-        // Desktop (Tauri): the Google OAuth bounce (→ Google → prod callback)
-        // can't complete through the local reverse-proxy, so run the whole login
-        // against the prod site. The Tauri shell harvests the resulting session
-        // cookie and returns to the local app. See docs/tauri-migration.md.
+        // Desktop (Tauri): hand off to the local shell, which runs a native Google
+        // sign-in (system browser + PKCE, RFC 8252), stores the session token, and
+        // navigates back here authenticated. See docs/tauri-migration.md.
         if (import.meta.env.VITE_DESKTOP as string | undefined) {
-          window.location.assign('https://music.whirlyfan.com/login')
+          window.location.assign('/__login')
           return
         }
         void providerRedirect('google', {

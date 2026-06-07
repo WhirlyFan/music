@@ -23,15 +23,33 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.11.2", features = [] }
 tauri-plugin-log = "2"
-# Local reverse-proxy: serve the embedded SPA + forward /api, /_allauth, /accounts
-# to the cloud with a server-side cookie jar so the webview is same-origin and the
-# existing cookie+CSRF auth works unchanged. See docs/tauri-migration.md (Phase E).
+# Local reverse-proxy: serve the embedded SPA + forward /api, /_allauth, /accounts to
+# the cloud, injecting the allauth session token as X-Session-Token. The webview is
+# same-origin (http://127.0.0.1:<port>); auth is owned by Rust. See docs/tauri-migration.md.
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["ws"] }
-reqwest = { version = "0.12", default-features = false, features = ["cookies", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
 include_dir = "0.7"
 mime_guess = "2"
 # WebSocket proxy (jams/notifications/playlist live-updates). tokio-tungstenite 0.24
 # matches axum's, so there's one tungstenite in the tree; connect + rustls for wss://.
 tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-webpki-roots"] }
 futures-util = "0.3"
+# Native Google OAuth (RFC 8252): system browser + loopback + PKCE → session token.
+getrandom = "0.2"           # PKCE verifier / state entropy
+sha2 = "0.10"               # PKCE S256 challenge
+base64 = "0.22"             # base64url for PKCE
+open = "5"                  # open the system browser for the OAuth flow
+# keyring (OS credential store) is declared per-OS below — v3 ships no backend by
+# default (it silently no-ops), so each target opts into its native backend.
+
+# OS keychain backend, per platform: macOS Keychain, Windows Credential Manager,
+# Linux Secret Service (gnome-keyring/KWallet) with a pure-Rust crypto provider.
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
