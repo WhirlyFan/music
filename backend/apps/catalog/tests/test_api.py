@@ -6,7 +6,7 @@ import pytest
 from allauth.account.models import EmailAddress
 from rest_framework.test import APIClient
 
-from apps.catalog import match, streaming
+from apps.catalog import match
 from apps.catalog.ingest import applemusic
 from apps.catalog.models import PlaybackSource, Playlist, Track
 from apps.catalog.tests.factories import (
@@ -549,46 +549,6 @@ def test_playlist_tracks_server_side_search(client):
 
     by_artist = client.get(f"/api/v1/catalog/playlists/{pl['id']}/tracks/?search=deadmau5")
     assert [r["track"]["id"] for r in by_artist.data["results"]] == [str(other.id)]
-
-
-class _FakeUpstream:
-    """Stand-in for the googlevideo HTTP response (no network in tests)."""
-
-    status = 206
-
-    def __init__(self):
-        self._chunks = [b"AUDIO", b"DATA", b""]
-        self.headers = {"Content-Type": "audio/mp4", "Content-Range": "bytes 0-8/9"}
-
-    def read(self, _n):
-        return self._chunks.pop(0) if self._chunks else b""
-
-    def close(self):
-        pass
-
-
-@pytest.mark.django_db
-def test_stream_404_until_matched(client):
-    track = TrackFactory()  # no active source yet
-    assert client.get(f"/api/v1/catalog/tracks/{track.id}/stream/").status_code == 404
-
-
-@pytest.mark.django_db
-def test_stream_proxies_audio_with_range(client, monkeypatch):
-    track = TrackFactory()
-    PlaybackSourceFactory(track=track, locator="dQw4w9WgXcQ")
-
-    monkeypatch.setattr(
-        streaming, "resolved_audio", lambda vid: {"url": "https://fake/v", "http_headers": {}}
-    )
-    monkeypatch.setattr(streaming, "open_upstream", lambda url, headers: _FakeUpstream())
-
-    r = client.get(f"/api/v1/catalog/tracks/{track.id}/stream/", HTTP_RANGE="bytes=0-")
-    assert r.status_code == 206
-    assert b"".join(r.streaming_content) == b"AUDIODATA"
-    assert r["Accept-Ranges"] == "bytes"
-    assert r["Content-Range"] == "bytes 0-8/9"
-    assert r["Content-Type"] == "audio/mp4"
 
 
 @pytest.mark.django_db

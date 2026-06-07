@@ -85,9 +85,13 @@ live in `frontend/.env` (also gitignored; example tracked).
 
 ## YouTube audio playback
 
-Tracks are resolved to a YouTube video and the audio is proxied through the
-backend (`apps/catalog/ingest/youtube.py` + `streaming.py`). YouTube actively
-fights extraction, so the chain has several pieces — all required together:
+**Audio is resolved + fetched on each desktop node now**, off the user's own
+residential IP (the bundled `yt-dlp`/`deno` in `desktop/src-tauri`, served from
+the local engine's `/stream/`). The cloud no longer touches audio bytes — there's
+no server-side resolve, proxy, or disk cache. The backend still uses `yt-dlp`
+(`apps/catalog/ingest/youtube.py`), but only for **search** and **playlist/video
+metadata ingest**. YouTube actively fights extraction, so the chain has several
+pieces — all required together (and the desktop engine mirrors the same stack):
 
 | Piece | Where | Why |
 |---|---|---|
@@ -108,15 +112,16 @@ Notes:
   server isn't up, yt-dlp just resolves without PO tokens (the solver still works).
 - Cookies are **not** used. If the bot wall returns under load, PO tokens are the
   fix, not cookies.
-- **Audio format/client matters.** `resolve_audio` pins the progressive **itag-140
-  m4a/AAC** stream via the **`web_embedded`** player client (see
-  `apps/catalog/ingest/youtube.py`). The default clients now return only an **HLS
-  manifest** for `bestaudio` (YouTube's SABR rollout) — a plain `<audio>` element
-  can't play HLS in Chrome, and on Safari the visualizer's `createMediaElementSource`
-  can't tap a native-HLS stream, so playback goes **silent while the timeline keeps
-  advancing**. `web_embedded` is the one client whose progressive URL we can fetch
-  directly (no GVS PO token / visitor-data needed). If audio ever goes silent again,
-  check that resolution still returns a non-HLS `https` m4a URL first.
+- **Audio format/client matters (desktop engine).** The desktop's `resolve_audio`
+  (`desktop/src-tauri/src/lib.rs`) pins the progressive **itag-140 m4a/AAC** stream
+  via the **`web_embedded`** player client. The default clients now return only an
+  **HLS manifest** for `bestaudio` (YouTube's SABR rollout) — a plain `<audio>`
+  element can't play HLS in Chrome, and on Safari the visualizer's
+  `createMediaElementSource` can't tap a native-HLS stream, so playback goes
+  **silent while the timeline keeps advancing**. `web_embedded` is the one client
+  whose progressive URL we can fetch directly (no GVS PO token / visitor-data
+  needed). If audio ever goes silent again, check that resolution still returns a
+  non-HLS `https` m4a URL first.
 
 ## Database migrations
 

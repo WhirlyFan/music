@@ -39,8 +39,6 @@ import { useRoomSocket } from '@/lib/hooks/useRoomSocket'
 import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string) ?? '/api/v1'
-
 /**
  * Persistent player (mounted in the root layout, so playback + the queue survive
  * navigation). The DB-backed room is the single source of truth: now-playing +
@@ -123,14 +121,11 @@ export function NowPlayingBar() {
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
-  // Desktop (Tauri): stream from the LOCAL engine — the Rust proxy resolves the
+  // Audio always comes from the LOCAL engine: the desktop's Rust proxy resolves the
   // video via the bundled yt-dlp (from the user's own residential IP) and proxies
-  // the bytes. The cloud /stream/ stays the fallback for the (dead) web build.
-  const audioSrc = !(matched && track)
-    ? null
-    : import.meta.env.VITE_DESKTOP
-      ? `/stream/${track.active_source?.locator}`
-      : `${API_BASE}/catalog/tracks/${track.id}/stream/`
+  // the bytes from /stream/. The cloud no longer serves audio (no server-side
+  // resolve/cache) — every node fetches off its own IP.
+  const audioSrc = matched && track ? `/stream/${track.active_source?.locator}` : null
   // In a jam: the host always controls; guests drive playback only if the host
   // enabled it (allow_guest_control). Queue editing stays host-only regardless.
   // Your own (unshared) room: full control.

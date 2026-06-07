@@ -73,9 +73,9 @@ class RoomViewSet(viewsets.ViewSet):
             PlaybackState.objects.filter(room=room).update(generation=F("generation") + 1)
         data = self._data(room)  # re-load picks up the committed state + new generation
         broadcast.publish(room.id, data)
-        # Warm the next tracks' audio so advancing the jam starts instantly.
-        if data.get("is_shared"):
-            services.prewarm_upcoming(room)
+        # The upcoming tracks are warmed on the client now (each desktop node caches
+        # locally, off its own residential IP) via the frame's `prewarm` list — see
+        # services.prewarm_video_ids. No server-side warming.
         return Response(data)
 
     def _control_room(self, request):

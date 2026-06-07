@@ -182,11 +182,13 @@ services:
         sync: false
 
       # Residential egress for YouTube via a Tailscale exit node (the preferred
-      # path — see home-proxy/). Set TS_AUTHKEY to a Tailscale auth key and
-      # TS_EXIT_NODE to the home node's name/IP (e.g. music-home-exit); the
-      # entrypoint runs tailscaled in userspace mode and points YOUTUBE_PROXY at
-      # its local HTTP proxy, so only YouTube traffic egresses through your home
-      # IP. Leave unset to disable (playback then hits the datacenter bot wall).
+      # path — see home-proxy/). Now used only for SEARCH + playlist/video metadata
+      # ingest extraction — audio is resolved + fetched on each desktop node, off the
+      # user's own IP. Set TS_AUTHKEY to a Tailscale auth key and TS_EXIT_NODE to the
+      # home node's name/IP (e.g. music-home-exit); the entrypoint runs tailscaled in
+      # userspace mode and points YOUTUBE_PROXY at its local HTTP proxy, so only
+      # YouTube traffic egresses through your home IP. Leave unset to disable (search
+      # /ingest then hit the datacenter bot wall; playback is unaffected).
       - key: TS_AUTHKEY
         sync: false
       - key: TS_EXIT_NODE
@@ -261,14 +263,6 @@ services:
       # Defaults to the GitHub releases page; point it at wherever you host builds.
       - key: DESKTOP_DOWNLOAD_URL
         value: https://github.com/WhirlyFan/music/releases/latest
-
-      # Audio disk cache (streaming.py). The image's /app is read-only at
-      # runtime for the `app` user, so the code default /app/.cache/audio can't
-      # be created and every /stream/ 500s. Point it at writable /tmp. Ephemeral
-      # is fine — the cache re-warms from YouTube on a cold start; a persistent
-      # disk would force a single instance and disable zero-downtime deploys.
-      - key: AUDIO_CACHE_DIR
-        value: /tmp/whirlyfan-audio-cache
 
       # ── Database ────────────────────────────────────────────────────────
       # Render auto-injects the connection string when the service is linked

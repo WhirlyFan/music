@@ -20,10 +20,9 @@ import secrets
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import F, Max, Min
+from django.db.models import Max, Min
 from django.utils import timezone
 
-from apps.catalog import streaming
 from apps.catalog.models import PlaybackSource
 
 from . import coordination
@@ -59,35 +58,6 @@ def set_position(room: Room, position_ms: int, is_playing: bool) -> None:
     )
 
 
-def on_audio_ready(video_id: str) -> None:
-    """A track's audio finished caching — start any shared room that was waiting
-    on it (synced start). Called from the cache-warm worker thread; idempotent
-    (only flips rooms still pending). Local imports avoid a snapshot→serializers→
-    services import cycle."""
-    from . import broadcast, snapshot
-
-    room_ids = (
-        PlaybackState.objects.filter(
-            pending_start=True,
-            room__is_shared=True,
-            current_item__track__playback_sources__locator=video_id,
-            current_item__track__playback_sources__locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
-            current_item__track__playback_sources__status=PlaybackSource.Status.ACTIVE,
-        )
-        .values_list("room_id", flat=True)
-        .distinct()
-    )
-    for room_id in room_ids:
-        updated = PlaybackState.objects.filter(room_id=room_id, pending_start=True).update(
-            is_playing=True,
-            pending_start=False,
-            playing_since=timezone.now(),
-            generation=F("generation") + 1,
-        )
-        if updated:
-            broadcast.publish(room_id, snapshot.serialize_room(room_id))
-
-
 def _prewarm_candidates(room: Room, count: int) -> list[QueueItem]:
     """The items worth warming ahead of a transport action. Covers two cases:
       • the next `count` tracks in line — what plays on a normal skip/auto-advance, and
@@ -116,21 +86,6 @@ def prewarm_video_ids(room: Room, count: int = 2) -> list[str]:
             seen.add(vid)
             out.append(vid)
     return out
-
-
-def prewarm_upcoming(room: Room, count: int = 2) -> None:
-    """Server-side warm of the upcoming tracks (legacy cloud path — superseded by
-    desktop-local warming via `prewarm_video_ids` on the frame; kept until the cloud
-    yt-dlp path is torn down). Each warm is a background no-op if already cached or
-    in flight."""
-    seen = set()
-    for item in _prewarm_candidates(room, count):
-        if item.id in seen:
-            continue
-        seen.add(item.id)
-        vid = _video_id(item.track)
-        if vid and not streaming.is_cached(vid):
-            streaming.warm_video(vid)  # no gate — nothing is waiting on these yet
 
 
 # --- Jam (sharing / membership) ---------------------------------------------
