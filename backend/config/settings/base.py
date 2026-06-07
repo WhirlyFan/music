@@ -37,6 +37,13 @@ YOUTUBE_POT_BASE_URL = env("YOUTUBE_POT_BASE_URL", default="")
 # updating the value and redeploying — cookies expire / get invalidated.
 YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
 
+# Route yt-dlp extraction AND the audio fetch through this proxy
+# (http://user:pass@host:port). YouTube bot-walls datacenter IPs; a residential
+# proxy (e.g. your home connection exposed via a tunnel) makes requests look
+# residential and clears the wall. The resolved audio URL is IP-locked to the
+# proxy, so streaming.py fetches through it too. Empty = direct (dev / unset).
+YOUTUBE_PROXY = env("YOUTUBE_PROXY", default="")
+
 # --- Apps ---
 DJANGO_APPS = [
     "django.contrib.admin",

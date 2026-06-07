@@ -57,9 +57,19 @@ def resolved_audio(video_id: str) -> dict:
     return data
 
 
+def _proxied_open(req: urllib.request.Request, timeout: int):
+    """Open `req`, routing through settings.YOUTUBE_PROXY when set. The resolved
+    googlevideo URL is IP-locked to whoever resolved it (yt-dlp, via the same
+    proxy), so the audio fetch MUST exit that same IP or googlevideo 403s. Empty
+    proxy → direct (an explicit {} disables urllib's env-var proxy autodetect)."""
+    proxy = (getattr(settings, "YOUTUBE_PROXY", "") or "").strip()
+    handler = urllib.request.ProxyHandler({"http": proxy, "https": proxy} if proxy else {})
+    return urllib.request.build_opener(handler).open(req, timeout=timeout)
+
+
 def open_upstream(url: str, headers: dict):
     """Open the upstream audio stream (forwarding Range etc.)."""
-    return urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=20)
+    return _proxied_open(urllib.request.Request(url, headers=headers), timeout=20)
 
 
 def stream_chunks(upstream):
@@ -158,7 +168,7 @@ def _fill(video_id: str, url: str | None, headers: dict | None) -> None:
         _notify_ready(video_id)
         # Full file (drop any Range) so we can serve arbitrary ranges from disk.
         h = {k: v for k, v in (headers or {}).items() if k.lower() != "range"}
-        with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=60) as up:
+        with _proxied_open(urllib.request.Request(url, headers=h), timeout=60) as up:
             ct = up.headers.get("Content-Type", "audio/mp4")
             with open(tmp, "wb") as f:
                 while True:
