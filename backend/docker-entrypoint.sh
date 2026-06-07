@@ -44,14 +44,32 @@ if [ -n "$TS_AUTHKEY" ]; then
     i=$((i + 1))
     sleep 0.5
   done
+  # Join the tailnet WITHOUT --exit-node so boot can't fail when the home node
+  # isn't up yet (`tailscale up` errors on an unknown exit node).
   if tailscale --socket=/tmp/tailscaled.sock up \
     --authkey="$TS_AUTHKEY" \
     --hostname="${TS_HOSTNAME:-music-backend}" \
-    ${TS_EXIT_NODE:+--exit-node="$TS_EXIT_NODE"} \
     >/tmp/ts-up.log 2>&1; then
-    echo "[entrypoint] tailscale up OK — YOUTUBE_PROXY via :1055 (exit node: ${TS_EXIT_NODE:-none})"
     # Don't override an explicitly-set proxy (e.g. a manual bore/ngrok URL).
     export YOUTUBE_PROXY="${YOUTUBE_PROXY:-http://localhost:1055}"
+    echo "[entrypoint] tailscale up OK — YOUTUBE_PROXY via :1055"
+    if [ -n "$TS_EXIT_NODE" ]; then
+      # Attach (and keep) the exit node in the background, idempotently — so order
+      # never matters: the backend can boot before the home node, and it re-attaches
+      # whenever the node appears, cycles down/up, or re-registers with a new ID.
+      # `set` is a no-op once attached. ~1 CLI call / 30s — negligible.
+      (
+        attached=0
+        while true; do
+          if tailscale --socket=/tmp/tailscaled.sock set --exit-node="$TS_EXIT_NODE" >/dev/null 2>&1; then
+            [ "$attached" = 1 ] || { echo "[entrypoint] exit node attached: $TS_EXIT_NODE"; attached=1; }
+          else
+            attached=0
+          fi
+          sleep 30
+        done
+      ) &
+    fi
   else
     echo "[entrypoint] tailscale up FAILED (see /tmp/ts-up.log) — continuing without proxy"
   fi
