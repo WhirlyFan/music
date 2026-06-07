@@ -2,15 +2,13 @@
 # YouTube extraction (clearing the datacenter bot wall) WITHOUT exposing anything
 # to the public internet. Traffic is private + peer-to-peer over your tailnet.
 #
-#   1. cp .env.example .env   (paste a Tailscale auth key)
-#   2. docker compose up -d
-#   3. Approve this machine as an exit node in the Tailscale admin console
-#      (Machines → music-home-exit → Edit route settings → "Use as exit node").
-#   4. In Render, set TS_AUTHKEY + TS_EXIT_NODE=music-home-exit, redeploy.
+# Run it (TS_AUTHKEY pulled from Doppler prd — no .env to manage):
+#   cd home-proxy && make up
+# Or without Doppler: `cp .env.example .env` (set TS_AUTHKEY) then `docker compose up -d`.
 #
-# Clone the repo + drop in a .env on any machine and `docker compose up` — that
-# machine becomes the exit node. Works only while it's running (the trade for a
-# free residential IP). Stop with `docker compose down`.
+# The auth key is tagged tag:music, and the tailnet ACL auto-approves tag:music
+# exit nodes — so this comes up approved, no manual step. Works only while it's
+# running (the trade for a free residential IP). Stop with `make down`.
 services:
   tailscale:
     image: tailscale/tailscale:stable
