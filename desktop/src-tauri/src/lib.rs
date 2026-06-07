@@ -1,13 +1,13 @@
 //! WhirlyFan desktop shell.
 //!
-//! The webview can't talk to the cloud directly: loaded from a custom origin it
-//! would be cross-origin to api.whirlyfan.com, so the session cookie + CSRF flow
-//! (django-allauth browser mode + DRF SessionAuthentication) can't work. Instead
-//! we run a tiny local reverse-proxy: it serves the embedded SPA AND forwards
-//! /api, /_allauth, /accounts to the cloud through a server-side cookie jar. From
-//! the webview everything is same-origin (http://127.0.0.1:<port>), so the
-//! existing cookie+CSRF auth works UNCHANGED and no backend changes are needed.
-//! See docs/tauri-migration.md (Phase E).
+//! The webview loads the embedded SPA from a local reverse-proxy
+//! (`http://127.0.0.1:<port>`) that forwards `/api`, `/_allauth`, `/accounts`, and
+//! `/ws` to the cloud. Auth is owned by Rust: a native Google sign-in (system
+//! browser + PKCE + loopback, RFC 8252) yields an allauth session token, which the
+//! proxy injects as the `sessionid` cookie on every upstream request. Because that
+//! token *is* the Django session key, the existing cookie + CSRF auth (and the
+//! frontend's allauth browser client) work unchanged — the webview is same-origin
+//! to the proxy and never handles auth itself. See docs/tauri-migration.md.
 
 use axum::{
     body::Body,
@@ -22,10 +22,18 @@ use include_dir::{include_dir, Dir};
 static ASSETS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../frontend/dist");
 
 const UPSTREAM: &str = "https://api.whirlyfan.com";
-// Origin/Referer Django trusts for CSRF (and the host allauth pins OAuth to). The
-// webview's real origin is http://127.0.0.1:<port>, which Django would reject, so
-// we present a trusted one on every forwarded request.
+// Origin/Referer Django trusts for CSRF (and the host allauth pins OAuth to).
 const TRUSTED_ORIGIN: &str = "https://music.whirlyfan.com";
+
+// Native Google OAuth. The client id is baked at build time (it's public); the
+// loopback redirect uses a FIXED port so it can be registered on the Google client.
+const GOOGLE_CLIENT_ID: Option<&str> = option_env!("GOOGLE_OAUTH_CLIENT_ID");
+const LOGIN_PORT: u16 = 8765;
+const REDIRECT_URI: &str = "http://127.0.0.1:8765";
+
+// OS keychain slot for the session token (so login survives restarts).
+const KR_SERVICE: &str = "com.whirlyfan.music";
+const KR_USER: &str = "session_token";
 
 #[derive(Clone)]
 struct AppState {
@@ -42,10 +50,14 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
-            // Cookie-jar HTTP client = the server-side session for the proxied API.
-            // We keep an explicit jar so the OAuth harvest (below) can inject the
-            // session cookie obtained by logging in against prod in the webview.
+            // Cookie-jar HTTP client. The jar holds the session as a `sessionid`
+            // cookie — populated natively by /__login (or restored from the keychain
+            // on startup), NOT harvested from a webview.
             let jar = std::sync::Arc::new(reqwest::cookie::Jar::default());
+            if let Some(token) = load_token() {
+                set_session(&jar, &token);
+                log::info!("restored session from keychain");
+            }
             let client = reqwest::Client::builder()
                 .cookie_provider(jar.clone())
                 .build()
@@ -64,6 +76,7 @@ pub fn run() {
             log::info!("local proxy listening on 127.0.0.1:{port}");
 
             let router = Router::new()
+                .route("/__login", axum::routing::get(login_handler))
                 .route("/ws/*rest", axum::routing::any(ws_handler))
                 .fallback(handle)
                 .with_state(state);
@@ -74,74 +87,220 @@ pub fn run() {
             });
 
             let url = format!("http://127.0.0.1:{port}/");
-            let webview = tauri::WebviewWindowBuilder::new(
+            tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::External(url.parse().expect("proxy url")),
             )
-            .title("WhirlyFan")
+            .title("music")
             .inner_size(1280.0, 800.0)
             .min_inner_size(900.0, 600.0)
             .center()
             .build()?;
-
-            // OAuth harvest (background poll). Google login can't complete through
-            // the proxy (the bounce to Google + back to the prod callback bypasses
-            // it), so the desktop "sign in" sends the webview to the prod site where
-            // the full flow works. Tauri's page-load events don't fire reliably
-            // across that cross-origin redirect chain, so instead we POLL the
-            // webview's prod cookies: the moment a `sessionid` appears we lift it
-            // into the proxy jar and, if the webview is still on prod, bring it home
-            // — now authenticated, with no backend change.
-            let harvest_jar = jar.clone();
-            tauri::async_runtime::spawn(async move {
-                let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
-                let local: tauri::Url = format!("http://127.0.0.1:{port}/").parse().unwrap();
-                let mut have_session = false;
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-                    // cookies() returns ALL cookies (incl. HttpOnly/secure) across URLs;
-                    // cookies_for_url's URL filter returns empty for the prod domain here.
-                    let cookies = match webview.cookies() {
-                        Ok(c) => c,
-                        Err(e) => {
-                            log::error!("[harvest] cookies() failed: {e}");
-                            continue;
-                        }
-                    };
-                    let Some(sess) = cookies.iter().find(|c| c.name() == "sessionid") else {
-                        have_session = false;
-                        continue;
-                    };
-                    harvest_jar
-                        .add_cookie_str(&format!("sessionid={}; Path=/", sess.value()), &api);
-                    if !have_session {
-                        have_session = true;
-                        log::info!("[harvest] sessionid found → injected into proxy jar");
-                    }
-                    if let Ok(cur) = webview.url() {
-                        if cur.host_str() == Some("music.whirlyfan.com") {
-                            log::info!("[harvest] returning webview to local app");
-                            let _ = webview.navigate(local.clone());
-                        }
-                    }
-                }
-            });
             Ok(())
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
+// ---------------------------------------------------------------------------
+// Auth: native Google sign-in + session token storage
+// ---------------------------------------------------------------------------
+
+fn set_session(jar: &reqwest::cookie::Jar, token: &str) {
+    let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
+    jar.add_cookie_str(&format!("sessionid={token}; Path=/"), &api);
+}
+
+fn load_token() -> Option<String> {
+    match keyring::Entry::new(KR_SERVICE, KR_USER).and_then(|e| e.get_password()) {
+        Ok(t) => Some(t),
+        Err(keyring::Error::NoEntry) => None,
+        Err(e) => {
+            log::error!("keychain load failed: {e}");
+            None
+        }
+    }
+}
+
+fn store_token(token: &str) {
+    match keyring::Entry::new(KR_SERVICE, KR_USER).and_then(|e| e.set_password(token)) {
+        Ok(()) => log::info!("session token saved to keychain"),
+        Err(e) => log::error!("keychain store failed: {e}"),
+    }
+}
+
+fn clear_token() {
+    if let Ok(entry) = keyring::Entry::new(KR_SERVICE, KR_USER) {
+        let _ = entry.delete_credential();
+    }
+}
+
+fn b64url(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn rand_b64(n: usize) -> String {
+    let mut buf = vec![0u8; n];
+    getrandom::getrandom(&mut buf).expect("getrandom");
+    b64url(&buf)
+}
+
+/// (verifier, S256 challenge) for PKCE.
+fn pkce() -> (String, String) {
+    use sha2::{Digest, Sha256};
+    let verifier = rand_b64(32);
+    let challenge = b64url(&Sha256::digest(verifier.as_bytes()));
+    (verifier, challenge)
+}
+
+/// GET /__login — run Google's auth-code + PKCE flow in the system browser, exchange
+/// the code server-side for a session token, store it, and return to the app.
+async fn login_handler(State(state): State<AppState>) -> Response<Body> {
+    let client_id = match GOOGLE_CLIENT_ID {
+        Some(c) if !c.is_empty() => c,
+        _ => {
+            return text(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "This build has no Google client id (set GOOGLE_OAUTH_CLIENT_ID at build time).",
+            )
+        }
+    };
+    let (verifier, challenge) = pkce();
+    let oauth_state = rand_b64(16);
+
+    let mut auth_url = reqwest::Url::parse("https://accounts.google.com/o/oauth2/v2/auth").unwrap();
+    auth_url
+        .query_pairs_mut()
+        .append_pair("client_id", client_id)
+        .append_pair("redirect_uri", REDIRECT_URI)
+        .append_pair("response_type", "code")
+        .append_pair("scope", "openid email profile")
+        .append_pair("code_challenge", &challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("state", &oauth_state)
+        .append_pair("prompt", "select_account");
+
+    if let Err(e) = open::that(auth_url.as_str()) {
+        return text(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &format!("Could not open the browser: {e}"),
+        );
+    }
+
+    let code = match await_oauth_code(&oauth_state).await {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("oauth: {e}");
+            return redirect("/");
+        }
+    };
+
+    match exchange_code(&state.client, &code, &verifier).await {
+        Some(token) => {
+            set_session(&state.jar, &token);
+            store_token(&token);
+            log::info!("native google login complete");
+        }
+        None => log::error!("oauth: code exchange failed"),
+    }
+    redirect("/")
+}
+
+/// Exchange the auth code for an allauth session token via the backend (the client
+/// secret stays server-side).
+async fn exchange_code(client: &reqwest::Client, code: &str, verifier: &str) -> Option<String> {
+    let resp = client
+        .post(format!("{UPSTREAM}/api/v1/users/auth/desktop/google/"))
+        .json(&serde_json::json!({
+            "code": code,
+            "code_verifier": verifier,
+            "redirect_uri": REDIRECT_URI,
+        }))
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        log::error!("desktop-google exchange status {}", resp.status());
+        return None;
+    }
+    let body: serde_json::Value = resp.json().await.ok()?;
+    body.get("session_token")?.as_str().map(str::to_owned)
+}
+
+/// One-shot loopback listener that captures Google's redirect (`?code=&state=`).
+async fn await_oauth_code(expected_state: &str) -> Result<String, String> {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", LOGIN_PORT))
+        .await
+        .map_err(|e| format!("loopback bind failed (port {LOGIN_PORT} busy?): {e}"))?;
+    let (mut stream, _) =
+        tokio::time::timeout(std::time::Duration::from_secs(300), listener.accept())
+            .await
+            .map_err(|_| "login timed out".to_string())?
+            .map_err(|e| format!("accept failed: {e}"))?;
+
+    let mut buf = vec![0u8; 8192];
+    let n = stream.read(&mut buf).await.map_err(|e| e.to_string())?;
+    let head = String::from_utf8_lossy(&buf[..n]);
+    let req_line = head.lines().next().unwrap_or("");
+    let path_q = req_line.split_whitespace().nth(1).unwrap_or("/");
+
+    let page = "<!doctype html><html><head><meta charset=utf-8><title>music</title></head>\
+<body style=\"margin:0;height:100vh;display:flex;align-items:center;justify-content:center;\
+background:#0b0b12;color:#e7e7ee;font:16px/1.5 -apple-system,system-ui,sans-serif\">\
+<div style=\"text-align:center;max-width:22rem;padding:2rem\">\
+<div style=\"font-size:2rem;font-weight:600;letter-spacing:-.02em;\
+background:linear-gradient(90deg,#6366f1,#a78bfa);-webkit-background-clip:text;\
+background-clip:text;color:transparent\">music</div>\
+<p style=\"margin:1rem 0 .25rem;font-weight:500\">You're signed in.</p>\
+<p style=\"margin:0;color:#9a9aa8;font-size:.9rem\">You can close this tab and return to the app.</p>\
+</div><script>setTimeout(()=>window.close(),800)</script></body></html>";
+    let resp = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
+        page.len()
+    );
+    let _ = stream.write_all(resp.as_bytes()).await;
+    let _ = stream.flush().await;
+
+    let parsed = reqwest::Url::parse(&format!("http://127.0.0.1:{LOGIN_PORT}{path_q}"))
+        .map_err(|e| e.to_string())?;
+    let (mut code, mut state, mut err) = (None, None, None);
+    for (k, v) in parsed.query_pairs() {
+        match k.as_ref() {
+            "code" => code = Some(v.into_owned()),
+            "state" => state = Some(v.into_owned()),
+            "error" => err = Some(v.into_owned()),
+            _ => {}
+        }
+    }
+    if let Some(e) = err {
+        return Err(format!("Google returned error: {e}"));
+    }
+    if state.as_deref() != Some(expected_state) {
+        return Err("state mismatch".into());
+    }
+    code.ok_or_else(|| "no code in redirect".into())
+}
+
+fn redirect(location: &str) -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::FOUND)
+        .header("location", location)
+        .body(Body::empty())
+        .unwrap()
+}
+
+// ---------------------------------------------------------------------------
+// Reverse proxy
+// ---------------------------------------------------------------------------
+
 async fn handle(State(state): State<AppState>, req: Request<Body>) -> Response<Body> {
     let path = req.uri().path().to_owned();
     if path.starts_with("/api") || path.starts_with("/_allauth") || path.starts_with("/accounts") {
         proxy(state, req).await
-    } else if path.starts_with("/ws") {
-        // TODO(Phase E): WebSocket proxy for jam/playlist/notification sockets.
-        // Until then fail cleanly so the socket hooks just retry/ignore (the app
-        // works over HTTP; only live updates are missing).
-        text(StatusCode::SERVICE_UNAVAILABLE, "ws proxy not implemented yet")
     } else {
         serve_static(&path)
     }
@@ -150,6 +309,8 @@ async fn handle(State(state): State<AppState>, req: Request<Body>) -> Response<B
 /// Forward an API/auth request to the cloud through the cookie-jar client.
 async fn proxy(state: AppState, req: Request<Body>) -> Response<Body> {
     let (parts, body) = req.into_parts();
+    let method = parts.method.clone();
+    let path = parts.uri.path().to_owned();
     let pq = parts
         .uri
         .path_and_query()
@@ -163,7 +324,7 @@ async fn proxy(state: AppState, req: Request<Body>) -> Response<Body> {
         Err(_) => return text(StatusCode::BAD_REQUEST, "request body too large"),
     };
 
-    let mut rb = state.client.request(parts.method.clone(), &url);
+    let mut rb = state.client.request(method.clone(), &url);
     for (k, v) in parts.headers.iter() {
         let kn = k.as_str().to_ascii_lowercase();
         // Skip hop-by-hop + identity headers; let reqwest/the jar own host, cookies,
@@ -189,6 +350,16 @@ async fn proxy(state: AppState, req: Request<Body>) -> Response<Body> {
     };
 
     let status = upstream.status().as_u16();
+    // The frontend's own logout (DELETE the allauth session) clears the server
+    // session + the jar (via Set-Cookie); also drop the keychain copy so it doesn't
+    // get restored on the next launch.
+    if method == reqwest::Method::DELETE
+        && path == "/_allauth/browser/v1/auth/session"
+        && (200..400).contains(&status)
+    {
+        clear_token();
+    }
+
     let mut builder = Response::builder().status(status);
     for (k, v) in upstream.headers().iter() {
         let kn = k.as_str().to_ascii_lowercase();
@@ -207,15 +378,14 @@ async fn proxy(state: AppState, req: Request<Body>) -> Response<Body> {
         builder = builder.header(k.as_str(), v.as_bytes());
     }
     let bytes = upstream.bytes().await.unwrap_or_default();
-    builder.body(Body::from(bytes)).unwrap_or_else(|_| {
-        text(StatusCode::INTERNAL_SERVER_ERROR, "response build failed")
-    })
+    builder
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "response build failed"))
 }
 
 /// Make a cookie set by api.whirlyfan.com apply to the local http origin: drop
-/// Domain (host-only on localhost), Secure (we're http), and SameSite. The
-/// csrftoken cookie must reach the webview so the SPA can echo it as X-CSRFToken;
-/// the session cookie is harmless here (the jar is the real source of truth).
+/// Domain (host-only on localhost), Secure (we're http), and SameSite. This lets
+/// `csrftoken` reach the webview so the SPA can echo it as X-CSRFToken.
 fn rewrite_set_cookie(s: &str) -> String {
     s.split(';')
         .map(|p| p.trim())
@@ -230,8 +400,6 @@ fn rewrite_set_cookie(s: &str) -> String {
 /// Serve an embedded SPA asset, falling back to index.html for client routes.
 fn serve_static(path: &str) -> Response<Body> {
     let rel = path.trim_start_matches('/');
-    // Guess the content-type from the file actually served, not the request path
-    // (root "/" serves index.html → must be text/html, not octet-stream).
     let lookup = if rel.is_empty() { "index.html" } else { rel };
     match ASSETS.get_file(lookup) {
         Some(f) => {
@@ -261,9 +429,12 @@ fn text(status: StatusCode, msg: &str) -> Response<Body> {
         .unwrap()
 }
 
+// ---------------------------------------------------------------------------
+// WebSocket proxy
+// ---------------------------------------------------------------------------
+
 /// Upgrade a webview WebSocket and bridge it to the cloud's wss:// endpoint,
-/// forwarding the proxy jar's session cookie + a trusted Origin so Channels
-/// authenticates the connection. Used for jam/playlist/notification sockets.
+/// forwarding the jar's session cookie + a trusted Origin so Channels authenticates.
 async fn ws_handler(
     State(state): State<AppState>,
     OriginalUri(uri): OriginalUri,

@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "WhirlyFan",
+  "productName": "music",
   "version": "0.1.0",
-  "identifier": "com.whirlyfan.desktop",
+  "identifier": "com.whirlyfan.music",
   "build": {
     "frontendDist": "../../frontend/dist",
     "devUrl": "http://localhost:5173",

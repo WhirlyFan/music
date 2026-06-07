@@ -151,13 +151,22 @@ proxy) and leaves `VITE_WS_BASE` unset. Verified end-to-end with headless WebKit
 renders the welcome screen, proxied allauth returns real `401 + flows`, `csrftoken`
 passes through.
 
-**Google OAuth (IMPLEMENTED — session harvest):** the OAuth bounce (→ Google → prod
-callback) can't complete through the proxy, so the desktop "Continue with Google" sends
-the webview to the prod login (`frontend` checks `VITE_DESKTOP`); when it lands on an
-authenticated prod page, `on_page_load` in `lib.rs` lifts the `sessionid` cookie into the
-proxy jar (`cookies_for_url`) and navigates back to the local app — now authenticated.
-Verified end-to-end. No OAuth reimplementation, no backend change; works for password
-login on prod too.
+**Google OAuth — native (IMPLEMENTED, RFC 8252).** The desktop "Continue with Google"
+hits the local `/__login` route, which runs the auth-code + PKCE flow in the **system
+browser** (not an embedded webview — Google blocks those) and catches the redirect on a
+fixed loopback (`http://127.0.0.1:8765`, registered on the Google web client). Rust posts
+the `code` to `POST /api/v1/users/auth/desktop/google/`, which exchanges it **server-side**
+(client secret stays in Doppler) and returns the allauth **session token** (= the Django
+session key). The token is stored in the **OS keychain** (`keyring`, per-OS backend) and
+the proxy injects it as the `sessionid` cookie on every upstream `/api` + `/ws` request —
+so the existing cookie auth + the frontend's allauth browser client work unchanged. Login
+**persists across restarts** (restored from the keychain on launch); the frontend's logout
+clears it. Verified end-to-end: native login → REST 200 → jam WS open → survives restart.
+
+> The earlier interim "session harvest" (poll the embedded webview's `cookies()` after a
+> prod login) is **removed** — it relied on the now-dead web app and embedded-webview OAuth.
+> The DRF `XSessionTokenAuthentication` + Channels token middleware (PR #30) remain available
+> for a future header-token transport but are currently bypassed (we inject as a cookie).
 
 **WebSocket proxy (IMPLEMENTED):** `lib.rs` routes `/ws/*` to an axum WS upgrade that
 bridges the webview socket to `wss://api.whirlyfan.com/ws/...` (tokio-tungstenite),
