@@ -5,7 +5,14 @@ from urllib.parse import urlsplit
 from csp.constants import NONE, SELF
 
 from .base import *  # noqa: F401,F403
-from .base import ALLOWED_HOSTS, FRONTEND_ORIGIN, INSTALLED_APPS, MIDDLEWARE, env
+from .base import (
+    ALLOWED_HOSTS,
+    BACKEND_ORIGIN,
+    FRONTEND_ORIGIN,
+    INSTALLED_APPS,
+    MIDDLEWARE,
+    env,
+)
 
 # anymail must be in INSTALLED_APPS for the backend to load.
 # Append in prod only — dev uses Mailpit via plain SMTP backend.
@@ -155,6 +162,12 @@ PERMISSIONS_POLICY = {
 # real public origins here. Comma-separated list, e.g.
 #   DJANGO_CSRF_TRUSTED_ORIGINS=https://app.example.com,https://www.example.com
 CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+# The backend now renders state-changing pages on its OWN origin — the password
+# reset form posts back to BACKEND_ORIGIN (api.whirlyfan.com). That origin must be
+# trusted too, or CsrfViewMiddleware rejects the POST. Append it automatically so
+# this doesn't depend on someone remembering to add it to the env list.
+if BACKEND_ORIGIN and BACKEND_ORIGIN not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS = [*CSRF_TRUSTED_ORIGINS, BACKEND_ORIGIN]
 
 # --- Email (Resend via django-anymail) ---
 #

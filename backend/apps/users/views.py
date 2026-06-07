@@ -24,6 +24,9 @@ Safety:
 from __future__ import annotations
 
 import requests
+from allauth.account.adapter import get_adapter as get_account_adapter
+from allauth.account.forms import UserTokenForm
+from allauth.account.internal.flows import password_reset as password_reset_flows
 from allauth.account.models import EmailConfirmationHMAC
 from allauth.core.exceptions import SignupClosedException
 from allauth.headless.socialaccount.internal import complete_token_login
@@ -50,6 +53,7 @@ from rest_framework.throttling import UserRateThrottle
 from apps.notifications.events import nudge
 
 from .invites import InviteError, create_invitation, redeem_invitation
+from .models import INVITE_TTL, Invitation
 
 
 class InviteRateThrottle(UserRateThrottle):
@@ -212,6 +216,77 @@ def verify_email_page(request, key):
         return render(request, "account/verify_email_result.html", {"ok": False}, status=400)
     nudge(email_address.user_id, "email_verified")
     return render(request, "account/verify_email_result.html", {"ok": True})
+
+
+def reset_password_page(request, key):
+    """Backend-rendered password-reset page.
+
+    The reset email links here (HEADLESS_FRONTEND_URLS), not the dead web frontend.
+    GET shows a "set a new password" form; POST validates the key and sets the
+    password. We reuse allauth's own `UserTokenForm` to decode/verify the key (the
+    exact validator its headless reset endpoint uses) and its `clean_password` (so
+    the breach-list screening + Django validators still apply), then `reset_password`
+    + `finalize_password_reset` (which sends the "password changed" notice). The user
+    then returns to the desktop app and logs in — we don't log them into a browser
+    session here.
+
+    The opaque key is `<uidb36>-<token>`; an invalid/expired/used key renders the
+    error state (410). On success the token stops matching (the password hash it's
+    derived from changed), so the link can't be replayed.
+    """
+    uidb36, _, subkey = key.partition("-")
+    token_form = UserTokenForm(data={"uidb36": uidb36, "key": subkey})
+    user = token_form.reset_user if token_form.is_valid() else None
+    if user is None:
+        return render(request, "account/password_reset_page.html", {"invalid": True}, status=410)
+
+    if request.method == "POST":
+        password = request.POST.get("password", "")
+        confirm = request.POST.get("confirm", "")
+        errors: list[str] = []
+        if not password:
+            errors.append("Enter a new password.")
+        elif password != confirm:
+            errors.append("The two passwords don’t match.")
+        else:
+            try:
+                get_account_adapter(request).clean_password(password, user=user)
+            except ValidationError as e:
+                errors.extend(e.messages)
+        if errors:
+            return render(request, "account/password_reset_page.html", {"errors": errors})
+        password_reset_flows.reset_password(user, password)
+        password_reset_flows.finalize_password_reset(request, user)
+        return render(request, "account/password_reset_page.html", {"done": True})
+
+    return render(request, "account/password_reset_page.html", {})
+
+
+def invite_landing(request, token):
+    """Backend-rendered invite landing page.
+
+    The invite email links here. The invitee has no app yet, so this page validates
+    the invite, says which email to sign in with, and links to download the desktop
+    app — signup happens in-app (invite-gated by email). We don't redeem/stash here:
+    the redeem only helps a signup in the *same* browser session, but the invitee
+    signs up in the desktop app (a different session), so it'd be a no-op. Google
+    sign-in is auto-verified; an in-app email/password signup gets its own (backend-
+    rendered) verification mail.
+    """
+    inv = Invitation.pending_by_token(token)
+    if inv is None:
+        return render(request, "account/invite_landing.html", {"invalid": True}, status=410)
+    inviter = getattr(inv.invited_by, "display_name", None) or "A member"
+    return render(
+        request,
+        "account/invite_landing.html",
+        {
+            "inviter": inviter,
+            "email": inv.email,
+            "download_url": settings.DESKTOP_DOWNLOAD_URL,
+            "expires_days": INVITE_TTL.days,
+        },
+    )
 
 
 class _UsernameSerializer(serializers.Serializer):

@@ -249,11 +249,18 @@ services:
       - key: FRONTEND_ORIGIN
         value: https://music.whirlyfan.com
 
-      # Email-verification links point at the backend's own domain (a backend-
-      # rendered landing page), so the desktop app doesn't depend on the web
-      # frontend for that flow. See HEADLESS_FRONTEND_URLS / verify_email_page.
+      # Email-verification, password-reset, and invite links all point at the
+      # backend's own domain (backend-rendered landing pages), so the desktop app
+      # doesn't depend on the (retired) web frontend for those flows. The reset
+      # form posts back here, so settings/prod.py auto-trusts this origin for CSRF.
+      # See HEADLESS_FRONTEND_URLS / verify_email_page / reset_password_page.
       - key: DJANGO_BACKEND_ORIGIN
         value: https://api.whirlyfan.com
+
+      # Where the invite landing page sends invitees to get the desktop app.
+      # Defaults to the GitHub releases page; point it at wherever you host builds.
+      - key: DESKTOP_DOWNLOAD_URL
+        value: https://github.com/WhirlyFan/music/releases/latest
 
       # Audio disk cache (streaming.py). The image's /app is read-only at
       # runtime for the `app` user, so the code default /app/.cache/audio can't

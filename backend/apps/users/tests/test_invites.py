@@ -26,7 +26,7 @@ INVITE = "/api/v1/users/invite/"
 def _token_from_email() -> str:
     """The raw token from the most recent invite email's link (the DB stores only its
     hash, so the link is the only place the raw token exists — exactly as a user gets it)."""
-    m = re.search(r"/signup\?invite=([\w-]+)", mail.outbox[-1].body)
+    m = re.search(r"/invite/([\w-]+)/", mail.outbox[-1].body)
     assert m, "no invite link in the email"
     return m.group(1)
 
@@ -112,7 +112,7 @@ def test_create_invitation_sends_email(member):
     assert inv is not None and inv.invited_by == member
     assert len(mail.outbox) == 1
     assert "friend@example.com" in mail.outbox[0].to
-    assert "/signup?invite=" in mail.outbox[0].body  # link carries the redeemable token
+    assert "/invite/" in mail.outbox[0].body  # link to the backend invite landing page
 
 
 @pytest.mark.django_db

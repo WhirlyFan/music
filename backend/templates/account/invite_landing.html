@@ -1,0 +1,18 @@
+{% extends "account/_base_page.html" %}
+{% block body %}
+  {% if invalid %}
+    <h1>Invite unavailable</h1>
+    <p>This invite link is invalid or has expired. Ask whoever invited you to send a new one.</p>
+  {% else %}
+    <h1>You’re invited{% if inviter %} by {{ inviter }}{% endif %}</h1>
+    <p>music is a desktop app for listening together — paste a playlist, hit play, listen in sync.</p>
+    <p style="text-align: left">
+      1. Download &amp; install the app below.<br />
+      2. Open it and sign in with <span class="email">{{ email }}</span>.
+    </p>
+    <p style="margin-top: 1.25rem"><a class="btn" href="{{ download_url }}">Download the app</a></p>
+    <p class="muted" style="margin-top: 1.25rem">
+      This invite expires in {{ expires_days }} days. If you weren’t expecting it, you can ignore this email.
+    </p>
+  {% endif %}
+{% endblock %}
