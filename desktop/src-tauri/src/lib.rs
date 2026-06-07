@@ -11,7 +11,8 @@
 
 use axum::{
     body::Body,
-    extract::State,
+    extract::ws::{Message as AxMsg, WebSocket, WebSocketUpgrade},
+    extract::{OriginalUri, State},
     http::{Request, Response, StatusCode},
     Router,
 };
@@ -29,6 +30,7 @@ const TRUSTED_ORIGIN: &str = "https://music.whirlyfan.com";
 #[derive(Clone)]
 struct AppState {
     client: reqwest::Client,
+    jar: std::sync::Arc<reqwest::cookie::Jar>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,7 +50,10 @@ pub fn run() {
                 .cookie_provider(jar.clone())
                 .build()
                 .expect("build reqwest client");
-            let state = AppState { client };
+            let state = AppState {
+                client,
+                jar: jar.clone(),
+            };
 
             // Bind first so we know the port before pointing the window at it.
             let listener = tauri::async_runtime::block_on(async {
@@ -58,7 +63,10 @@ pub fn run() {
             let port = listener.local_addr().expect("local_addr").port();
             log::info!("local proxy listening on 127.0.0.1:{port}");
 
-            let router = Router::new().fallback(handle).with_state(state);
+            let router = Router::new()
+                .route("/ws/*rest", axum::routing::any(ws_handler))
+                .fallback(handle)
+                .with_state(state);
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = axum::serve(listener, router).await {
                     log::error!("local proxy server exited: {e}");
@@ -66,8 +74,7 @@ pub fn run() {
             });
 
             let url = format!("http://127.0.0.1:{port}/");
-            let oauth_jar = jar.clone();
-            tauri::WebviewWindowBuilder::new(
+            let webview = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 tauri::WebviewUrl::External(url.parse().expect("proxy url")),
@@ -76,44 +83,50 @@ pub fn run() {
             .inner_size(1280.0, 800.0)
             .min_inner_size(900.0, 600.0)
             .center()
-            // OAuth harvest: Google login can't complete through the proxy (the
-            // cross-domain bounce to Google + back to the prod callback bypasses
-            // it). So the desktop "sign in" sends the webview to the prod site,
-            // where the full flow works; when it lands back on an authenticated
-            // prod page we lift the `sessionid` cookie into the proxy jar and
-            // return to the local app — now authenticated, with no backend change.
-            .on_page_load(move |webview, payload| {
-                if payload.event() != tauri::webview::PageLoadEvent::Finished {
-                    return;
-                }
-                let u = payload.url();
-                if u.host_str() != Some("music.whirlyfan.com") {
-                    return;
-                }
-                let path = u.path();
-                // Pre-auth / in-flight pages have no usable session yet.
-                if path == "/login"
-                    || path == "/signup"
-                    || path.starts_with("/account")
-                    || path.starts_with("/_allauth")
-                    || path.starts_with("/accounts")
-                {
-                    return;
-                }
-                let Ok(cookies) = webview.cookies_for_url(u.clone()) else {
-                    return;
-                };
-                let Some(sess) = cookies.iter().find(|c| c.name() == "sessionid") else {
-                    return; // not authenticated yet — let the page be
-                };
-                let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
-                oauth_jar.add_cookie_str(&format!("sessionid={}; Path=/", sess.value()), &api);
-                log::info!("harvested prod session into proxy jar; returning to local app");
-                if let Ok(local) = format!("http://127.0.0.1:{port}/").parse() {
-                    let _ = webview.navigate(local);
-                }
-            })
             .build()?;
+
+            // OAuth harvest (background poll). Google login can't complete through
+            // the proxy (the bounce to Google + back to the prod callback bypasses
+            // it), so the desktop "sign in" sends the webview to the prod site where
+            // the full flow works. Tauri's page-load events don't fire reliably
+            // across that cross-origin redirect chain, so instead we POLL the
+            // webview's prod cookies: the moment a `sessionid` appears we lift it
+            // into the proxy jar and, if the webview is still on prod, bring it home
+            // — now authenticated, with no backend change.
+            let harvest_jar = jar.clone();
+            tauri::async_runtime::spawn(async move {
+                let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
+                let local: tauri::Url = format!("http://127.0.0.1:{port}/").parse().unwrap();
+                let mut have_session = false;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                    // cookies() returns ALL cookies (incl. HttpOnly/secure) across URLs;
+                    // cookies_for_url's URL filter returns empty for the prod domain here.
+                    let cookies = match webview.cookies() {
+                        Ok(c) => c,
+                        Err(e) => {
+                            log::error!("[harvest] cookies() failed: {e}");
+                            continue;
+                        }
+                    };
+                    let Some(sess) = cookies.iter().find(|c| c.name() == "sessionid") else {
+                        have_session = false;
+                        continue;
+                    };
+                    harvest_jar
+                        .add_cookie_str(&format!("sessionid={}; Path=/", sess.value()), &api);
+                    if !have_session {
+                        have_session = true;
+                        log::info!("[harvest] sessionid found → injected into proxy jar");
+                    }
+                    if let Ok(cur) = webview.url() {
+                        if cur.host_str() == Some("music.whirlyfan.com") {
+                            log::info!("[harvest] returning webview to local app");
+                            let _ = webview.navigate(local.clone());
+                        }
+                    }
+                }
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -246,4 +259,97 @@ fn text(status: StatusCode, msg: &str) -> Response<Body> {
         .header("content-type", "text/plain")
         .body(Body::from(msg.to_owned()))
         .unwrap()
+}
+
+/// Upgrade a webview WebSocket and bridge it to the cloud's wss:// endpoint,
+/// forwarding the proxy jar's session cookie + a trusted Origin so Channels
+/// authenticates the connection. Used for jam/playlist/notification sockets.
+async fn ws_handler(
+    State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
+    ws: WebSocketUpgrade,
+) -> axum::response::Response {
+    let pq = uri
+        .path_and_query()
+        .map(|x| x.as_str())
+        .unwrap_or("/")
+        .to_owned();
+    ws.on_upgrade(move |socket| bridge_ws(socket, pq, state))
+}
+
+async fn bridge_ws(client: WebSocket, pq: String, state: AppState) {
+    use axum::http::header::{COOKIE, ORIGIN};
+    use futures_util::{SinkExt, StreamExt};
+    use reqwest::cookie::CookieStore;
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    use tokio_tungstenite::tungstenite::Message as TgMsg;
+
+    let upstream_url = format!("wss://api.whirlyfan.com{pq}");
+    let mut request = match upstream_url.into_client_request() {
+        Ok(r) => r,
+        Err(e) => {
+            log::error!("ws: bad upstream url: {e}");
+            return;
+        }
+    };
+    {
+        let h = request.headers_mut();
+        h.insert(ORIGIN, axum::http::HeaderValue::from_static(TRUSTED_ORIGIN));
+        let api: reqwest::Url = "https://api.whirlyfan.com/".parse().unwrap();
+        if let Some(cookie) = state.jar.cookies(&api) {
+            h.insert(COOKIE, cookie);
+        }
+    }
+
+    let (upstream, _resp) = match tokio_tungstenite::connect_async(request).await {
+        Ok(x) => x,
+        Err(e) => {
+            log::error!("ws: upstream connect failed: {e}");
+            return; // dropping `client` closes the webview socket
+        }
+    };
+
+    let (mut up_tx, mut up_rx) = upstream.split();
+    let (mut cl_tx, mut cl_rx) = client.split();
+
+    // webview → cloud
+    let c2u = tokio::spawn(async move {
+        while let Some(Ok(msg)) = cl_rx.next().await {
+            let out = match msg {
+                AxMsg::Text(t) => TgMsg::Text(t.into()),
+                AxMsg::Binary(b) => TgMsg::Binary(b.into()),
+                AxMsg::Ping(p) => TgMsg::Ping(p.into()),
+                AxMsg::Pong(p) => TgMsg::Pong(p.into()),
+                AxMsg::Close(_) => {
+                    let _ = up_tx.send(TgMsg::Close(None)).await;
+                    break;
+                }
+            };
+            if up_tx.send(out).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // cloud → webview
+    let u2c = tokio::spawn(async move {
+        while let Some(Ok(msg)) = up_rx.next().await {
+            let out = match msg {
+                TgMsg::Text(t) => AxMsg::Text(t.as_str().to_owned()),
+                TgMsg::Binary(b) => AxMsg::Binary(b.to_vec()),
+                TgMsg::Ping(p) => AxMsg::Ping(p.to_vec()),
+                TgMsg::Pong(p) => AxMsg::Pong(p.to_vec()),
+                TgMsg::Close(_) => {
+                    let _ = cl_tx.send(AxMsg::Close(None)).await;
+                    break;
+                }
+                TgMsg::Frame(_) => continue,
+            };
+            if cl_tx.send(out).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let _ = tokio::join!(c2u, u2c);
 }

@@ -159,8 +159,13 @@ proxy jar (`cookies_for_url`) and navigates back to the local app — now authen
 Verified end-to-end. No OAuth reimplementation, no backend change; works for password
 login on prod too.
 
-Remaining: **WebSocket proxy** (currently `/ws` 503s — jams/notifications/playlist live
-updates). This proxy is also the seam the Phase-B local audio engine plugs into.
+**WebSocket proxy (IMPLEMENTED):** `lib.rs` routes `/ws/*` to an axum WS upgrade that
+bridges the webview socket to `wss://api.whirlyfan.com/ws/...` (tokio-tungstenite),
+forwarding the jar's `Cookie` + a trusted `Origin` so Channels authenticates it. Jams,
+playlist live-updates, and notifications work. (Desktop `VITE_WS_BASE` stays unset so the
+hooks derive `ws://127.0.0.1:<port>` → proxy.)
+
+This proxy is also the seam the Phase-B local audio engine plugs into.
 
 ## Phasing (each phase ships independently; PR-per-phase)
 
