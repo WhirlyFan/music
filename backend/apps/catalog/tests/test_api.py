@@ -422,6 +422,57 @@ def test_lazy_match_single_track(client, offline, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_match_endpoint_uses_client_supplied_candidates(client, offline, monkeypatch):
+    """The desktop posts its own yt-dlp candidates; the cloud scores + persists them
+    and must NOT call YouTube itself."""
+    client.post(INGEST, {"url": ALBUM_URL}, format="json")
+    track = Track.objects.first()
+
+    def boom(*a, **k):
+        raise AssertionError("cloud must not call YouTube when candidates are supplied")
+
+    monkeypatch.setattr(match.youtube, "search", boom)
+
+    r = client.post(
+        f"/api/v1/catalog/tracks/{track.id}/match/",
+        {"candidates": [{"video_id": "CLIENT1", "title": track.title, "duration_sec": 240}]},
+        format="json",
+    )
+    assert r.status_code == 200
+    assert r.data["locator"] == "CLIENT1"
+
+
+@pytest.mark.django_db
+def test_ingest_youtube_uses_client_supplied_metadata(client, monkeypatch):
+    """The desktop ran yt-dlp for the playlist; the cloud persists the metadata
+    without touching YouTube."""
+    from apps.catalog.ingest import youtube
+
+    def boom(url):
+        raise AssertionError("cloud must not call YouTube when metadata is supplied")
+
+    monkeypatch.setattr(youtube, "ingest_with_meta", boom)
+
+    meta = {
+        "title": "Desktop YT Playlist",
+        "external_id": "PL9",
+        "kind": "playlist",
+        "tracks": [
+            {"video_id": "vid11111111", "title": "Song A", "artist": "Chan", "duration": 200000}
+        ],
+        "cover": "",
+    }
+    r = client.post(
+        INGEST,
+        {"url": "https://www.youtube.com/playlist?list=PL9", "youtube_metadata": meta},
+        format="json",
+    )
+    assert r.status_code == 201
+    assert r.data["track_count"] == 1
+    assert r.data["tracks"][0]["active_source"]["locator"] == "vid11111111"
+
+
+@pytest.mark.django_db
 def test_match_backfills_artwork_from_youtube_thumbnail(monkeypatch):
     # Tracks with no cover (old imports / sources that gave none) get the video
     # thumbnail once matched — so the player shows art, not a placeholder.

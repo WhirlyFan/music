@@ -23,6 +23,7 @@ from .serializers import (
     CreatePlaylistSerializer,
     ImportResultSerializer,
     IngestSerializer,
+    MatchSerializer,
     PlaybackSourceSerializer,
     PlaylistActivitySerializer,
     PlaylistCollaboratorSerializer,
@@ -65,8 +66,9 @@ class IngestViewSet(viewsets.ViewSet):
         serializer = IngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         url = serializer.validated_data["url"]
+        yt_meta = serializer.validated_data.get("youtube_metadata")
         try:
-            result = ingest_source(url, user=request.user)
+            result = ingest_source(url, user=request.user, youtube_metadata=yt_meta)
         except (UnsupportedSourceError, SpotifyError) as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:  # noqa: BLE001 — pasted URLs are untrusted; never 500 on a bad link
@@ -122,7 +124,14 @@ class PlaylistViewSet(
     search_fields = ["title"]
 
     # Actions whose object may be owned OR co-edited by the caller.
-    _EDIT_ACTIONS = ("update", "partial_update", "remove_track", "remove_tracks", "reorder", "add_tracks")
+    _EDIT_ACTIONS = (
+        "update",
+        "partial_update",
+        "remove_track",
+        "remove_tracks",
+        "reorder",
+        "add_tracks",
+    )
 
     def get_queryset(self):
         user = self.request.user
@@ -295,9 +304,7 @@ class PlaylistViewSet(
                 added.append(track)
             if added:
                 summary = (
-                    f"added “{added[0].title}”"
-                    if len(added) == 1
-                    else f"added {len(added)} tracks"
+                    f"added “{added[0].title}”" if len(added) == 1 else f"added {len(added)} tracks"
                 )
                 collab.record_track_edit(
                     playlist,
@@ -315,7 +322,7 @@ class PlaylistViewSet(
         playlist = self.get_object()
         try:
             target = int(request.data.get("position"))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return Response(
                 {"detail": "position must be an integer."}, status=status.HTTP_400_BAD_REQUEST
             )
@@ -348,17 +355,13 @@ class PlaylistViewSet(
         """GET: list collaborators (owner + any member may view). POST: invite a user
         by `{user_id}` (owner only) — creates a PENDING invite + notifies them."""
         if request.method == "POST":
-            playlist = get_object_or_404(
-                Playlist.objects.filter(created_by=request.user), pk=pk
-            )
+            playlist = get_object_or_404(Playlist.objects.filter(created_by=request.user), pk=pk)
             invitee = get_object_or_404(User, pk=request.data.get("user_id"))
             try:
                 c = collab.invite(playlist, invitee=invitee, by=request.user)
             except collab.CollaboratorError as e:
                 return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-            return Response(
-                PlaylistCollaboratorSerializer(c).data, status=status.HTTP_201_CREATED
-            )
+            return Response(PlaylistCollaboratorSerializer(c).data, status=status.HTTP_201_CREATED)
         playlist = self._member_playlist(pk)
         qs = playlist.collaborators.select_related("user").order_by("-created_at")
         page = self.paginate_queryset(qs)  # 25/page; the client loads more on scroll
@@ -371,9 +374,7 @@ class PlaylistViewSet(
         c = get_object_or_404(PlaylistCollaborator, playlist_id=pk, user_id=user_id)
         is_owner = c.playlist.created_by_id == request.user.id
         if not (is_owner or c.user_id == request.user.id):
-            return Response(
-                {"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN
-            )
+            return Response({"detail": "Not allowed."}, status=status.HTTP_403_FORBIDDEN)
         collab.remove(c, by=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -435,24 +436,28 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
         return Response(TrackSerializer(tracks, many=True).data)
 
-    @extend_schema(request=None, responses=PlaybackSourceSerializer)
+    @extend_schema(request=MatchSerializer, responses=PlaybackSourceSerializer)
     @action(detail=True, methods=["post"])
     def match(self, request, pk=None):
         """Resolve this track's YouTube source on demand (lazy — used by Play).
 
-        Returns the existing active source if already matched (no wasted
-        YouTube search); otherwise resolves one; 404 if nothing fits.
+        The desktop posts `candidates` (its own yt-dlp search, run on the user's
+        IP); the cloud scores + persists them — it never calls YouTube. Absent →
+        the cloud searches (legacy fallback). Returns the existing active source if
+        already matched (no wasted work); otherwise the best candidate; 404 if none.
         """
+        body = MatchSerializer(data=request.data)
+        body.is_valid(raise_exception=True)
+        candidates = body.validated_data.get("candidates")
         # Lock the track row so concurrent match-on-play calls (every client in a
         # jam fires one for the same current track) serialize: the first resolves
         # + creates the ACTIVE source, the rest wait and then find it — instead of
         # racing into duplicate inserts that violate one_active_playback_source_per_track.
         with transaction.atomic():
             track = get_object_or_404(Track.objects.select_for_update(), pk=pk)
-            ps = (
-                track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).first()
-                or match.match_track_to_youtube(track)
-            )
+            ps = track.playback_sources.filter(
+                status=PlaybackSource.Status.ACTIVE
+            ).first() or match.match_track_to_youtube(track, candidates=candidates)
         if ps is None:
             return Response({"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PlaybackSourceSerializer(ps).data)

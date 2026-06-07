@@ -59,3 +59,19 @@ def test_no_candidates_returns_none(monkeypatch, track):
     monkeypatch.setattr(match.youtube, "search", lambda q, n=5: [])
     assert match.match_track_to_youtube(track) is None
     assert track.playback_sources.count() == 0
+
+
+@pytest.mark.django_db
+def test_client_supplied_candidates_skip_youtube(monkeypatch, track):
+    # The desktop ran the search on its own IP — the cloud must NOT call YouTube.
+    def boom(*a, **k):
+        raise AssertionError("youtube.search must not be called when candidates are supplied")
+
+    monkeypatch.setattr(match.youtube, "search", boom)
+
+    ps = match.match_track_to_youtube(track, candidates=FAKE_CANDIDATES)
+
+    assert ps is not None
+    assert ps.locator == "BEST"  # scoring still happens server-side
+    assert track.playback_sources.count() == 3
+    assert track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).count() == 1

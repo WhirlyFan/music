@@ -60,8 +60,16 @@ def backfill_artwork(track: Track, video_id: str) -> None:
         track.save(update_fields=["artwork_url"])
 
 
-def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None):
-    """Search YouTube for `track`, persist candidates, promote the best to active.
+def match_track_to_youtube(
+    track: Track, *, n: int = 5, query: str | None = None, candidates: list[dict] | None = None
+):
+    """Score YouTube candidates for `track`, persist them, promote the best to active.
+
+    `candidates` is a list of {video_id, title, uploader, duration_sec} dicts. The
+    desktop runs the yt-dlp search on the user's own IP and passes them in; when
+    omitted we fall back to a cloud-side `youtube.search()` (kept only until every
+    client supplies its own — the cloud should not be calling YouTube). Scoring +
+    persistence stay here, on the side that owns the catalog DB.
 
     Idempotent: returns None (does nothing) if the track already has an active
     playback source. Returns the active PlaybackSource on success, else None.
@@ -70,7 +78,8 @@ def match_track_to_youtube(track: Track, *, n: int = 5, query: str | None = None
         return None
 
     source = Source.objects.get(code=Source.YOUTUBE)
-    candidates = youtube.search(query or f"{track.title} {track.primary_artist}", n=n)
+    if candidates is None:
+        candidates = youtube.search(query or f"{track.title} {track.primary_artist}", n=n)
     if not candidates:
         return None
 
