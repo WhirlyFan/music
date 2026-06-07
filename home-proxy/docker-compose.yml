@@ -1,0 +1,37 @@
+# Home residential proxy for YouTube extraction, exposed to the deployed backend
+# via an ngrok TCP tunnel.
+#
+#   1. cp .env.example .env   (fill in creds + ngrok token)
+#   2. docker compose up -d
+#   3. ./print-proxy-url.sh   → paste the line into Render's YOUTUBE_PROXY, redeploy
+#
+# YouTube bot-walls the backend's datacenter IP; routing extraction through this
+# proxy makes the requests come from your home (residential) IP, which clears it.
+# Runs only while this machine + these containers are up — the trade for a free
+# residential IP instead of a paid proxy. All audio flows through your home
+# connection, so it leans on your upstream bandwidth.
+services:
+  proxy:
+    image: abhinavsingh/proxy.py:latest
+    # Authenticated HTTP/HTTPS forward proxy on :8899. Basic-auth stops the
+    # tunnel-exposed proxy from being an open relay anyone could abuse.
+    command:
+      - --hostname
+      - 0.0.0.0
+      - --port
+      - "8899"
+      - --basic-auth
+      - ${PROXY_USER}:${PROXY_PASS}
+    restart: unless-stopped
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    # Expose the proxy on a public TCP endpoint the Render backend can reach.
+    command: tcp proxy:8899
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040" # ngrok inspector + local API (print-proxy-url.sh reads this)
+    depends_on:
+      - proxy
+    restart: unless-stopped
