@@ -126,6 +126,15 @@ export function NowPlayingBar() {
   // the bytes from /stream/. The cloud no longer serves audio (no server-side
   // resolve/cache) — every node fetches off its own IP.
   const audioSrc = matched && track ? `/stream/${track.active_source?.locator}` : null
+  // The song's true length, from metadata (the matched YouTube video's duration,
+  // falling back to the track's). We DON'T trust the <audio> element's own
+  // `duration`: some YouTube AAC streams report it ~2x too long (an SBR/timescale
+  // decoder quirk), which both shows a wrong total time AND makes the element think
+  // the track is only half over when the audio actually runs out — so it stalls
+  // instead of ending, and playback never advances. Metadata is authoritative;
+  // el.duration is only a fallback when we have none.
+  const metaDurationSec = (track?.active_source?.duration_ms ?? track?.duration_ms ?? 0) / 1000
+  const effectiveDuration = metaDurationSec || duration
   // In a jam: the host always controls; guests drive playback only if the host
   // enabled it (allow_guest_control). Queue editing stays host-only regardless.
   // Your own (unshared) room: full control.
@@ -305,18 +314,36 @@ export function NowPlayingBar() {
     }
   }, [wantsAudio])
 
-  // Stuck-at-end watchdog: if we're parked at the end while the server still thinks
-  // we're playing (the track ended while disconnected/backgrounded, so `onEnded`
-  // never fired), advance. Controller only — guests follow the host's broadcast.
+  // End-of-track watchdog. `onEnded` handles the clean case, but it can't be relied
+  // on here: when the element over-reports its duration (the ~2x AAC quirk), the
+  // real audio runs out at the metadata duration while the element thinks it's only
+  // half done, so it STALLS (paused or buffering, currentTime stuck) instead of
+  // firing `onEnded`. So we advance off the metadata duration: once the playhead is
+  // at/near the true end AND no longer progressing (paused, ended, or stalled), move
+  // on. The "not progressing" gate means we never cut a still-playing track short.
+  // Controller only — guests follow the host's broadcast.
+  // Advance at most once per track — both this watchdog and `onEnded` can fire near
+  // the end, and the watchdog keeps ticking until the room state updates and the
+  // element remounts; without this guard a slow room update would skip several
+  // tracks. Reset on the next track's onLoadStart.
+  const endHandled = useRef(false)
+  const lastTick = useRef(0)
   useEffect(() => {
     if (!audioSrc || !canDrive) return
+    lastTick.current = -1
     const id = setInterval(() => {
       const el = audioRef.current
-      if (!el || !el.duration || !(room?.is_playing ?? false)) return
-      if (el.paused && el.currentTime >= el.duration - 0.75) next.mutate()
-    }, 3000)
+      if (!el || !effectiveDuration || !(room?.is_playing ?? false)) return
+      const nearEnd = el.currentTime >= effectiveDuration - 1.5
+      const progressed = Math.abs(el.currentTime - lastTick.current) > 0.25
+      lastTick.current = el.currentTime
+      if (nearEnd && (el.paused || el.ended || !progressed) && !endHandled.current) {
+        endHandled.current = true
+        next.mutate()
+      }
+    }, 1500)
     return () => clearInterval(id)
-  }, [audioSrc, canDrive, room?.is_playing, next])
+  }, [audioSrc, canDrive, room?.is_playing, effectiveDuration, next])
 
   // Lazy match-on-play: resolve the current track's source once; on failure skip.
   const attempted = useRef<string | null>(null)
@@ -658,7 +685,7 @@ export function NowPlayingBar() {
             <div className="mt-1 hidden sm:block">
               <SeekBar
                 currentTime={currentTime}
-                duration={duration}
+                duration={effectiveDuration}
                 onSeek={seek}
                 disabled={!canDrive}
               />
@@ -703,7 +730,7 @@ export function NowPlayingBar() {
           analyser={analyser}
           playing={playing}
           currentTime={currentTime}
-          duration={duration}
+          duration={effectiveDuration}
           audioReady={!!audioSrc}
           canNext={upcoming > 0 && canDrive}
           canDrive={canDrive}
@@ -733,6 +760,7 @@ export function NowPlayingBar() {
             // to a real play attempt (onPlay) or a mid-play stall (onWaiting).
             setCurrentTime(0)
             setDuration(0)
+            endHandled.current = false // fresh track → re-arm the end watchdog
             // This element (keyed per track) just remounted, so it starts paused
             // and fires no onPause. Reset local-playing so a passive guest's button
             // doesn't read "Pause" before their new track's audio actually starts;
@@ -765,7 +793,11 @@ export function NowPlayingBar() {
           // hits their OWN room and bounces them out of the jam. They instead wait
           // for the host's next frame (the reconcile effect re-syncs them); if they
           // merely drifted ahead, it seeks them back and resumes the same track.
-          onEnded={() => canDrive && next.mutate()}
+          onEnded={() => {
+            if (!canDrive || endHandled.current) return
+            endHandled.current = true
+            next.mutate()
+          }}
           onError={() => {
             // The stream failed to load (couldn't extract audio from YouTube).
             setBuffering(false)
