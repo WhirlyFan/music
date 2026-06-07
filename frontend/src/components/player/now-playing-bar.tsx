@@ -175,22 +175,22 @@ export function NowPlayingBar() {
   const canEditQueue = !isShared || isHost
   const memberCount = room?.members_count ?? 0
 
-  // Synced-start readiness: when a shared jam parks a freshly-chosen track
-  // (pending_start), tell the server once THIS node's audio is buffered enough to
-  // play. The server starts the track when every present node is ready (or a
-  // deadline passes), so nobody starts before the rest have the audio — and a node
-  // that never reports can't stall it. Deduped per (track, generation) so we report
-  // each parked track exactly once; a new generation re-arms it.
+  // Synced-start readiness: a freshly-chosen track parks (pending_start) until THIS
+  // node's audio is buffered enough to play, then the server starts it. We report
+  // readiness for SOLO rooms too — that's what keeps a cold ~10s resolve from running
+  // as playback (the song would otherwise begin ~10s in); the clock only starts once
+  // the audio is actually ready. In a jam the server waits for every present node.
+  // Deduped per (track, generation) so we report each parked track exactly once.
   const pendingStart = room?.pending_start ?? false
   const generation = room?.generation
   const reportedReadyRef = useRef<string | null>(null)
   const maybeReportReady = useCallback(() => {
-    if (!isShared || !pendingStart || typeof generation !== 'number') return
+    if (!pendingStart || typeof generation !== 'number') return
     const tag = `${itemId ?? ''}:${generation}`
     if (reportedReadyRef.current === tag) return
     reportedReadyRef.current = tag
     reportReady(generation)
-  }, [isShared, pendingStart, generation, itemId, reportReady])
+  }, [pendingStart, generation, itemId, reportReady])
 
   // Cover the already-buffered case: the audio was ready before the pending frame
   // arrived (a track we'd already cached), so the element's onCanPlay won't fire
