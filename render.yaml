@@ -143,12 +143,19 @@ services:
       - key: DJANGO_SECRET_KEY
         generateValue: true        # Render generates a strong secret + stores it in encrypted env
 
-      # Fernet key for app-layer encryption of MFA secrets (TOTP) at rest.
-      # Must be a valid 32-byte base64-url-encoded Fernet key. Generate with:
+      # ── Secrets — VALUES LIVE IN DOPPLER (config: prd) ──────────────────
+      # Every `sync: false` entry below is a secret whose value is injected by
+      # the Doppler → Render integration. Manage the values in Doppler `prd`, NOT
+      # the Render dashboard. They stay declared here as a MANIFEST: they document
+      # which secrets the service needs and mark them externally-overridden (the
+      # blueprint never carries a value). New secret → add it to Doppler `prd`
+      # AND list it here as `sync: false`.
+
+      # Fernet key for app-layer encryption of MFA secrets (TOTP) at rest — a
+      # valid 32-byte base64-url Fernet key:
       #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-      # Paste into Render dashboard. `sync: false` so it never lands in the
-      # repo. If lost, existing TOTP rows can't be decrypted — users must
-      # re-enroll. Don't rotate without a migration plan.
+      # If lost, existing TOTP rows can't be decrypted — users must re-enroll.
+      # Don't rotate without a migration plan.
       - key: MFA_FIELD_ENCRYPTION_KEY
         sync: false
 
@@ -273,12 +280,11 @@ services:
         value: "1"
 
       # ── Email (Resend via Anymail) ──────────────────────────────────────
-      # Paste your Resend API key into the dashboard — never into this file.
-      # Sign up at https://resend.com (free tier: 3K/mo, no card required).
-      # Without a key, allauth's password-reset + signup-verification flows
-      # silently fail; with one, they deliver through Resend.
+      # Set the Resend API key in Doppler `prd` — never in this file. Sign up at
+      # https://resend.com (free tier: 3K/mo, no card required). Without a key,
+      # allauth's password-reset + signup-verification flows silently fail.
       - key: RESEND_API_KEY
-        sync: false                # dashboard-managed; encrypted at rest
+        sync: false                # value from Doppler prd
       # Override to your own verified-domain sender (e.g. noreply@yourdomain.com)
       # when you've verified DKIM/SPF in Resend. Until then, the default
       # `onboarding@resend.dev` in settings/prod.py works for testing.
@@ -289,7 +295,7 @@ services:
       # Free Spotify developer app (Client ID + Secret). Unset = Spotify paste
       # returns "not configured"; Apple Music + YouTube need nothing.
       - key: SPOTIFY_CLIENT_ID
-        sync: false                # dashboard-managed; encrypted at rest
+        sync: false                # value from Doppler prd
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
 
