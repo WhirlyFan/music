@@ -58,3 +58,44 @@ def test_no_candidates_returns_none(track):
     assert match.match_track_to_youtube(track, candidates=[]) is None
     assert match.match_track_to_youtube(track, candidates=None) is None
     assert track.playback_sources.count() == 0
+
+
+_SPOTIFY_HIT = {
+    "title": "P.O.V.",
+    "artist": "Clipse",
+    "duration": 258_000,  # within tolerance of the track's 258_030
+    "isrc": "USXXX0000001",
+    "artwork": "https://i.scdn.co/image/REAL",
+    "album": "Lord Willin'",
+    "preview": "",
+    "source_url": "https://open.spotify.com/track/abc123",
+}
+
+
+@pytest.mark.django_db
+def test_enrich_from_spotify_adopts_real_metadata(track, monkeypatch):
+    # A YouTube-sourced track with only a thumbnail cover and no real origin.
+    track.artwork_url = "https://i.ytimg.com/vi/VID/hqdefault.jpg"
+    track.source_url = "https://www.youtube.com/watch?v=VID"
+    track.save()
+    monkeypatch.setattr(match.spotify, "search_tracks", lambda q, limit=5: [_SPOTIFY_HIT])
+
+    assert match.enrich_from_spotify(track) is True
+    track.refresh_from_db()
+    assert track.artwork_url == "https://i.scdn.co/image/REAL"  # real cover, not the thumb
+    assert track.album_name == "Lord Willin'"
+    assert track.isrc == "USXXX0000001"
+    assert "open.spotify.com/track/abc123" in track.source_url  # origin now resolvable
+
+
+@pytest.mark.django_db
+def test_enrich_from_spotify_rejects_wrong_song(track, monkeypatch):
+    # Far-off duration AND no title overlap → not the same recording, adopt nothing.
+    monkeypatch.setattr(
+        match.spotify,
+        "search_tracks",
+        lambda q, limit=5: [{"title": "unrelated", "duration": 90_000, "artwork": "https://x"}],
+    )
+    assert match.enrich_from_spotify(track) is False
+    track.refresh_from_db()
+    assert track.album_name == ""
