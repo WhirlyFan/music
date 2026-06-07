@@ -23,12 +23,13 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.11.2", features = [] }
 tauri-plugin-log = "2"
+tauri-plugin-shell = "2"     # run the bundled yt-dlp sidecar
 # Local reverse-proxy: serve the embedded SPA + forward /api, /_allauth, /accounts to
 # the cloud, injecting the allauth session token as X-Session-Token. The webview is
 # same-origin (http://127.0.0.1:<port>); auth is owned by Rust. See docs/tauri-migration.md.
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["ws"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls", "stream"] }
 include_dir = "0.7"
 mime_guess = "2"
 # WebSocket proxy (jams/notifications/playlist live-updates). tokio-tungstenite 0.24

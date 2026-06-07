@@ -12,11 +12,12 @@
 use axum::{
     body::Body,
     extract::ws::{Message as AxMsg, WebSocket, WebSocketUpgrade},
-    extract::{OriginalUri, State},
-    http::{Request, Response, StatusCode},
+    extract::{OriginalUri, Path, State},
+    http::{HeaderMap, Request, Response, StatusCode},
     Router,
 };
 use include_dir::{include_dir, Dir};
+use tauri_plugin_shell::ShellExt;
 
 // The built SPA, embedded at compile time. `beforeBuildCommand` builds it first.
 static ASSETS: Dir = include_dir!("$CARGO_MANIFEST_DIR/../../frontend/dist");
@@ -35,10 +36,16 @@ const REDIRECT_URI: &str = "http://127.0.0.1:8765";
 const KR_SERVICE: &str = "com.whirlyfan.music";
 const KR_USER: &str = "session_token";
 
+type ResolvedCache =
+    std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>>;
+
 #[derive(Clone)]
 struct AppState {
     client: reqwest::Client,
     jar: std::sync::Arc<reqwest::cookie::Jar>,
+    // For the local audio engine: run the yt-dlp sidecar + cache resolved URLs.
+    app: tauri::AppHandle,
+    resolved: ResolvedCache,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -49,6 +56,7 @@ pub fn run() {
                 .level(log::LevelFilter::Info)
                 .build(),
         )
+        .plugin(tauri_plugin_shell::init())
         .setup(|app| {
             // Cookie-jar HTTP client. The jar holds the session as a `sessionid`
             // cookie — populated natively by /__login (or restored from the keychain
@@ -65,6 +73,8 @@ pub fn run() {
             let state = AppState {
                 client,
                 jar: jar.clone(),
+                app: app.handle().clone(),
+                resolved: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
             };
 
             // Bind first so we know the port before pointing the window at it.
@@ -77,6 +87,7 @@ pub fn run() {
 
             let router = Router::new()
                 .route("/__login", axum::routing::get(login_handler))
+                .route("/stream/:video_id", axum::routing::get(stream_handler))
                 .route("/ws/*rest", axum::routing::any(ws_handler))
                 .fallback(handle)
                 .with_state(state);
@@ -427,6 +438,90 @@ fn text(status: StatusCode, msg: &str) -> Response<Body> {
         .header("content-type", "text/plain")
         .body(Body::from(msg.to_owned()))
         .unwrap()
+}
+
+// ---------------------------------------------------------------------------
+// Local audio engine: resolve via the yt-dlp sidecar + proxy the bytes
+// ---------------------------------------------------------------------------
+
+const BROWSER_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
+/// Resolve the direct (progressive m4a, itag 140) audio URL for a YouTube video by
+/// running the bundled yt-dlp sidecar — from the user's own residential IP, so no
+/// bot wall / cookies / proxy needed (unlike the cloud). Cached in-memory (the URL
+/// is IP-locked + time-limited) so Range requests and replays don't re-run yt-dlp.
+async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
+    if let Ok(cache) = state.resolved.lock() {
+        if let Some((url, at)) = cache.get(video_id) {
+            if at.elapsed() < std::time::Duration::from_secs(3600) {
+                return Some(url.clone());
+            }
+        }
+    }
+    let watch = format!("https://www.youtube.com/watch?v={video_id}");
+    let output = state
+        .app
+        .shell()
+        .sidecar("yt-dlp")
+        .ok()?
+        .args([
+            "-f",
+            "140/bestaudio[ext=m4a]/bestaudio",
+            "--no-playlist",
+            "--no-warnings",
+            "-q",
+            "--print",
+            "%(url)s",
+            &watch,
+        ])
+        .output()
+        .await
+        .ok()?;
+    if !output.status.success() {
+        log::error!(
+            "yt-dlp resolve failed for {video_id}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return None;
+    }
+    let url = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())?
+        .to_string();
+    if let Ok(mut cache) = state.resolved.lock() {
+        cache.insert(video_id.to_string(), (url.clone(), std::time::Instant::now()));
+    }
+    Some(url)
+}
+
+/// GET /stream/<video_id> — resolve locally, then proxy the audio bytes (Range-aware)
+/// from googlevideo. The <audio> element points here instead of the cloud /stream/.
+async fn stream_handler(
+    State(state): State<AppState>,
+    Path(video_id): Path<String>,
+    headers: HeaderMap,
+) -> Response<Body> {
+    let Some(url) = resolve_audio(&state, &video_id).await else {
+        return text(StatusCode::BAD_GATEWAY, "could not resolve audio");
+    };
+    let mut rb = state.client.get(&url).header("User-Agent", BROWSER_UA);
+    if let Some(range) = headers.get(axum::http::header::RANGE) {
+        rb = rb.header(reqwest::header::RANGE, range.as_bytes());
+    }
+    let upstream = match rb.send().await {
+        Ok(r) => r,
+        Err(e) => return text(StatusCode::BAD_GATEWAY, &format!("audio fetch failed: {e}")),
+    };
+    let mut builder = Response::builder().status(upstream.status().as_u16());
+    for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
+        if let Some(v) = upstream.headers().get(h) {
+            builder = builder.header(h, v.as_bytes());
+        }
+    }
+    builder
+        .body(Body::from_stream(upstream.bytes_stream()))
+        .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "stream build failed"))
 }
 
 // ---------------------------------------------------------------------------

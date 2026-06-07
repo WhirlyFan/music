@@ -118,7 +118,14 @@ export function NowPlayingBar() {
   const track = room?.current ?? null
   const matched = track?.active_source?.locator_kind === 'video_id'
   const itemId = room?.current_item_id ?? null
-  const audioSrc = matched && track ? `${API_BASE}/catalog/tracks/${track.id}/stream/` : null
+  // Desktop (Tauri): stream from the LOCAL engine — the Rust proxy resolves the
+  // video via the bundled yt-dlp (from the user's own residential IP) and proxies
+  // the bytes. The cloud /stream/ stays the fallback for the (dead) web build.
+  const audioSrc = !(matched && track)
+    ? null
+    : import.meta.env.VITE_DESKTOP
+      ? `/stream/${track.active_source?.locator}`
+      : `${API_BASE}/catalog/tracks/${track.id}/stream/`
   // In a jam: the host always controls; guests drive playback only if the host
   // enabled it (allow_guest_control). Queue editing stays host-only regardless.
   // Your own (unshared) room: full control.
