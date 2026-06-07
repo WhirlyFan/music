@@ -34,6 +34,7 @@ import {
 } from '@/lib/hooks/mutations/rooms'
 import { useSession } from '@/lib/hooks/queries/auth'
 import { type ContextPage, useRoom, useRoomContext } from '@/lib/hooks/queries/rooms'
+import { usePrewarm } from '@/lib/hooks/usePrewarm'
 import { useRoomSocket } from '@/lib/hooks/useRoomSocket'
 import { useNowPlayingOpen, useQueueOpen } from '@/lib/player-url-state'
 import { usePlayerUiStore } from '@/lib/stores/player-ui'
@@ -59,6 +60,9 @@ export function NowPlayingBar() {
   // so a jam stays in sync without polling. No-op until we have a room id.
   // `reportReady` is the synced-start readiness signal (below).
   const { reportReady } = useRoomSocket(room?.id, authed, myUserId)
+  // Desktop: warm the next tracks (incl. the seeded shuffle target) locally so a
+  // skip / auto-advance / shuffle starts instantly. Server-computed; no-op on web.
+  usePrewarm(room?.prewarm)
   const refreshArtwork = useRefreshArtwork()
 
   const matchTrack = useMatchTrack()

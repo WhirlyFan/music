@@ -113,6 +113,7 @@ pub fn run() {
             let router = Router::new()
                 .route("/__login", axum::routing::get(login_handler))
                 .route("/stream/:video_id", axum::routing::get(stream_handler))
+                .route("/prewarm", axum::routing::post(prewarm_handler))
                 .route("/ws/*rest", axum::routing::any(ws_handler))
                 .fallback(handle)
                 .with_state(state);
@@ -584,6 +585,58 @@ async fn stream_handler(
     builder
         .body(Body::from_stream(upstream.bytes_stream()))
         .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "stream build failed"))
+}
+
+/// POST /prewarm — body `{"video_ids": ["…", …]}`. Resolve + fully cache each
+/// upcoming track in the background so a skip / auto-advance / shuffle starts from
+/// disk instantly instead of paying the ~9s cold resolve. The SPA posts the room
+/// frame's `prewarm` list (next up-next + the seeded shuffle target) whenever it
+/// changes. Fire-and-forget: returns 202 at once; each id is a no-op if already
+/// cached or in flight, so re-posting the same set is cheap.
+async fn prewarm_handler(State(state): State<AppState>, body: Body) -> Response<Body> {
+    let bytes = match axum::body::to_bytes(body, 64 * 1024).await {
+        Ok(b) => b,
+        Err(_) => return text(StatusCode::BAD_REQUEST, "body too large"),
+    };
+    let video_ids: Vec<String> = serde_json::from_slice::<PrewarmReq>(&bytes)
+        .map(|r| r.video_ids)
+        .unwrap_or_default();
+
+    for video_id in video_ids {
+        // Same id shape the stream route enforces before touching the filesystem.
+        if video_id.is_empty()
+            || !video_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        {
+            continue;
+        }
+        let state = state.clone();
+        tauri::async_runtime::spawn(async move {
+            let file = state.cache_dir.join(&video_id);
+            if tokio::fs::try_exists(&file).await.unwrap_or(false) {
+                return; // already fully cached
+            }
+            // A download already in flight (a real play, or a prior prewarm) owns
+            // this id — skip so we don't pay a redundant ~9s resolve. spawn_cache_fill
+            // single-flights the download itself; this guards the resolve too.
+            if state.warming.lock().map(|w| w.contains(&video_id)).unwrap_or(true) {
+                return;
+            }
+            if let Some(url) = resolve_audio(&state, &video_id).await {
+                spawn_cache_fill(state, video_id, url);
+            }
+        });
+    }
+    Response::builder()
+        .status(StatusCode::ACCEPTED)
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[derive(serde::Deserialize)]
+struct PrewarmReq {
+    video_ids: Vec<String>,
 }
 
 /// Serve a fully-cached audio file from disk, honoring a Range request.

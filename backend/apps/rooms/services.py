@@ -88,21 +88,43 @@ def on_audio_ready(video_id: str) -> None:
             broadcast.publish(room_id, snapshot.serialize_room(room_id))
 
 
-def prewarm_upcoming(room: Room, count: int = 2) -> None:
-    """Warm upcoming tracks so advancing the jam starts instantly (no 'Starting…'
-    wait). Covers two cases:
-      • the next 2 tracks in line — what plays on a normal skip/auto-advance, and
-      • the exact track a shuffle would land on — shuffle is server-side and
-        seeded, so its result is deterministic; we warm precisely that one.
-    Each warm is a background no-op if already cached or in flight."""
+def _prewarm_candidates(room: Room, count: int) -> list[QueueItem]:
+    """The items worth warming ahead of a transport action. Covers two cases:
+      • the next `count` tracks in line — what plays on a normal skip/auto-advance, and
+      • the exact track a shuffle would land on — shuffle is server-side and seeded,
+        so its result is deterministic; we warm precisely that one.
+    Order preserved (up-next first, then the shuffle target); not yet deduped."""
     up = upcoming(room)
     candidates = list((up["queue"] + up["context"])[:count])
     shuffle_top = next_shuffle_top(room)
     if shuffle_top is not None:
         candidates.append(shuffle_top)
+    return candidates
 
+
+def prewarm_video_ids(room: Room, count: int = 2) -> list[str]:
+    """The YouTube ids the client should warm ahead of time (next `count` up-next +
+    the seeded shuffle target). Deduped, matched-only, order preserved. Surfaced on
+    the room frame so each desktop node caches these locally — a skip / auto-advance
+    / shuffle then starts instantly instead of paying the ~9s cold resolve. Computed
+    from prefetched data, so it adds no queries to the per-frame serializer."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in _prewarm_candidates(room, count):
+        vid = _video_id(item.track)
+        if vid and vid not in seen:
+            seen.add(vid)
+            out.append(vid)
+    return out
+
+
+def prewarm_upcoming(room: Room, count: int = 2) -> None:
+    """Server-side warm of the upcoming tracks (legacy cloud path — superseded by
+    desktop-local warming via `prewarm_video_ids` on the frame; kept until the cloud
+    yt-dlp path is torn down). Each warm is a background no-op if already cached or
+    in flight."""
     seen = set()
-    for item in candidates:
+    for item in _prewarm_candidates(room, count):
         if item.id in seen:
             continue
         seen.add(item.id)
@@ -511,9 +533,10 @@ def _seeded_shuffle(items: list[QueueItem], seed: int):
 def next_shuffle_top(room: Room) -> QueueItem | None:
     """The context item a shuffle would play next under the room's current seed
     (the track that lands at position 0), or None. Pure — no writes — so prewarm
-    can warm exactly that track."""
+    can warm exactly that track. Reads the prefetched items (no extra query), so
+    it's cheap to call from the per-frame serializer."""
     playback = getattr(room, "playback", None)
-    items = list(_ctx(room))
+    items = [i for i in room.items.all() if i.kind == CONTEXT]
     if playback is None or not items:
         return None
     ordered, positions = _seeded_shuffle(items, playback.next_shuffle_seed)
