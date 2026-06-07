@@ -403,6 +403,8 @@ def test_ingest_youtube_sets_direct_playback_source(client, monkeypatch):
     # YouTube tracks are immediately playable — active source already set, no lazy match.
     src = r.data["tracks"][0]["active_source"]
     assert src["locator"] == "abc11111111" and src["locator_kind"] == "video_id"
+    # YouTube's duration lands on the source (authoritative audio length for the player).
+    assert src["duration_ms"] == 200000
 
 
 @pytest.mark.django_db
