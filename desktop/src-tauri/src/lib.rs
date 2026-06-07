@@ -698,6 +698,24 @@ fn csrf_token(state: &AppState) -> Option<String> {
     })
 }
 
+/// The csrftoken, priming the jar first if it's absent. An engine-originated cloud
+/// POST can be the first unsafe call (before the SPA has triggered its own CSRF
+/// bootstrap), so the cookie may not be in the jar yet — a GET through Django's
+/// CsrfViewMiddleware sets it. Best-effort: returns None if it still can't be had.
+async fn ensure_csrf(state: &AppState) -> Option<String> {
+    if let Some(tok) = csrf_token(state) {
+        return Some(tok);
+    }
+    let _ = state
+        .client
+        .get(format!("{UPSTREAM}/_allauth/browser/v1/auth/session"))
+        .header("Origin", TRUSTED_ORIGIN)
+        .header("X-Requested-With", "XMLHttpRequest")
+        .send()
+        .await;
+    csrf_token(state)
+}
+
 /// Forward a cloud reqwest::Response back to the webview verbatim (status + JSON
 /// body), so the SPA sees exactly what the cloud endpoint returned.
 async fn relay(resp: reqwest::Response) -> Response<Body> {
@@ -727,7 +745,7 @@ async fn cloud_post(state: &AppState, path: &str, body: serde_json::Value) -> Re
         .header("Origin", TRUSTED_ORIGIN)
         .header("Referer", format!("{TRUSTED_ORIGIN}/"))
         .json(&body);
-    if let Some(tok) = csrf_token(state) {
+    if let Some(tok) = ensure_csrf(state).await {
         rb = rb.header("X-CSRFToken", tok);
     }
     match rb.send().await {
