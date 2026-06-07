@@ -174,11 +174,20 @@ services:
       - key: YOUTUBE_COOKIES
         sync: false
 
-      # Optional residential proxy for YouTube extraction + audio fetch
-      # (http://user:pass@host:port). YouTube bot-walls Render's datacenter IP;
-      # point this at a residential proxy — e.g. a proxy on your home machine
-      # exposed via an ngrok TCP tunnel — and both the yt-dlp resolve and the
-      # audio stream go out that IP. Update when the tunnel URL changes + redeploy.
+      # Residential egress for YouTube via a Tailscale exit node (the preferred
+      # path — see home-proxy/). Set TS_AUTHKEY to a Tailscale auth key and
+      # TS_EXIT_NODE to the home node's name/IP (e.g. music-home-exit); the
+      # entrypoint runs tailscaled in userspace mode and points YOUTUBE_PROXY at
+      # its local HTTP proxy, so only YouTube traffic egresses through your home
+      # IP. Leave unset to disable (playback then hits the datacenter bot wall).
+      - key: TS_AUTHKEY
+        sync: false
+      - key: TS_EXIT_NODE
+        sync: false
+
+      # Manual override only: an explicit proxy URL (http://user:pass@host:port),
+      # e.g. a bore/ngrok tunnel. Normally leave UNSET — the Tailscale entrypoint
+      # above sets YOUTUBE_PROXY automatically. If set, it wins over Tailscale.
       - key: YOUTUBE_PROXY
         sync: false
 

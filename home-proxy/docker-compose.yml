@@ -1,37 +1,36 @@
-# Home residential proxy for YouTube extraction, exposed to the deployed backend
-# via an ngrok TCP tunnel.
+# Home Tailscale exit node — gives the deployed backend a residential IP for
+# YouTube extraction (clearing the datacenter bot wall) WITHOUT exposing anything
+# to the public internet. Traffic is private + peer-to-peer over your tailnet.
 #
-#   1. cp .env.example .env   (fill in creds + ngrok token)
+#   1. cp .env.example .env   (paste a Tailscale auth key)
 #   2. docker compose up -d
-#   3. ./print-proxy-url.sh   → paste the line into Render's YOUTUBE_PROXY, redeploy
+#   3. Approve this machine as an exit node in the Tailscale admin console
+#      (Machines → music-home-exit → Edit route settings → "Use as exit node").
+#   4. In Render, set TS_AUTHKEY + TS_EXIT_NODE=music-home-exit, redeploy.
 #
-# YouTube bot-walls the backend's datacenter IP; routing extraction through this
-# proxy makes the requests come from your home (residential) IP, which clears it.
-# Runs only while this machine + these containers are up — the trade for a free
-# residential IP instead of a paid proxy. All audio flows through your home
-# connection, so it leans on your upstream bandwidth.
+# Clone the repo + drop in a .env on any machine and `docker compose up` — that
+# machine becomes the exit node. Works only while it's running (the trade for a
+# free residential IP). Stop with `docker compose down`.
 services:
-  proxy:
-    image: abhinavsingh/proxy.py:latest
-    # Authenticated HTTP/HTTPS forward proxy on :8899. Basic-auth stops the
-    # tunnel-exposed proxy from being an open relay anyone could abuse.
-    command:
-      - --hostname
-      - 0.0.0.0
-      - --port
-      - "8899"
-      - --basic-auth
-      - ${PROXY_USER}:${PROXY_PASS}
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: ${TS_HOSTNAME:-music-home-exit}
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      # Advertise this node as an exit node so the backend can egress through it.
+      - TS_EXTRA_ARGS=--advertise-exit-node
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    # An exit node forwards packets, so the kernel needs IP forwarding on.
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
     restart: unless-stopped
 
-  ngrok:
-    image: ngrok/ngrok:latest
-    # Expose the proxy on a public TCP endpoint the Render backend can reach.
-    command: tcp proxy:8899
-    environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
-    ports:
-      - "4040:4040" # ngrok inspector + local API (print-proxy-url.sh reads this)
-    depends_on:
-      - proxy
-    restart: unless-stopped
+volumes:
+  ts-state: {}
