@@ -57,6 +57,10 @@ class RoomSerializer(serializers.ModelSerializer):
     # Changes only when the context list's membership/order changes, so a jam guest
     # refetches the full list on play/shuffle/remove but not on play/pause/seek.
     context_version = serializers.SerializerMethodField()
+    # YouTube ids the client should warm ahead: the next up-next tracks + the exact
+    # (seeded, deterministic) shuffle target. The desktop POSTs these to its local
+    # engine so a skip / auto-advance / shuffle starts instantly. Web ignores it.
+    prewarm = serializers.SerializerMethodField()
 
     # --- Jam (sharing) ---
     # User PK (UUIDv7). Clients compare it to the session user's id to tell host
@@ -93,6 +97,7 @@ class RoomSerializer(serializers.ModelSerializer):
             "context_pos",
             "context_window",
             "context_version",
+            "prewarm",
             "host_id",
             "code",
             "is_shared",
@@ -131,6 +136,10 @@ class RoomSerializer(serializers.ModelSerializer):
     @extend_schema_field(serializers.CharField())
     def get_context_version(self, room):
         return services.context_version(room)
+
+    @extend_schema_field(serializers.ListField(child=serializers.CharField()))
+    def get_prewarm(self, room):
+        return services.prewarm_video_ids(room)
 
     @extend_schema_field(serializers.DateTimeField())
     def get_server_time(self, room):

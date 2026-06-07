@@ -1,7 +1,13 @@
 import pytest
 
-from apps.catalog.tests.factories import PlaylistFactory, PlaylistTrackFactory, TrackFactory
+from apps.catalog.tests.factories import (
+    PlaybackSourceFactory,
+    PlaylistFactory,
+    PlaylistTrackFactory,
+    TrackFactory,
+)
 from apps.rooms import services
+from apps.rooms import snapshot as room_snapshot
 from apps.rooms.models import QueueItem, Room
 from apps.users.tests.factories import UserFactory
 
@@ -190,3 +196,62 @@ def test_shuffle_includes_all_and_plays_from_top():
     assert sorted(i.position for i in _ctx(room)) == [0, 1, 2, 3, 4, 5]
     # Seed rotated → the next shuffle is predictable again (and independent).
     assert services.next_shuffle_top(room) is not None
+
+
+def _matched_playlist(user, locators):
+    """A playlist whose tracks each have a known YouTube video id (the locator)."""
+    playlist = PlaylistFactory(created_by=user)
+    for i, loc in enumerate(locators):
+        track = TrackFactory()
+        PlaybackSourceFactory(track=track, locator=loc)
+        PlaylistTrackFactory(playlist=playlist, track=track, position=i)
+    return playlist
+
+
+@pytest.mark.django_db
+def test_prewarm_video_ids_covers_next_two_and_shuffle_target():
+    user = UserFactory()
+    room = services.get_active_room(user)
+    locs = ["VID00000000", "VID00000001", "VID00000002", "VID00000003", "VID00000004"]
+    playlist = _matched_playlist(user, locs)
+    services.play_playlist(room, playlist, added_by=user)  # plays from the top (pos 0)
+
+    room = room_snapshot.load_room(room.id)  # prefetched, like the serializer sees it
+    ids = services.prewarm_video_ids(room, count=2)
+
+    # The next two up-next context tracks (positions 1 and 2) come first, in order…
+    assert ids[:2] == ["VID00000001", "VID00000002"]
+    # …followed by the exact track a seeded shuffle would land on.
+    shuffle_vid = services._video_id(services.next_shuffle_top(room).track)
+    assert shuffle_vid in ids
+    assert len(ids) == len(set(ids))  # deduped (shuffle target may equal an up-next)
+
+
+@pytest.mark.django_db
+def test_prewarm_video_ids_skips_unmatched_tracks():
+    user = UserFactory()
+    room = services.get_active_room(user)
+    playlist = PlaylistFactory(created_by=user)
+    # Two tracks, neither matched to a YouTube source → nothing anywhere is warmable
+    # (not the up-next, not whatever the shuffle target lands on).
+    for i in range(2):
+        PlaylistTrackFactory(playlist=playlist, track=TrackFactory(), position=i)
+    services.play_playlist(room, playlist, added_by=user)
+
+    room = room_snapshot.load_room(room.id)
+    assert services.prewarm_video_ids(room, count=2) == []
+
+
+@pytest.mark.django_db
+def test_room_frame_carries_prewarm_list():
+    user = UserFactory()
+    room = services.get_active_room(user)
+    playlist = _matched_playlist(user, ["VID00000000", "VID00000001", "VID00000002"])
+    services.play_playlist(room, playlist, added_by=user)
+
+    data = room_snapshot.serialize_room(room.id)
+
+    # The next two up-next ids lead the list; the seeded shuffle target (one of the
+    # three context ids, deduped) may follow — its presence is covered above.
+    assert data["prewarm"][:2] == ["VID00000001", "VID00000002"]
+    assert set(data["prewarm"]) <= {"VID00000000", "VID00000001", "VID00000002"}

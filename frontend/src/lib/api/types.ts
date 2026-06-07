@@ -1574,6 +1574,7 @@ export interface components {
             readonly context_pos: number | null;
             readonly context_window: components["schemas"]["QueueItem"][];
             readonly context_version: string;
+            readonly prewarm: readonly string[];
             /** Format: uuid */
             readonly host_id: string;
             code?: string;
