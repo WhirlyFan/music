@@ -27,10 +27,15 @@ export function GooeyMenu({
   items,
   className,
   style,
+  // How to reference the #goo filter. Safari/WebKit (the desktop WebView) resolves a
+  // bare `url(#goo)` against the CURRENT ROUTE URL, so in this SPA the filter silently
+  // fails on any non-root route. The caller passes an absolute-URL reference to fix it.
+  gooFilter = 'url(#goo)',
 }: {
   items: GooeyItem[]
   className?: string
   style?: React.CSSProperties
+  gooFilter?: string
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -98,7 +103,7 @@ export function GooeyMenu({
       </svg>
 
       {/* Blob layer — colored circles under the goo filter (no shadows). */}
-      <div className="pointer-events-none absolute inset-0" style={{ filter: 'url(#goo)' }}>
+      <div className="pointer-events-none absolute inset-0" style={{ filter: gooFilter }}>
         <span className="bg-primary absolute inset-0 rounded-full" />
         {items.map((item, i) => (
           <span
