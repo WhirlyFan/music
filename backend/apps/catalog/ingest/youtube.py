@@ -8,12 +8,17 @@ Audio download (Phase 3) is a separate concern and is the only part that needs
 ffmpeg.
 """
 
+import base64
+import http.cookiejar
+import logging
 import tempfile
 import urllib.parse
 from functools import lru_cache
 
 from django.conf import settings
 from yt_dlp import YoutubeDL
+
+log = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -44,14 +49,43 @@ def _cookiefile() -> str | None:
     throws at datacenter IPs — the PO-token sidecar + ejs solver alone don't clear
     it from Render. None if unset (local/dev), then we rely on those instead.
 
+    Accepts either base64 (RECOMMENDED — a cookies.txt is tab-delimited, and
+    pasting it raw into a dashboard env field mangles the tabs into spaces, which
+    yt-dlp can't parse, so it silently runs unauthenticated and still bot-blocks)
+    or a raw Netscape file. We then validate it parses and log the cookie count,
+    so a bad paste shows up loud in the logs instead of looking like 'no cookies'.
+
     Written under /tmp (writable) with delete=False so it persists for the process
     and yt-dlp can refresh the jar in place."""
-    content = (getattr(settings, "YOUTUBE_COOKIES", "") or "").strip()
-    if not content:
+    raw = (getattr(settings, "YOUTUBE_COOKIES", "") or "").strip()
+    if not raw:
+        log.info("YOUTUBE_COOKIES not set — yt-dlp runs unauthenticated")
         return None
+
+    # A raw Netscape file starts with a '# ... Cookie File' magic comment; anything
+    # else we try to base64-decode (the tab-safe way to carry it in an env var).
+    content = raw
+    if not raw.startswith("#"):
+        try:
+            content = base64.b64decode(raw, validate=True).decode()
+        except ValueError:  # binascii.Error & UnicodeDecodeError both subclass it
+            content = raw  # not base64 — fall back to treating it as a raw file
+
     f = tempfile.NamedTemporaryFile("w", prefix="ytcookies-", suffix=".txt", delete=False)
-    f.write(content + "\n")
+    f.write(content if content.endswith("\n") else content + "\n")
     f.close()
+
+    try:
+        jar = http.cookiejar.MozillaCookieJar(f.name)
+        jar.load()
+        log.info("YouTube cookies loaded for yt-dlp auth (%d cookies)", len(jar))
+    except Exception:  # noqa: BLE001 — diagnostic only; hand the file to yt-dlp regardless
+        log.warning(
+            "YOUTUBE_COOKIES is set but didn't parse as a Netscape cookies.txt — the "
+            "tabs were likely mangled on paste. Store it base64-encoded instead "
+            "(e.g. `base64 -i cookies.txt | tr -d '\\n'`).",
+            exc_info=True,
+        )
     return f.name
 
 
