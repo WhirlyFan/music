@@ -164,6 +164,16 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
 
+      # ── YouTube audio extraction ────────────────────────────────────────
+      # Netscape cookies.txt from a signed-in YouTube account, pasted as one
+      # multi-line value. yt-dlp uses it to clear the "confirm you're not a bot"
+      # wall YouTube throws at Render's datacenter IP (the PO-token sidecar +
+      # ejs solver don't clear it alone). `sync: false` → set/rotate in the
+      # Render dashboard; never commit cookies. When playback starts 502ing with
+      # the bot error again, the cookies expired — paste fresh ones + redeploy.
+      - key: YOUTUBE_COOKIES
+        sync: false
+
       # ── Host / origin allow-lists ───────────────────────────────────────
       # Django checks the Host header against ALLOWED_HOSTS. With our
       # same-origin Render rewrites, requests arrive at the backend with the

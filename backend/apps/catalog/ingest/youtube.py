@@ -8,6 +8,7 @@ Audio download (Phase 3) is a separate concern and is the only part that needs
 ffmpeg.
 """
 
+import tempfile
 import urllib.parse
 from functools import lru_cache
 
@@ -35,13 +36,34 @@ def _impersonate_target():
         return None
 
 
+@lru_cache(maxsize=1)
+def _cookiefile() -> str | None:
+    """Write the YouTube cookies (a Netscape cookies.txt exported from a signed-in
+    account, supplied via the YOUTUBE_COOKIES secret) to a tmp file for yt-dlp.
+    Signed-in requests get past the 'confirm you're not a bot' wall that YouTube
+    throws at datacenter IPs — the PO-token sidecar + ejs solver alone don't clear
+    it from Render. None if unset (local/dev), then we rely on those instead.
+
+    Written under /tmp (writable) with delete=False so it persists for the process
+    and yt-dlp can refresh the jar in place."""
+    content = (getattr(settings, "YOUTUBE_COOKIES", "") or "").strip()
+    if not content:
+        return None
+    f = tempfile.NamedTemporaryFile("w", prefix="ytcookies-", suffix=".txt", delete=False)
+    f.write(content + "\n")
+    f.close()
+    return f.name
+
+
 def _opts(**extra) -> dict:
     """Base yt-dlp options for current YouTube extraction. YouTube requires solving
     a JS signature / n challenge to expose playable formats; that's handled by the
     bundled `yt-dlp-ejs` solver scripts run through the `deno` runtime (both baked
     into the image) — no runtime download. The bgutil PO-token provider sidecar
     (see settings.YOUTUBE_POT_BASE_URL) supplies proof-of-origin tokens to dodge
-    throttling under load; curl_cffi impersonation is used where available."""
+    throttling under load; YOUTUBE_COOKIES (signed-in cookies.txt) clears the
+    'confirm you're not a bot' wall on datacenter IPs; curl_cffi impersonation is
+    used where available."""
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -56,6 +78,9 @@ def _opts(**extra) -> dict:
     if pot_base:
         # Point the bgutil-ytdlp-pot-provider plugin at the sidecar's HTTP server.
         opts.setdefault("extractor_args", {})["youtubepot-bgutilhttp"] = {"base_url": [pot_base]}
+    cookiefile = _cookiefile()
+    if cookiefile:
+        opts["cookiefile"] = cookiefile
     return opts
 
 

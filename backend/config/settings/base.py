@@ -29,6 +29,14 @@ SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
 # then falls back to its localhost default, which won't reach a separate container).
 YOUTUBE_POT_BASE_URL = env("YOUTUBE_POT_BASE_URL", default="")
 
+# A Netscape-format cookies.txt exported from a signed-in YouTube account. Lets
+# yt-dlp make authenticated requests, which clear the "confirm you're not a bot"
+# wall YouTube throws at datacenter IPs (the PO-token sidecar + ejs solver don't
+# clear it from Render). Secret — sourced from Doppler in dev, the Render
+# dashboard in prod (sync: false); empty in local non-Doppler runs. Rotate by
+# updating the value and redeploying — cookies expire / get invalidated.
+YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
+
 # --- Apps ---
 DJANGO_APPS = [
     "django.contrib.admin",
