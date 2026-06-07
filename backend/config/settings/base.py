@@ -371,7 +371,13 @@ MFA_PASSKEY_SIGNUP_ENABLED = False
 
 # --- DRF ---
 REST_FRAMEWORK = {
+    # Two auth paths, tried in order:
+    #  1. X-Session-Token — django-allauth headless "app" client (native/desktop:
+    #     the Tauri app obtains a session token via OAuth and the local proxy sends
+    #     it as this header). No CSRF (it's not cookie-based).
+    #  2. SessionAuthentication — the cookie-based web app (allauth browser client).
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "allauth.headless.contrib.rest_framework.authentication.XSessionTokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

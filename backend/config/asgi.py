@@ -15,16 +15,19 @@ from channels.routing import ProtocolTypeRouter, URLRouter  # noqa: E402
 from channels.security.websocket import OriginValidator  # noqa: E402
 from django.conf import settings  # noqa: E402
 
+from apps.core.channels_auth import XSessionTokenAuthMiddleware  # noqa: E402
 from config.routing import websocket_urlpatterns  # noqa: E402
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        # The session cookie is sent on the WS upgrade, so AuthMiddlewareStack
-        # populates scope["user"]. OriginValidator only admits sockets opened
-        # from our own frontend origins (CSWSH guard — see WEBSOCKET_ALLOWED_ORIGINS).
+        # Two auth paths for the WS upgrade:
+        #  - web: the session cookie → AuthMiddlewareStack populates scope["user"].
+        #  - desktop: the local proxy sends an X-Session-Token header →
+        #    XSessionTokenAuthMiddleware (inner; runs after cookie auth) overrides it.
+        # OriginValidator only admits sockets from our own origins (CSWSH guard).
         "websocket": OriginValidator(
-            AuthMiddlewareStack(URLRouter(websocket_urlpatterns)),
+            AuthMiddlewareStack(XSessionTokenAuthMiddleware(URLRouter(websocket_urlpatterns))),
             settings.WEBSOCKET_ALLOWED_ORIGINS,
         ),
     }
