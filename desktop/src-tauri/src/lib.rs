@@ -17,6 +17,7 @@ use axum::{
     Router,
 };
 use include_dir::{include_dir, Dir};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
 // The built SPA, embedded at compile time. `beforeBuildCommand` builds it first.
@@ -46,6 +47,10 @@ struct AppState {
     // For the local audio engine: run the yt-dlp sidecar + cache resolved URLs.
     app: tauri::AppHandle,
     resolved: ResolvedCache,
+    // On-disk audio cache root (also holds yt-dlp's player-JS cache under .ytdlp/)
+    // and the set of video_ids currently downloading (single-flight).
+    cache_dir: std::path::PathBuf,
+    warming: std::sync::Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -70,11 +75,21 @@ pub fn run() {
                 .cookie_provider(jar.clone())
                 .build()
                 .expect("build reqwest client");
+            let cache_dir = app
+                .handle()
+                .path()
+                .app_cache_dir()
+                .unwrap_or_else(|_| std::env::temp_dir().join("music"))
+                .join("audio");
+            let _ = std::fs::create_dir_all(&cache_dir);
+            log::info!("audio cache dir: {}", cache_dir.display());
             let state = AppState {
                 client,
                 jar: jar.clone(),
                 app: app.handle().clone(),
                 resolved: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+                cache_dir,
+                warming: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
             };
 
             // Bind first so we know the port before pointing the window at it.
@@ -84,6 +99,16 @@ pub fn run() {
             .expect("bind local proxy");
             let port = listener.local_addr().expect("local_addr").port();
             log::info!("local proxy listening on 127.0.0.1:{port}");
+
+            // Warm yt-dlp's player-JS cache at startup (background, best-effort): pay
+            // the base.js download + n-sig extraction ONCE, before the user plays, so
+            // their first real resolve is ~2-3s instead of ~10s.
+            let warm_state = state.clone();
+            tauri::async_runtime::spawn(async move {
+                if resolve_audio(&warm_state, "dQw4w9WgXcQ").await.is_some() {
+                    log::info!("yt-dlp player cache warmed");
+                }
+            });
 
             let router = Router::new()
                 .route("/__login", axum::routing::get(login_handler))
@@ -259,16 +284,13 @@ async fn await_oauth_code(expected_state: &str) -> Result<String, String> {
     let req_line = head.lines().next().unwrap_or("");
     let path_q = req_line.split_whitespace().nth(1).unwrap_or("/");
 
-    let page = "<!doctype html><html><head><meta charset=utf-8><title>music</title></head>\
-<body style=\"margin:0;height:100vh;display:flex;align-items:center;justify-content:center;\
-background:#0b0b12;color:#e7e7ee;font:16px/1.5 -apple-system,system-ui,sans-serif\">\
-<div style=\"text-align:center;max-width:22rem;padding:2rem\">\
-<div style=\"font-size:2rem;font-weight:600;letter-spacing:-.02em;\
-background:linear-gradient(90deg,#6366f1,#a78bfa);-webkit-background-clip:text;\
-background-clip:text;color:transparent\">music</div>\
-<p style=\"margin:1rem 0 .25rem;font-weight:500\">You're signed in.</p>\
-<p style=\"margin:0;color:#9a9aa8;font-size:.9rem\">You can close this tab and return to the app.</p>\
-</div><script>setTimeout(()=>window.close(),800)</script></body></html>";
+    let page = r#"<!doctype html><html><head><meta charset="utf-8"><title>music</title>
+<style>
+html,body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0b12;color:#e7e7ee;font:16px/1.5 -apple-system,system-ui,sans-serif}
+.brand{font-size:2rem;font-weight:600;letter-spacing:-.02em;background:linear-gradient(110deg,#6366f1 35%,#c4b5fd 50%,#6366f1 65%);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shimmer 3s linear infinite}
+@keyframes shimmer{from{background-position:200% center}to{background-position:-200% center}}
+</style></head>
+<body><div style="text-align:center;max-width:22rem;padding:2rem"><div class="brand">music</div><p style="margin:1rem 0 .25rem;font-weight:500">You're signed in.</p><p style="margin:0;color:#9a9aa8;font-size:.9rem">You can close this tab and return to the app.</p></div><script>setTimeout(function(){window.close()},800)</script></body></html>"#;
     let resp = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{page}",
         page.len()
@@ -459,17 +481,37 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
         }
     }
     let watch = format!("https://www.youtube.com/watch?v={video_id}");
-    let output = state
-        .app
-        .shell()
-        .sidecar("yt-dlp")
-        .ok()?
+    let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
+    let mut cmd = state.app.shell().sidecar("yt-dlp").ok()?;
+    // Let yt-dlp find the bundled `deno` (n-sig solving): the launched app's PATH
+    // lacks the user's deno, so prepend the dir that holds our sidecars.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let mut paths = vec![dir.to_path_buf()];
+            if let Ok(p) = std::env::var("PATH") {
+                paths.extend(std::env::split_paths(&p));
+            }
+            if let Ok(joined) = std::env::join_paths(paths) {
+                cmd = cmd.env("PATH", joined);
+            }
+        }
+    }
+    let output = cmd
         .args([
+            // Force a *progressive* https itag-140 stream (exclude HLS). The default
+            // android_vr client hands back an HLS/m3u8 variant that cuts out mid-song;
+            // the web_embedded client needs no PO-token (unlike `web`) and serves a
+            // clean, complete progressive stream.
             "-f",
-            "140/bestaudio[ext=m4a]/bestaudio",
+            "140/bestaudio[ext=m4a][protocol^=https]/bestaudio[ext=m4a]/bestaudio",
+            "--extractor-args",
+            "youtube:player_client=web_embedded",
             "--no-playlist",
             "--no-warnings",
             "-q",
+            // Persist yt-dlp's player-JS cache across resolves.
+            "--cache-dir",
+            &cache_arg,
             "--print",
             "%(url)s",
             &watch,
@@ -502,9 +544,29 @@ async fn stream_handler(
     Path(video_id): Path<String>,
     headers: HeaderMap,
 ) -> Response<Body> {
+    // The route param is a YouTube id ([A-Za-z0-9_-]); guard it before it touches
+    // the filesystem.
+    if video_id.is_empty()
+        || !video_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        return text(StatusCode::BAD_REQUEST, "bad video id");
+    }
+
+    let file = state.cache_dir.join(&video_id);
+    // Cache hit → serve from disk (instant, Range-aware): no resolve, no network.
+    if tokio::fs::try_exists(&file).await.unwrap_or(false) {
+        return serve_cached(&file, headers.get(axum::http::header::RANGE)).await;
+    }
+
+    // Miss → resolve once, start a background full-download into the cache
+    // (single-flight), and serve the client live/progressively meanwhile.
     let Some(url) = resolve_audio(&state, &video_id).await else {
         return text(StatusCode::BAD_GATEWAY, "could not resolve audio");
     };
+    spawn_cache_fill(state.clone(), video_id, url.clone());
+
     let mut rb = state.client.get(&url).header("User-Agent", BROWSER_UA);
     if let Some(range) = headers.get(axum::http::header::RANGE) {
         rb = rb.header(reqwest::header::RANGE, range.as_bytes());
@@ -522,6 +584,143 @@ async fn stream_handler(
     builder
         .body(Body::from_stream(upstream.bytes_stream()))
         .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "stream build failed"))
+}
+
+/// Serve a fully-cached audio file from disk, honoring a Range request.
+async fn serve_cached(
+    file: &std::path::Path,
+    range: Option<&axum::http::HeaderValue>,
+) -> Response<Body> {
+    let data = match tokio::fs::read(file).await {
+        Ok(d) => d,
+        Err(_) => return text(StatusCode::NOT_FOUND, "cache read failed"),
+    };
+    let ct = tokio::fs::read_to_string(file.with_extension("ct"))
+        .await
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "audio/mp4".to_string());
+    let total = data.len() as u64;
+    if let Some((start, end)) = range
+        .and_then(|v| v.to_str().ok())
+        .and_then(|r| parse_range(r, total))
+    {
+        let slice = data[start as usize..=end as usize].to_vec();
+        return Response::builder()
+            .status(206)
+            .header("content-type", ct)
+            .header("content-range", format!("bytes {start}-{end}/{total}"))
+            .header("content-length", (end - start + 1).to_string())
+            .header("accept-ranges", "bytes")
+            .body(Body::from(slice))
+            .unwrap();
+    }
+    Response::builder()
+        .status(200)
+        .header("content-type", ct)
+        .header("content-length", total.to_string())
+        .header("accept-ranges", "bytes")
+        .body(Body::from(data))
+        .unwrap()
+}
+
+/// Parse a `bytes=start-end` Range header (suffix ranges `bytes=-N` unsupported).
+fn parse_range(h: &str, total: u64) -> Option<(u64, u64)> {
+    let (s, e) = h.trim().strip_prefix("bytes=")?.split_once('-')?;
+    let start: u64 = s.trim().parse().ok()?;
+    let end: u64 = if e.trim().is_empty() {
+        total.saturating_sub(1)
+    } else {
+        e.trim().parse().ok()?
+    };
+    if total == 0 || start > end || start >= total {
+        return None;
+    }
+    Some((start, end.min(total - 1)))
+}
+
+/// Background single-flight: download the full audio to disk for future hits.
+fn spawn_cache_fill(state: AppState, video_id: String, url: String) {
+    {
+        let mut w = match state.warming.lock() {
+            Ok(w) => w,
+            Err(_) => return,
+        };
+        if !w.insert(video_id.clone()) {
+            return; // already downloading
+        }
+    }
+    tauri::async_runtime::spawn(async move {
+        let ok = async {
+            let resp = state
+                .client
+                .get(&url)
+                .header("User-Agent", BROWSER_UA)
+                .send()
+                .await
+                .ok()?;
+            if !resp.status().is_success() {
+                return None;
+            }
+            let ct = resp
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("audio/mp4")
+                .to_string();
+            let bytes = resp.bytes().await.ok()?;
+            let file = state.cache_dir.join(&video_id);
+            let tmp = state.cache_dir.join(format!("{video_id}.part"));
+            tokio::fs::write(&tmp, &bytes).await.ok()?;
+            tokio::fs::rename(&tmp, &file).await.ok()?;
+            let _ = tokio::fs::write(file.with_extension("ct"), ct).await;
+            Some(())
+        }
+        .await;
+        if ok.is_some() {
+            evict_lru(&state.cache_dir, 1024 * 1024 * 1024).await; // ~1 GB cap
+        }
+        if let Ok(mut w) = state.warming.lock() {
+            w.remove(&video_id);
+        }
+    });
+}
+
+/// Keep the cache under `cap` bytes by deleting least-recently-modified files.
+async fn evict_lru(dir: &std::path::Path, cap: u64) {
+    let mut rd = match tokio::fs::read_dir(dir).await {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    let mut files: Vec<(std::path::PathBuf, u64, std::time::SystemTime)> = Vec::new();
+    let mut total = 0u64;
+    while let Ok(Some(entry)) = rd.next_entry().await {
+        let path = entry.path();
+        // Audio files are the bare video_id (no extension); skip .ct / .part / dirs.
+        if path.extension().is_some() {
+            continue;
+        }
+        if let Ok(meta) = entry.metadata().await {
+            if meta.is_file() {
+                total += meta.len();
+                let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                files.push((path, meta.len(), mtime));
+            }
+        }
+    }
+    if total <= cap {
+        return;
+    }
+    files.sort_by_key(|(_, _, mtime)| *mtime);
+    for (path, size, _) in files {
+        if total <= cap {
+            break;
+        }
+        let _ = tokio::fs::remove_file(&path).await;
+        let _ = tokio::fs::remove_file(path.with_extension("ct")).await;
+        total = total.saturating_sub(size);
+    }
 }
 
 // ---------------------------------------------------------------------------
