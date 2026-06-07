@@ -115,6 +115,12 @@ def _opts(**extra) -> dict:
     cookiefile = _cookiefile()
     if cookiefile:
         opts["cookiefile"] = cookiefile
+    proxy = (getattr(settings, "YOUTUBE_PROXY", "") or "").strip()
+    if proxy:
+        # Route extraction through a residential proxy so YouTube sees a home IP,
+        # not the datacenter (which it bot-walls). streaming.py fetches the audio
+        # through the same proxy too — the resolved URL is IP-locked to it.
+        opts["proxy"] = proxy
     return opts
 
 
