@@ -3,3 +3,6 @@ node_modules/
 src-tauri/target/
 # Generated bundles
 src-tauri/gen/
+# Bundled sidecar binaries (yt-dlp etc.) — fetched via scripts/fetch-sidecars.sh,
+# too large to commit. CI / a fresh checkout runs that before building.
+src-tauri/binaries/
