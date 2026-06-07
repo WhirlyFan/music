@@ -23,14 +23,8 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 SPOTIFY_CLIENT_ID = env("SPOTIFY_CLIENT_ID", default="")
 SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
 
-# A Netscape-format cookies.txt exported from a signed-in YouTube account. Lets
-# yt-dlp make authenticated requests, which clear the "confirm you're not a bot"
-# wall YouTube throws at datacenter IPs — used by the cloud's SEARCH + playlist/
-# video metadata ingest (audio is resolved on each desktop node now). Secret —
-# sourced from Doppler in dev, the Render dashboard in prod (sync: false); empty in
-# local non-Doppler runs. Rotate by updating the value and redeploying — cookies
-# expire / get invalidated.
-YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
+# (No YOUTUBE_COOKIES / proxy / yt-dlp settings: the cloud never calls YouTube. All
+# YouTube extraction runs on the desktop app, off the user's own IP.)
 
 # --- Apps ---
 DJANGO_APPS = [

@@ -72,7 +72,6 @@ live in `frontend/.env` (also gitignored; example tracked).
 | `WEB_CONCURRENCY` | optional | Gunicorn workers; default 3, lower on small instances |
 | `SENTRY_DSN` | optional | Opt-in error tracking |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | optional | Spotify ingest (metadata only); unset → "not configured" |
-| `YOUTUBE_COOKIES` | optional | Netscape cookies.txt for the cloud's YouTube search/ingest (see [YouTube extraction](#youtube-extraction)); clears the datacenter bot wall |
 | `HATCHET_CLIENT_TOKEN` | for worker | Generated via `make hatchet-token` |
 | `HATCHET_CLIENT_HOST_PORT` | for worker | `hatchet:7077` in compose |
 | `DJANGO_LOG_LEVEL` | optional | Default `INFO` |
@@ -83,46 +82,36 @@ live in `frontend/.env` (also gitignored; example tracked).
 | `VITE_API_BASE` | ✅ | Usually `/api/v1` because we proxy same-origin |
 | `VITE_SENTRY_DSN` | optional | Frontend error tracking |
 
-## YouTube extraction
+## YouTube
 
-Two separate paths, on two different machines:
+**All YouTube I/O runs on the desktop app — the cloud (Django) never touches
+YouTube.** Search, playlist/video metadata ingest, audio resolve, and the audio
+bytes all go through the bundled `yt-dlp`/`deno` in `desktop/src-tauri`, off the
+user's own residential IP. So there's no `yt-dlp`/`deno`/`ffmpeg` in the backend
+image, no `YOUTUBE_COOKIES`/proxy, and no datacenter bot wall to fight. Django just
+stores the metadata the desktop sends:
 
-**Audio — on each desktop node.** The current track's audio is resolved + fetched
-**locally** by the desktop engine (bundled `yt-dlp`/`deno` in `desktop/src-tauri`,
-served from the local `/stream/`), off the user's own residential IP. The cloud
-never touches audio bytes — no server-side resolve, proxy, or disk cache.
+- **Match-on-play** — the desktop's `/yt/search` returns candidates; the cloud
+  (`match.match_track_to_youtube`) scores + persists them. No candidates → no match.
+- **Paste a YouTube URL** — the desktop's `/yt/ingest` extracts the playlist/video;
+  the cloud (`services.ingest_youtube`) persists the supplied metadata. A YouTube URL
+  with no metadata is rejected (the cloud can't extract it).
+- **Audio** — the desktop's `/stream/<video_id>` resolves + proxies the bytes.
 
-- **Format/client matters.** The desktop's `resolve_audio` (`desktop/src-tauri/src/lib.rs`)
-  pins the progressive **itag-140 m4a/AAC** stream via the **`web_embedded`** player
-  client. The default clients now return only an **HLS manifest** for `bestaudio`
-  (YouTube's SABR rollout) — a plain `<audio>` element can't play HLS in Chrome, and
-  on Safari the visualizer's `createMediaElementSource` can't tap a native-HLS stream,
-  so playback goes **silent while the timeline keeps advancing**. `web_embedded` is
-  the one client whose progressive URL we can fetch directly, with **no PO token /
-  visitor-data / residential proxy needed** — which is why neither the bgutil PO-token
-  provider nor the Tailscale residential exit (both since removed) was the fix. If
-  audio ever goes silent again, check that resolution still returns a non-HLS `https`
-  m4a URL first.
+**Format/client matters (desktop engine).** `resolve_audio` (`desktop/src-tauri/src/lib.rs`)
+pins the progressive **itag-140 m4a/AAC** stream via the **`web_embedded`** player
+client. The default clients return only an **HLS manifest** for `bestaudio` (YouTube's
+SABR rollout) — a plain `<audio>` element can't play HLS in Chrome, and on Safari the
+visualizer's `createMediaElementSource` can't tap a native-HLS stream, so playback
+goes **silent while the timeline keeps advancing**. `web_embedded` is the one client
+whose progressive URL we can fetch directly, with **no PO token / visitor-data /
+residential proxy needed** — which is why neither a PO-token provider nor a Tailscale
+residential exit (both since removed) was ever the fix. If audio goes silent, check
+that resolution still returns a non-HLS `https` m4a URL first.
 
-**Search + playlist/video metadata ingest — on the cloud.** The backend uses
-`yt-dlp` (`apps/catalog/ingest/youtube.py`) for these flat-extraction calls only
-(no audio download). YouTube bot-walls Render's datacenter IP, so:
-
-| Piece | Where | Why |
-|---|---|---|
-| **yt-dlp** | backend dep (`uv`) | the extractor. **Bump frequently** — stale yt-dlp breaks as YouTube changes. |
-| **deno** | baked into `backend/Dockerfile` | JS runtime for the signature/n-challenge solver |
-| **yt-dlp-ejs** | backend dep (via `yt-dlp[default]`) | the JS solver scripts (so we don't fetch at runtime). Keep in lockstep with yt-dlp. |
-| **`YOUTUBE_COOKIES`** | env (Render dashboard / Doppler) | a signed-in Netscape cookies.txt — clears the "confirm you're not a bot" wall on the datacenter IP. The cloud's one anti-bot-wall lever now. |
-
-Notes:
-- After bumping yt-dlp/yt-dlp-ejs, run **`make reset`** — the backend `.venv` is an
-  anonymous volume that a plain `up` won't refresh.
-- If search/ingest start failing with the bot error, **`YOUTUBE_COOKIES` expired** —
-  paste a fresh export and redeploy (store it base64-encoded; raw paste mangles tabs).
-- **No PO-token provider and no residential proxy.** Both were tried against the old
-  *cloud audio* bot wall and neither worked; `web_embedded` (desktop) did, so the
-  bgutil sidecar, the Tailscale exit node, and `home-proxy/` are all gone.
+> Duration note: the player shows + ends on the **metadata** duration
+> (`active_source.duration_ms`, from yt-dlp), never the browser's `el.duration` —
+> some itag-140 AAC streams make Chromium report it ~2× too long.
 
 ## Database migrations
 

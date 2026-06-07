@@ -168,17 +168,9 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
 
-      # ── YouTube metadata extraction (search + playlist/video ingest) ────
-      # Netscape cookies.txt from a signed-in YouTube account, pasted as one
-      # multi-line value. yt-dlp uses it to clear the "confirm you're not a bot"
-      # wall YouTube throws at Render's datacenter IP. Audio is resolved on each
-      # desktop node now (off the user's own IP via web_embedded) — the cloud only
-      # does search + metadata ingest, so this is its one anti-bot-wall lever.
-      # `sync: false` → set/rotate in the Render dashboard; never commit cookies.
-      # If search/ingest start failing with the bot error, the cookies expired —
-      # paste fresh ones + redeploy.
-      - key: YOUTUBE_COOKIES
-        sync: false
+      # (No YouTube secrets here: the cloud never calls YouTube. All extraction —
+      # search, playlist/video ingest, audio resolve — runs on the desktop app off
+      # the user's own residential IP. See docs/ops.md "YouTube extraction".)
 
       # ── Host / origin allow-lists ───────────────────────────────────────
       # Django checks the Host header against ALLOWED_HOSTS. With our

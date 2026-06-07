@@ -45,19 +45,9 @@ dependencies = [
     "channels[daphne]>=4.2",
     "uvicorn[standard]>=0.34",
     "pwned-passwords-django>=5.2.0",
-    # Cloud-side YouTube SEARCH + playlist/video metadata ingest (audio is resolved
-    # on each desktop node now). Needs deno at runtime for the yt-dlp-ejs JS-challenge
-    # solver; the [default] extra bundles ejs (so we don't fetch it at runtime),
-    # pycryptodomex, requests, etc. Bump frequently — a stale yt-dlp breaks as YouTube
-    # changes, and yt-dlp-ejs must track yt-dlp.
-    #
-    # We deliberately do NOT include the [curl-cffi] extra: it adds browser-TLS
-    # impersonation (a best-effort anti-bot-detection layer, see ingest/youtube.py),
-    # but curl-cffi <0.15.0 carries CVE-2026-33752 (CVSS 8.6 SSRF) and no stable
-    # yt-dlp admits the patched 0.15.0 yet. Extraction doesn't depend on it (the ejs
-    # solver + cookies carry it). Re-add `,curl-cffi` once yt-dlp widens its pin to
-    # >=0.15.0.
-    "yt-dlp[default]>=2025.1",
+    # NB: no yt-dlp here. All YouTube I/O (search, playlist/video ingest, audio
+    # resolve) runs on the desktop app via its bundled yt-dlp, off the user's own
+    # residential IP. The cloud only stores the metadata the desktop sends.
 ]
 
 [dependency-groups]
