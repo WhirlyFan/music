@@ -9,12 +9,17 @@
 
 set -e
 
-# Start the co-located PO-token provider (internal :4416) in the background.
-# Best-effort: if it isn't up, yt-dlp just resolves without PO tokens (the
-# bundled solver still works), so a failure here never blocks playback.
-if [ -f /opt/bgutil/build/main.js ]; then
+# Co-located PO-token provider (internal :4416). OFF by default: it's a Node +
+# native-canvas server (~100MB+) that OOMs Render's free tier now that tailscaled
+# also runs in this container. With a residential exit node + cookies it isn't
+# needed (the bundled ejs solver still handles signatures). Set START_POT_PROVIDER=1
+# to enable it (e.g. on a larger instance).
+if [ -n "$START_POT_PROVIDER" ] && [ -f /opt/bgutil/build/main.js ]; then
   echo "[entrypoint] starting PO-token provider on :4416…"
   node /opt/bgutil/build/main.js >/tmp/bgutil.log 2>&1 &
+else
+  # Don't point yt-dlp at a :4416 that isn't running.
+  export YOUTUBE_POT_BASE_URL=""
 fi
 
 # Phase A collapses the admin + runtime roles into one, so the admin URL is just
