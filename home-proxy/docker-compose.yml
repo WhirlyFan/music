@@ -18,6 +18,15 @@ services:
       # Advertise this node as an exit node so the backend can egress through it.
       - TS_EXTRA_ARGS=--advertise-exit-node
       - TS_STATE_DIR=/var/lib/tailscale
+      # Don't let Tailscale (MagicDNS) manage this container's resolver — it
+      # fights Docker's embedded DNS and breaks the exit node's DNS forwarding
+      # (clients' lookups SERVFAIL, so proxied requests hang on name resolution).
+      - TS_ACCEPT_DNS=false
+    # Resolve via public DNS rather than Docker's embedded 127.0.0.11 (which was
+    # returning SERVFAIL for the exit node's forwarded queries).
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - ts-state:/var/lib/tailscale
     devices:
