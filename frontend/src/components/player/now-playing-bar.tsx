@@ -327,15 +327,21 @@ export function NowPlayingBar() {
     }
     if (matched || attempted.current === track.id) return
     attempted.current = track.id
-    matchTrack.mutate(track.id, {
-      onError: () => {
-        // Only the controller skips on a genuine no-match — a guest's skip would
-        // mutate their OWN room and bounce them out of the jam.
-        if (!canDrive) return
-        toast.error(`No YouTube match for “${track.title}” — skipping.`)
-        next.mutate()
+    // The query the desktop runs against YouTube (title + artist). The cloud ignores
+    // it on web and searches from the track's own fields.
+    const query = [track.title, track.primary_artist].filter(Boolean).join(' ')
+    matchTrack.mutate(
+      { trackId: track.id, query },
+      {
+        onError: () => {
+          // Only the controller skips on a genuine no-match — a guest's skip would
+          // mutate their OWN room and bounce them out of the jam.
+          if (!canDrive) return
+          toast.error(`No YouTube match for “${track.title}” — skipping.`)
+          next.mutate()
+        },
       },
-    })
+    )
   }, [track, matched, matchTrack, next, canDrive])
 
   // Resolve a blank cover once per track — off the audio path (its own request),

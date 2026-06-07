@@ -116,6 +116,8 @@ pub fn run() {
                 .route("/prewarm", axum::routing::post(prewarm_handler))
                 .route("/yt/search", axum::routing::get(yt_search_handler))
                 .route("/yt/ingest", axum::routing::get(yt_ingest_handler))
+                .route("/yt/match/:track_id", axum::routing::post(yt_match_handler))
+                .route("/yt/import", axum::routing::post(yt_import_handler))
                 .route("/ws/*rest", axum::routing::any(ws_handler))
                 .fallback(handle)
                 .with_state(state);
@@ -525,13 +527,19 @@ async fn yt_search_handler(
             _ => {}
         }
     }
-    let q = q.trim();
+    let candidates = yt_search_candidates(&state, q.trim(), n).await;
+    json_ok(serde_json::to_string(&candidates).unwrap_or_else(|_| "[]".into()))
+}
+
+/// Run a YouTube search via the yt-dlp sidecar (flat extraction, on the user's own
+/// IP) → candidates in the cloud matcher's shape. Empty query or any failure → [].
+async fn yt_search_candidates(state: &AppState, q: &str, n: u32) -> Vec<serde_json::Value> {
     if q.is_empty() {
-        return json_ok("[]".into());
+        return Vec::new();
     }
     let n = n.clamp(1, 20);
-    let Some(cmd) = ytdlp_cmd(&state) else {
-        return text(StatusCode::INTERNAL_SERVER_ERROR, "yt-dlp unavailable");
+    let Some(cmd) = ytdlp_cmd(state) else {
+        return Vec::new();
     };
     let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
     let output = cmd
@@ -550,12 +558,15 @@ async fn yt_search_handler(
         Ok(o) if o.status.success() => o,
         Ok(o) => {
             log::error!("yt-dlp search failed: {}", String::from_utf8_lossy(&o.stderr));
-            return text(StatusCode::BAD_GATEWAY, "search failed");
+            return Vec::new();
         }
-        Err(e) => return text(StatusCode::BAD_GATEWAY, &format!("search failed: {e}")),
+        Err(e) => {
+            log::error!("yt-dlp search failed: {e}");
+            return Vec::new();
+        }
     };
     // One JSON object per line (per result). Keep only entries with an id.
-    let candidates: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
+    String::from_utf8_lossy(&output.stdout)
         .lines()
         .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
         .filter_map(|v| {
@@ -568,8 +579,7 @@ async fn yt_search_handler(
                 "duration_sec": v.get("duration").and_then(|x| x.as_i64()),
             }))
         })
-        .collect();
-    json_ok(serde_json::to_string(&candidates).unwrap_or_else(|_| "[]".into()))
+        .collect()
 }
 
 /// Build a normalized ingest track row (the shape of `youtube._entry()` on the
@@ -602,17 +612,27 @@ async fn yt_ingest_handler(
     let Some(url) = url.filter(|u| !u.is_empty()) else {
         return text(StatusCode::BAD_REQUEST, "missing url");
     };
+    match yt_ingest_meta(&state, &url).await {
+        Some(meta) => json_ok(serde_json::to_string(&meta).unwrap_or_else(|_| "{}".into())),
+        None => text(StatusCode::BAD_GATEWAY, "ingest failed"),
+    }
+}
+
+/// Run a yt-dlp playlist/video metadata extract (on the user's own IP) → the cloud
+/// ingester's shape (`{title, external_id, kind, tracks, cover}`), or None on
+/// failure. A `watch?v=…&list=…` URL imports the whole playlist (auto-mix `RD…` /
+/// Watch-Later `WL` fall back to the single video), matching the cloud's
+/// `ingest_with_meta`. Metadata only; no audio.
+async fn yt_ingest_meta(state: &AppState, url: &str) -> Option<serde_json::Value> {
     // Import the playlist only for a real `list=` (not an auto-mix / Watch Later).
-    let list_id = reqwest::Url::parse(&url)
+    let list_id = reqwest::Url::parse(url)
         .ok()
         .and_then(|u| u.query_pairs().find(|(k, _)| k == "list").map(|(_, v)| v.into_owned()))
         .unwrap_or_default();
     let want_playlist =
         !list_id.is_empty() && !list_id.starts_with("RD") && !list_id.starts_with("WL");
 
-    let Some(cmd) = ytdlp_cmd(&state) else {
-        return text(StatusCode::INTERNAL_SERVER_ERROR, "yt-dlp unavailable");
-    };
+    let cmd = ytdlp_cmd(state)?;
     let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
     let mut args = vec![
         "--dump-single-json",
@@ -628,43 +648,141 @@ async fn yt_ingest_handler(
     } else {
         args.push("--no-playlist");
     }
-    args.push(&url);
+    args.push(url);
     let output = match cmd.args(args).output().await {
         Ok(o) if o.status.success() => o,
         Ok(o) => {
             log::error!("yt-dlp ingest failed: {}", String::from_utf8_lossy(&o.stderr));
-            return text(StatusCode::BAD_GATEWAY, "ingest failed");
+            return None;
         }
-        Err(e) => return text(StatusCode::BAD_GATEWAY, &format!("ingest failed: {e}")),
+        Err(e) => {
+            log::error!("yt-dlp ingest failed: {e}");
+            return None;
+        }
     };
-    let info: serde_json::Value = match serde_json::from_slice(&output.stdout) {
-        Ok(v) => v,
-        Err(_) => return text(StatusCode::BAD_GATEWAY, "could not parse ingest"),
-    };
-    let result = if let Some(entries) = info.get("entries").and_then(|e| e.as_array()) {
+    let info: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    if let Some(entries) = info.get("entries").and_then(|e| e.as_array()) {
         let tracks: Vec<serde_json::Value> = entries.iter().filter_map(entry_to_row).collect();
         let cover = tracks.first().and_then(|t| t.get("artwork")).cloned()
             .unwrap_or(serde_json::Value::String(String::new()));
-        serde_json::json!({
+        Some(serde_json::json!({
             "title": info.get("title").and_then(|x| x.as_str()).unwrap_or("YouTube playlist"),
             "external_id": info.get("id").and_then(|x| x.as_str()).unwrap_or(""),
             "kind": "playlist",
             "tracks": tracks,
             "cover": cover,
-        })
+        }))
     } else {
         let tracks: Vec<serde_json::Value> = entry_to_row(&info).into_iter().collect();
         let cover = tracks.first().and_then(|t| t.get("artwork")).cloned()
             .unwrap_or(serde_json::Value::String(String::new()));
-        serde_json::json!({
+        Some(serde_json::json!({
             "title": info.get("title").and_then(|x| x.as_str()).unwrap_or("YouTube video"),
             "external_id": info.get("id").and_then(|x| x.as_str()).unwrap_or(""),
             "kind": "video",
             "tracks": tracks,
             "cover": cover,
-        })
-    };
-    json_ok(serde_json::to_string(&result).unwrap_or_else(|_| "{}".into()))
+        }))
+    }
+}
+
+/// The csrftoken from the cookie jar, for engine-originated POSTs to the cloud
+/// (Django requires X-CSRFToken to match the cookie on unsafe methods). The jar
+/// picks it up from cloud Set-Cookie as the SPA makes its normal requests.
+fn csrf_token(state: &AppState) -> Option<String> {
+    use reqwest::cookie::CookieStore;
+    let api: reqwest::Url = "https://api.whirlyfan.com/".parse().ok()?;
+    let header = state.jar.cookies(&api)?;
+    header.to_str().ok()?.split(';').find_map(|p| {
+        p.trim().strip_prefix("csrftoken=").map(str::to_owned)
+    })
+}
+
+/// Forward a cloud reqwest::Response back to the webview verbatim (status + JSON
+/// body), so the SPA sees exactly what the cloud endpoint returned.
+async fn relay(resp: reqwest::Response) -> Response<Body> {
+    let status = resp.status().as_u16();
+    let ct = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/json")
+        .to_string();
+    let bytes = resp.bytes().await.unwrap_or_default();
+    Response::builder()
+        .status(status)
+        .header("content-type", ct)
+        .body(Body::from(bytes))
+        .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "relay failed"))
+}
+
+/// POST a JSON body to a cloud endpoint as the signed-in user (jar cookies +
+/// CSRF + a trusted Origin), and relay the response. The orchestration tail shared
+/// by the match + import handlers — "do the YouTube work locally, persist on the
+/// cloud."
+async fn cloud_post(state: &AppState, path: &str, body: serde_json::Value) -> Response<Body> {
+    let mut rb = state
+        .client
+        .post(format!("{UPSTREAM}{path}"))
+        .header("Origin", TRUSTED_ORIGIN)
+        .header("Referer", format!("{TRUSTED_ORIGIN}/"))
+        .json(&body);
+    if let Some(tok) = csrf_token(state) {
+        rb = rb.header("X-CSRFToken", tok);
+    }
+    match rb.send().await {
+        Ok(resp) => relay(resp).await,
+        Err(e) => text(StatusCode::BAD_GATEWAY, &format!("cloud request failed: {e}")),
+    }
+}
+
+/// POST /yt/match/<track_id> {query} — search YouTube locally for the track, then
+/// hand the candidates to the cloud to score + persist (it never calls YouTube).
+/// Relays the cloud's PlaybackSource response.
+async fn yt_match_handler(
+    State(state): State<AppState>,
+    Path(track_id): Path<String>,
+    body: Body,
+) -> Response<Body> {
+    if track_id.is_empty()
+        || !track_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+    {
+        return text(StatusCode::BAD_REQUEST, "bad track id");
+    }
+    let bytes = axum::body::to_bytes(body, 64 * 1024).await.unwrap_or_default();
+    let query = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .ok()
+        .and_then(|v| v.get("query").and_then(|q| q.as_str()).map(str::to_owned))
+        .unwrap_or_default();
+    let candidates = yt_search_candidates(&state, query.trim(), 5).await;
+    cloud_post(
+        &state,
+        &format!("/api/v1/catalog/tracks/{track_id}/match/"),
+        serde_json::json!({ "candidates": candidates }),
+    )
+    .await
+}
+
+/// POST /yt/import {url} — paste handler. For a YouTube URL, extract its metadata
+/// locally and hand it to the cloud to persist; anything else (Spotify/Apple) is
+/// just forwarded — those use official APIs the cloud can call directly. Relays the
+/// cloud's ImportResult.
+async fn yt_import_handler(State(state): State<AppState>, body: Body) -> Response<Body> {
+    let bytes = axum::body::to_bytes(body, 64 * 1024).await.unwrap_or_default();
+    let url = serde_json::from_slice::<serde_json::Value>(&bytes)
+        .ok()
+        .and_then(|v| v.get("url").and_then(|u| u.as_str()).map(str::to_owned))
+        .unwrap_or_default();
+    if url.is_empty() {
+        return text(StatusCode::BAD_REQUEST, "missing url");
+    }
+    let mut payload = serde_json::json!({ "url": url });
+    if url.contains("youtube.com") || url.contains("youtu.be") {
+        if let Some(meta) = yt_ingest_meta(&state, &url).await {
+            payload["youtube_metadata"] = meta;
+        }
+    }
+    cloud_post(&state, "/api/v1/catalog/ingest/", payload).await
 }
 
 /// Resolve the direct (progressive m4a, itag 140) audio URL for a YouTube video by
