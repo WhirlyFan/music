@@ -23,12 +23,24 @@ Safety:
 
 from __future__ import annotations
 
+import requests
+from allauth.core.exceptions import SignupClosedException
+from allauth.headless.socialaccount.internal import complete_token_login
 from allauth.mfa.models import Authenticator
+from allauth.socialaccount.adapter import get_adapter as get_socialaccount_adapter
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.utils.module_loading import import_string
 from rest_framework import permissions, serializers, status
-from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.decorators import (
+    api_view,
+    authentication_classes,
+    permission_classes,
+    throttle_classes,
+)
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -93,6 +105,91 @@ def redeem_invite(request: Request) -> Response:
     except InviteError as e:
         return Response({"detail": str(e)}, status=status.HTTP_404_NOT_FOUND)
     return Response({"email": inv.email})
+
+
+class _DesktopGoogleSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    code_verifier = serializers.CharField()
+    redirect_uri = serializers.CharField()
+
+
+def _session_token(request: Request) -> str:
+    """Mint the allauth headless session token for the (just logged-in) request,
+    honoring the configured token strategy (default: the Django session key)."""
+    strategy_path = getattr(
+        settings,
+        "HEADLESS_TOKEN_STRATEGY",
+        "allauth.headless.tokens.strategies.sessions.SessionTokenStrategy",
+    )
+    return import_string(strategy_path)().create_session_token(request)
+
+
+@api_view(["POST"])
+@authentication_classes([])  # pre-auth: this endpoint establishes the session
+@permission_classes([permissions.AllowAny])
+def desktop_google_login(request: Request) -> Response:
+    """Native desktop Google sign-in (RFC 8252).
+
+    The Tauri app runs Google's Authorization Code + PKCE flow in the system
+    browser (loopback redirect) and POSTs the resulting `code` here. We exchange
+    it for an id_token SERVER-SIDE — the OAuth client secret stays in Doppler and
+    is never shipped in the desktop binary — then verify + log in via allauth and
+    return the headless `session_token`. The app sends that token back as
+    `X-Session-Token` (DRF) and on the WS upgrade (Channels), so the desktop
+    client needs no cookies. Reuses the existing Google web client (same client_id,
+    so the id_token audience matches the configured SocialApp).
+    """
+    s = _DesktopGoogleSerializer(data=request.data)
+    s.is_valid(raise_exception=True)
+
+    app = settings.SOCIALACCOUNT_PROVIDERS["google"]["APPS"][0]
+    try:
+        token_resp = requests.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": s.validated_data["code"],
+                "code_verifier": s.validated_data["code_verifier"],
+                "redirect_uri": s.validated_data["redirect_uri"],
+                "client_id": app["client_id"],
+                "client_secret": app["secret"],
+            },
+            timeout=10,
+        )
+    except requests.RequestException:
+        return Response({"detail": "Could not reach Google."}, status=status.HTTP_502_BAD_GATEWAY)
+    if token_resp.status_code != 200:
+        return Response(
+            {"detail": "Authorization code exchange failed."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    id_token = token_resp.json().get("id_token")
+    if not id_token:
+        return Response(
+            {"detail": "No id_token returned by Google."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    provider = get_socialaccount_adapter().get_provider(
+        request, "google", client_id=app["client_id"]
+    )
+    try:
+        sociallogin = provider.verify_token(request, {"id_token": id_token})
+        complete_token_login(request, sociallogin)
+    except SignupClosedException:
+        return Response(
+            {
+                "detail": "That Google account isn’t invited yet — ask a member to invite your email."
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    except ValidationError:
+        return Response(
+            {"detail": "Google sign-in didn’t complete."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response({"session_token": _session_token(request)})
 
 
 class _UsernameSerializer(serializers.Serializer):
