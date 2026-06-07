@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 from django.db import transaction
 from django.utils import timezone
 
-from .ingest import applemusic, spotify, youtube
+from .ingest import applemusic, spotify
 from .ingest.normalize import make_match_key
 from .ingest.spotify import SpotifyError
 from .models import (
@@ -259,9 +259,8 @@ def ingest_youtube(url: str, *, user=None, metadata: dict | None = None) -> dict
     """YouTube playlist/video → loose Tracks, each with its video as an ACTIVE
     playback source already set (no search/match needed — it's playable now).
 
-    `metadata` is the desktop's yt-dlp extraction (the shape of
-    `youtube.ingest_with_meta()`), run on the user's own IP. When omitted we fall
-    back to a cloud-side extraction (legacy — the cloud should not call YouTube)."""
+    `metadata` is the desktop's yt-dlp extraction (the shape the engine's /yt/ingest
+    returns), run on the user's own IP. Required — the cloud never calls YouTube."""
     yt = Source.objects.get(code=Source.YOUTUBE)
 
     def set_direct_source(track: Track, row: dict) -> None:
@@ -283,8 +282,10 @@ def ingest_youtube(url: str, *, user=None, metadata: dict | None = None) -> dict
             duration_ms=row.get("duration"),
         )
 
-    parsed = metadata if metadata is not None else youtube.ingest_with_meta(url)
-    return _record(yt, parsed, url, user=user, on_track=set_direct_source)
+    if metadata is None:
+        # The cloud has no yt-dlp; YouTube extraction happens on the desktop engine.
+        raise UnsupportedSourceError("YouTube links are imported by the desktop app.")
+    return _record(yt, metadata, url, user=user, on_track=set_direct_source)
 
 
 def ingest(url: str, *, user=None, youtube_metadata: dict | None = None) -> dict:

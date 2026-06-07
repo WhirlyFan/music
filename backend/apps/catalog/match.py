@@ -6,7 +6,7 @@ Writes the top candidates as PlaybackSource rows and promotes the best to
 
 from __future__ import annotations
 
-from .ingest import applemusic, spotify, youtube
+from .ingest import applemusic, spotify
 from .models import PlaybackSource, Source, Track
 
 # A duration this far off (ms) scores zero — filters covers / extended edits.
@@ -60,16 +60,12 @@ def backfill_artwork(track: Track, video_id: str) -> None:
         track.save(update_fields=["artwork_url"])
 
 
-def match_track_to_youtube(
-    track: Track, *, n: int = 5, query: str | None = None, candidates: list[dict] | None = None
-):
-    """Score YouTube candidates for `track`, persist them, promote the best to active.
+def match_track_to_youtube(track: Track, *, candidates: list[dict] | None = None):
+    """Score YouTube `candidates` for `track`, persist them, promote the best to active.
 
-    `candidates` is a list of {video_id, title, uploader, duration_sec} dicts. The
-    desktop runs the yt-dlp search on the user's own IP and passes them in; when
-    omitted we fall back to a cloud-side `youtube.search()` (kept only until every
-    client supplies its own — the cloud should not be calling YouTube). Scoring +
-    persistence stay here, on the side that owns the catalog DB.
+    `candidates` is a list of {video_id, title, uploader, duration_sec} dicts, run by
+    the desktop's yt-dlp search on the user's own IP. The cloud only scores +
+    persists — it never calls YouTube. No candidates → no match.
 
     Idempotent: returns None (does nothing) if the track already has an active
     playback source. Returns the active PlaybackSource on success, else None.
@@ -77,11 +73,9 @@ def match_track_to_youtube(
     if track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).exists():
         return None
 
-    source = Source.objects.get(code=Source.YOUTUBE)
-    if candidates is None:
-        candidates = youtube.search(query or f"{track.title} {track.primary_artist}", n=n)
     if not candidates:
         return None
+    source = Source.objects.get(code=Source.YOUTUBE)
 
     scored = []
     for c in candidates:

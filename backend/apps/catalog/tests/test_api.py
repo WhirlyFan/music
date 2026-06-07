@@ -384,9 +384,10 @@ def test_metadata_enriched_across_sources():
 
 
 @pytest.mark.django_db
-def test_ingest_youtube_sets_direct_playback_source(client, monkeypatch):
-    from apps.catalog.ingest import youtube
-
+def test_ingest_youtube_persists_desktop_metadata(client):
+    """The desktop ran yt-dlp for the playlist on the user's own IP; the cloud just
+    persists the supplied metadata (no YouTube call) and sets each video as the
+    immediately-playable active source."""
     meta = {
         "title": "YT Playlist",
         "external_id": "PL1",
@@ -395,12 +396,15 @@ def test_ingest_youtube_sets_direct_playback_source(client, monkeypatch):
             {"video_id": "abc11111111", "title": "Song A", "artist": "Chan", "duration": 200000},
             {"video_id": "def22222222", "title": "Song B", "artist": "Chan", "duration": 180000},
         ],
+        "cover": "",
     }
-    monkeypatch.setattr(youtube, "ingest_with_meta", lambda url: meta)
-    r = client.post(INGEST, {"url": "https://www.youtube.com/playlist?list=PL1"}, format="json")
+    r = client.post(
+        INGEST,
+        {"url": "https://www.youtube.com/playlist?list=PL1", "youtube_metadata": meta},
+        format="json",
+    )
     assert r.status_code == 201
     assert r.data["track_count"] == 2
-    # YouTube tracks are immediately playable — active source already set, no lazy match.
     src = r.data["tracks"][0]["active_source"]
     assert src["locator"] == "abc11111111" and src["locator_kind"] == "video_id"
     # YouTube's duration lands on the source (authoritative audio length for the player).
@@ -408,32 +412,19 @@ def test_ingest_youtube_sets_direct_playback_source(client, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_lazy_match_single_track(client, offline, monkeypatch):
-    client.post(INGEST, {"url": ALBUM_URL}, format="json")
-    track = Track.objects.first()
-    monkeypatch.setattr(
-        match.youtube,
-        "search",
-        lambda q, n=5: [{"video_id": "LAZY1", "title": q, "uploader": "y", "duration_sec": 240}],
-    )
-    r = client.post(f"/api/v1/catalog/tracks/{track.id}/match/")
-    assert r.status_code == 200
-    assert r.data["locator"] == "LAZY1"
-    # idempotent: second call returns the existing active source, no re-search
-    assert client.post(f"/api/v1/catalog/tracks/{track.id}/match/").data["locator"] == "LAZY1"
+def test_ingest_youtube_without_metadata_is_rejected(client):
+    """The cloud has no yt-dlp — a YouTube URL with no client metadata can't be
+    extracted server-side, so it's a clean 400 (not a 500)."""
+    r = client.post(INGEST, {"url": "https://www.youtube.com/playlist?list=PL1"}, format="json")
+    assert r.status_code == 400
 
 
 @pytest.mark.django_db
-def test_match_endpoint_uses_client_supplied_candidates(client, offline, monkeypatch):
-    """The desktop posts its own yt-dlp candidates; the cloud scores + persists them
-    and must NOT call YouTube itself."""
+def test_match_endpoint_scores_client_candidates(client, offline):
+    """Match-on-play: the desktop posts its candidates; the cloud scores + persists.
+    No candidates → no match (the cloud never searches YouTube itself)."""
     client.post(INGEST, {"url": ALBUM_URL}, format="json")
     track = Track.objects.first()
-
-    def boom(*a, **k):
-        raise AssertionError("cloud must not call YouTube when candidates are supplied")
-
-    monkeypatch.setattr(match.youtube, "search", boom)
 
     r = client.post(
         f"/api/v1/catalog/tracks/{track.id}/match/",
@@ -442,49 +433,28 @@ def test_match_endpoint_uses_client_supplied_candidates(client, offline, monkeyp
     )
     assert r.status_code == 200
     assert r.data["locator"] == "CLIENT1"
+    # idempotent: second call returns the existing active source
+    again = client.post(f"/api/v1/catalog/tracks/{track.id}/match/", {}, format="json")
+    assert again.data["locator"] == "CLIENT1"
 
 
 @pytest.mark.django_db
-def test_ingest_youtube_uses_client_supplied_metadata(client, monkeypatch):
-    """The desktop ran yt-dlp for the playlist; the cloud persists the metadata
-    without touching YouTube."""
-    from apps.catalog.ingest import youtube
-
-    def boom(url):
-        raise AssertionError("cloud must not call YouTube when metadata is supplied")
-
-    monkeypatch.setattr(youtube, "ingest_with_meta", boom)
-
-    meta = {
-        "title": "Desktop YT Playlist",
-        "external_id": "PL9",
-        "kind": "playlist",
-        "tracks": [
-            {"video_id": "vid11111111", "title": "Song A", "artist": "Chan", "duration": 200000}
-        ],
-        "cover": "",
-    }
-    r = client.post(
-        INGEST,
-        {"url": "https://www.youtube.com/playlist?list=PL9", "youtube_metadata": meta},
-        format="json",
-    )
-    assert r.status_code == 201
-    assert r.data["track_count"] == 1
-    assert r.data["tracks"][0]["active_source"]["locator"] == "vid11111111"
+def test_match_endpoint_no_candidates_is_404(client, offline):
+    client.post(INGEST, {"url": ALBUM_URL}, format="json")
+    track = Track.objects.first()
+    r = client.post(f"/api/v1/catalog/tracks/{track.id}/match/", {}, format="json")
+    assert r.status_code == 404
 
 
 @pytest.mark.django_db
-def test_match_backfills_artwork_from_youtube_thumbnail(monkeypatch):
+def test_match_backfills_artwork_from_youtube_thumbnail():
     # Tracks with no cover (old imports / sources that gave none) get the video
     # thumbnail once matched — so the player shows art, not a placeholder.
     track = TrackFactory(artwork_url="")
-    monkeypatch.setattr(
-        match.youtube,
-        "search",
-        lambda q, n=5: [{"video_id": "VID123", "title": "t", "uploader": "u", "duration_sec": 200}],
+    match.match_track_to_youtube(
+        track,
+        candidates=[{"video_id": "VID123", "title": "t", "uploader": "u", "duration_sec": 200}],
     )
-    match.match_track_to_youtube(track)
     track.refresh_from_db()
     assert track.artwork_url == "https://i.ytimg.com/vi/VID123/hqdefault.jpg"
 

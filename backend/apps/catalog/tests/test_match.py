@@ -1,10 +1,11 @@
-"""Matcher tests — yt-dlp mocked so CI never hits YouTube."""
+"""Matcher tests — the cloud scores client-supplied candidates and never calls YouTube."""
 
 import pytest
 
 from apps.catalog import match
 from apps.catalog.models import PlaybackSource, Track
 
+# Candidates as the desktop's /yt/search returns them.
 FAKE_CANDIDATES = [
     # closest duration AND title match → should win
     {
@@ -31,10 +32,8 @@ def track(db):
 
 
 @pytest.mark.django_db
-def test_promotes_best_candidate(monkeypatch, track):
-    monkeypatch.setattr(match.youtube, "search", lambda q, n=5: FAKE_CANDIDATES)
-
-    ps = match.match_track_to_youtube(track)
+def test_promotes_best_candidate(track):
+    ps = match.match_track_to_youtube(track, candidates=FAKE_CANDIDATES)
 
     assert ps is not None
     assert ps.locator == "BEST"  # best duration + title match
@@ -46,32 +45,16 @@ def test_promotes_best_candidate(monkeypatch, track):
 
 
 @pytest.mark.django_db
-def test_idempotent_when_already_active(monkeypatch, track):
-    monkeypatch.setattr(match.youtube, "search", lambda q, n=5: FAKE_CANDIDATES)
-    match.match_track_to_youtube(track)
+def test_idempotent_when_already_active(track):
+    match.match_track_to_youtube(track, candidates=FAKE_CANDIDATES)
     # second call is a no-op (active source already exists)
-    assert match.match_track_to_youtube(track) is None
+    assert match.match_track_to_youtube(track, candidates=FAKE_CANDIDATES) is None
     assert track.playback_sources.count() == 3
 
 
 @pytest.mark.django_db
-def test_no_candidates_returns_none(monkeypatch, track):
-    monkeypatch.setattr(match.youtube, "search", lambda q, n=5: [])
-    assert match.match_track_to_youtube(track) is None
+def test_no_candidates_returns_none(track):
+    # The desktop search found nothing (or wasn't supplied) → no match, no YouTube call.
+    assert match.match_track_to_youtube(track, candidates=[]) is None
+    assert match.match_track_to_youtube(track, candidates=None) is None
     assert track.playback_sources.count() == 0
-
-
-@pytest.mark.django_db
-def test_client_supplied_candidates_skip_youtube(monkeypatch, track):
-    # The desktop ran the search on its own IP — the cloud must NOT call YouTube.
-    def boom(*a, **k):
-        raise AssertionError("youtube.search must not be called when candidates are supplied")
-
-    monkeypatch.setattr(match.youtube, "search", boom)
-
-    ps = match.match_track_to_youtube(track, candidates=FAKE_CANDIDATES)
-
-    assert ps is not None
-    assert ps.locator == "BEST"  # scoring still happens server-side
-    assert track.playback_sources.count() == 3
-    assert track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).count() == 1

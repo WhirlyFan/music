@@ -28,21 +28,16 @@ COPY . .
 # ---- Final runtime stage ----
 FROM python:3.14-slim AS runtime
 
-# libpq5: Postgres client lib needed by psycopg.
-# ffmpeg: required by yt-dlp for the bits of metadata extraction that touch media.
+# libpq5: Postgres client lib needed by psycopg. (No ffmpeg/deno/yt-dlp — the cloud
+# never touches YouTube; all media extraction runs on the desktop app.)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq5 ffmpeg && \
+    apt-get install -y --no-install-recommends libpq5 && \
     rm -rf /var/lib/apt/lists/*
 
 # Doppler CLI (static Go binary, pinned). Dev wraps startup in `doppler run` so
 # secrets are fetched from Doppler into the process env at boot — never a file,
 # never the compose allowlist. Unused in prod (Render injects env directly).
 COPY --from=dopplerhq/cli:3.76.0 /bin/doppler /usr/local/bin/doppler
-
-# deno: JS runtime yt-dlp uses to solve YouTube's signature / n challenges
-# (with `remote_components=ejs:github`). Without it, YouTube returns no playable
-# audio formats. Pinned for reproducibility.
-COPY --from=denoland/deno:bin-2.8.2 /deno /usr/local/bin/deno
 
 # Non-root user
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
