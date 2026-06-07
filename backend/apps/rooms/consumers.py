@@ -17,7 +17,7 @@ import asyncio
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
-from . import broadcast, snapshot
+from . import broadcast, coordination, snapshot
 from .models import Room, RoomMember
 
 # How often each socket re-receives a full snapshot as a staleness backstop.
@@ -44,12 +44,23 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.user_group, self.channel_name)
         await self.accept()
 
+        # This node is now present for synced-start readiness. A clean disconnect
+        # drops it; a crash ages it out (coordination.PRESENCE_TTL).
+        coordination.mark_present(self.room_id, self.user.id)
+
         data = await self._snapshot()
         if data is not None:
             await self._send_room(data)  # immediately current on connect/reconnect
         self._heartbeat = asyncio.create_task(self._heartbeat_loop())
 
     async def disconnect(self, code):
+        # This node left, so it no longer counts toward "everyone is ready". Drop it
+        # and re-check: the REMAINING present nodes may now all be ready (a node we
+        # were waiting on just left), which should start the jam without the deadline.
+        room_id = getattr(self, "room_id", None)
+        if room_id is not None and getattr(self, "user", None) is not None:
+            coordination.mark_absent(room_id, self.user.id)
+            await database_sync_to_async(coordination.recheck)(room_id)
         hb = getattr(self, "_heartbeat", None)
         if hb is not None:
             hb.cancel()
@@ -61,8 +72,22 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_discard(user_group, self.channel_name)
 
     async def receive_json(self, content, **kwargs):
-        # The socket is read-only; the only client→server message is a keepalive.
-        if content.get("type") == "ping":
+        # Playback commands still go over REST (the single write path). The only
+        # client→server messages here are a keepalive and a synced-start readiness
+        # report — neither mutates playback directly; readiness only *accelerates* a
+        # start the server was already going to make at the deadline.
+        msg_type = content.get("type")
+        if msg_type == "ready":
+            generation = content.get("generation")
+            if isinstance(generation, int):
+                coordination.touch(self.room_id, self.user.id)
+                # DB + broadcast → run off the event loop.
+                await database_sync_to_async(coordination.client_ready)(
+                    self.room_id, self.user.id, generation
+                )
+            return
+        if msg_type == "ping":
+            coordination.touch(self.room_id, self.user.id)
             await self.send_json({"type": "pong"})
 
     # Channel-layer message {"type": "room.update", ...} → this handler.
@@ -99,6 +124,12 @@ class RoomConsumer(AsyncJsonWebsocketConsumer):
                 data = await self._snapshot()
                 if data is not None:
                     await self._send_room(data)
+                    # The send succeeded, so this node is alive → keep it present.
+                    coordination.touch(self.room_id, self.user.id)
+                # Recovery path: if a process restart lost the in-memory deadline
+                # timer, a room can be stuck pending past its deadline. Any live
+                # socket nudges it (idempotent — only flips if the deadline passed).
+                await database_sync_to_async(coordination.start_overdue)(self.room_id)
         except asyncio.CancelledError:
             pass
 

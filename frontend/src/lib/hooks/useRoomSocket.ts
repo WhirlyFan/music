@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 
 import type { Room } from '@/lib/api/models'
 import { roomKeys } from '@/lib/hooks/keys'
@@ -23,6 +23,13 @@ const WS_ORIGIN =
  *
  * Reconnects with capped backoff: the free-tier backend sleeps when idle, and
  * the first reconnect attempt is what wakes it.
+ *
+ * Returns `reportReady(generation)` — the synced-start readiness signal. When a
+ * shared room parks a freshly-chosen track (`pending_start`), each node calls this
+ * once its audio is buffered; the server starts the track when every present node
+ * is ready (or a deadline passes). It's the only client→server message besides the
+ * keepalive, and it never *commands* playback — it only accelerates a start the
+ * server was already going to make.
  */
 export function useRoomSocket(
   roomId: string | undefined,
@@ -32,6 +39,14 @@ export function useRoomSocket(
   const qc = useQueryClient()
   const lastGen = useRef(0)
   const lastContextVersion = useRef<string | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+
+  const reportReady = useCallback((generation: number) => {
+    const ws = wsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'ready', generation }))
+    }
+  }, [])
 
   useEffect(() => {
     if (!enabled || !roomId || !WS_ORIGIN) return
@@ -48,6 +63,7 @@ export function useRoomSocket(
 
     const connect = () => {
       ws = new WebSocket(`${WS_ORIGIN}/ws/rooms/${roomId}/`)
+      wsRef.current = ws
       ws.onopen = () => {
         backoff = 1000
         // On a RE-connect we missed every broadcast while the socket was down, so
@@ -108,6 +124,9 @@ export function useRoomSocket(
       closed = true
       if (retry) clearTimeout(retry)
       ws?.close()
+      wsRef.current = null
     }
   }, [roomId, enabled, qc, myUserId])
+
+  return { reportReady }
 }
