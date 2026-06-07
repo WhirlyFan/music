@@ -90,14 +90,15 @@ def _cookiefile() -> str | None:
 
 
 def _opts(**extra) -> dict:
-    """Base yt-dlp options for current YouTube extraction. YouTube requires solving
-    a JS signature / n challenge to expose playable formats; that's handled by the
-    bundled `yt-dlp-ejs` solver scripts run through the `deno` runtime (both baked
-    into the image) — no runtime download. The bgutil PO-token provider sidecar
-    (see settings.YOUTUBE_POT_BASE_URL) supplies proof-of-origin tokens to dodge
-    throttling under load; YOUTUBE_COOKIES (signed-in cookies.txt) clears the
-    'confirm you're not a bot' wall on datacenter IPs; curl_cffi impersonation is
-    used where available."""
+    """Base yt-dlp options for the cloud's YouTube extraction — SEARCH + playlist/
+    video metadata ingest only (audio is resolved on each desktop node now, off the
+    user's own IP). These are light flat-extraction calls. YOUTUBE_COOKIES (a
+    signed-in cookies.txt) clears the 'confirm you're not a bot' wall YouTube throws
+    at datacenter IPs; curl_cffi impersonation is used where available. The bundled
+    `yt-dlp-ejs` solver (via the `deno` runtime in the image) handles any JS
+    signature / n challenge. No residential proxy and no PO-token sidecar — both were
+    tried for the old cloud audio path and neither was the fix; web_embedded (desktop)
+    was, and the cloud no longer touches audio."""
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -108,20 +109,9 @@ def _opts(**extra) -> dict:
     target = _impersonate_target()
     if target is not None:
         opts["impersonate"] = target
-    pot_base = (getattr(settings, "YOUTUBE_POT_BASE_URL", "") or "").strip()
-    if pot_base:
-        # Point the bgutil-ytdlp-pot-provider plugin at the sidecar's HTTP server.
-        opts.setdefault("extractor_args", {})["youtubepot-bgutilhttp"] = {"base_url": [pot_base]}
     cookiefile = _cookiefile()
     if cookiefile:
         opts["cookiefile"] = cookiefile
-    proxy = (getattr(settings, "YOUTUBE_PROXY", "") or "").strip()
-    if proxy:
-        # Route extraction (search + playlist/video metadata ingest) through a
-        # residential proxy so YouTube sees a home IP, not the datacenter it
-        # bot-walls. Audio itself is resolved + fetched on each desktop node now,
-        # off the user's own IP — the cloud no longer touches audio bytes.
-        opts["proxy"] = proxy
     return opts
 
 

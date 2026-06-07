@@ -23,27 +23,14 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["localhost", "127.0.0.
 SPOTIFY_CLIENT_ID = env("SPOTIFY_CLIENT_ID", default="")
 SPOTIFY_CLIENT_SECRET = env("SPOTIFY_CLIENT_SECRET", default="")
 
-# Base URL of the bgutil PO-token provider sidecar (bgutil-ytdlp-pot-provider).
-# yt-dlp fetches YouTube proof-of-origin tokens from it to avoid throttling under
-# load. In docker compose it's the service hostname; empty disables it (the plugin
-# then falls back to its localhost default, which won't reach a separate container).
-YOUTUBE_POT_BASE_URL = env("YOUTUBE_POT_BASE_URL", default="")
-
 # A Netscape-format cookies.txt exported from a signed-in YouTube account. Lets
 # yt-dlp make authenticated requests, which clear the "confirm you're not a bot"
-# wall YouTube throws at datacenter IPs (the PO-token sidecar + ejs solver don't
-# clear it from Render). Secret — sourced from Doppler in dev, the Render
-# dashboard in prod (sync: false); empty in local non-Doppler runs. Rotate by
-# updating the value and redeploying — cookies expire / get invalidated.
+# wall YouTube throws at datacenter IPs — used by the cloud's SEARCH + playlist/
+# video metadata ingest (audio is resolved on each desktop node now). Secret —
+# sourced from Doppler in dev, the Render dashboard in prod (sync: false); empty in
+# local non-Doppler runs. Rotate by updating the value and redeploying — cookies
+# expire / get invalidated.
 YOUTUBE_COOKIES = env("YOUTUBE_COOKIES", default="")
-
-# Route yt-dlp extraction (search + playlist/video metadata ingest) through this
-# proxy (http://user:pass@host:port). YouTube bot-walls datacenter IPs; a
-# residential proxy (e.g. your home connection exposed via a tunnel) makes requests
-# look residential and clears the wall. Audio is resolved + fetched on each desktop
-# node now, off the user's own IP — the cloud no longer touches audio bytes. Empty
-# = direct (dev / unset).
-YOUTUBE_PROXY = env("YOUTUBE_PROXY", default="")
 
 # --- Apps ---
 DJANGO_APPS = [
