@@ -55,6 +55,14 @@ COPY --from=denoland/deno:bin-2.8.2 /deno /usr/local/bin/deno
 COPY --from=brainicism/bgutil-ytdlp-pot-provider:1.3.1 /usr/local/bin/node /usr/local/bin/node
 COPY --from=brainicism/bgutil-ytdlp-pot-provider:1.3.1 /app /opt/bgutil
 
+# Tailscale (userspace). The entrypoint optionally runs tailscaled in
+# userspace-networking mode + an outbound HTTP proxy, so YouTube extraction can
+# egress through a Tailscale exit node (e.g. a home machine running home-proxy/)
+# — a residential IP that clears the datacenter bot wall. No-op unless TS_AUTHKEY
+# is set. `stable` tracks the current release (binaries are forward-compatible).
+COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscaled /usr/local/bin/tailscaled
+COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscale /usr/local/bin/tailscale
+
 # Non-root user
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 

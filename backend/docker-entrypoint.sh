@@ -24,4 +24,37 @@ else
   echo "[entrypoint] WARNING: DATABASE_URL_ADMIN not set, skipping migrations"
 fi
 
+# Optional: route YouTube extraction through a Tailscale exit node (e.g. a home
+# machine running home-proxy/) so requests use a residential IP instead of
+# Render's datacenter IP, which YouTube bot-walls. Userspace networking (no TUN
+# needed on Render) + an outbound HTTP proxy on :1055; YOUTUBE_PROXY points at
+# it so ONLY YouTube traffic egresses via the exit node (DB etc. stay direct).
+# Best-effort + gated on TS_AUTHKEY: a bad key or an offline exit node never
+# blocks boot — playback just falls back to direct (the "home machine off" case).
+if [ -n "$TS_AUTHKEY" ]; then
+  echo "[entrypoint] starting tailscaled (userspace) + HTTP proxy on :1055…"
+  tailscaled \
+    --tun=userspace-networking \
+    --socket=/tmp/tailscaled.sock \
+    --statedir=/tmp/ts-state \
+    --outbound-http-proxy-listen=localhost:1055 \
+    >/tmp/tailscaled.log 2>&1 &
+  i=0
+  while [ ! -S /tmp/tailscaled.sock ] && [ "$i" -lt 10 ]; do
+    i=$((i + 1))
+    sleep 0.5
+  done
+  if tailscale --socket=/tmp/tailscaled.sock up \
+    --authkey="$TS_AUTHKEY" \
+    --hostname="${TS_HOSTNAME:-music-backend}" \
+    ${TS_EXIT_NODE:+--exit-node="$TS_EXIT_NODE"} \
+    >/tmp/ts-up.log 2>&1; then
+    echo "[entrypoint] tailscale up OK — YOUTUBE_PROXY via :1055 (exit node: ${TS_EXIT_NODE:-none})"
+    # Don't override an explicitly-set proxy (e.g. a manual bore/ngrok URL).
+    export YOUTUBE_PROXY="${YOUTUBE_PROXY:-http://localhost:1055}"
+  else
+    echo "[entrypoint] tailscale up FAILED (see /tmp/ts-up.log) — continuing without proxy"
+  fi
+fi
+
 exec "$@"
