@@ -71,10 +71,21 @@ export function GooeyMenu({
 
   return (
     <div ref={ref} className={cn('relative size-14', className)} style={style}>
-      {/* Goo filter — blur then crush the alpha so near shapes melt together. */}
+      {/* Goo filter — blur then crush the alpha so near shapes melt together.
+          The region is deliberately huge: the blobs fan ~RADIUS px beyond this 56px
+          box, and the SVG default filter region (~-10%…120%) clips them — hard in
+          WebKit (the desktop app's WKWebView), so the goo bridge vanished / glitched.
+          sRGB interpolation keeps the alpha-crush crisp in WebKit too. */}
       <svg aria-hidden width="0" height="0" className="absolute">
         <defs>
-          <filter id="goo">
+          <filter
+            id="goo"
+            x="-250%"
+            y="-250%"
+            width="600%"
+            height="600%"
+            colorInterpolationFilters="sRGB"
+          >
             <feGaussianBlur in="SourceGraphic" stdDeviation="10" result="blur" />
             <feColorMatrix
               in="blur"
