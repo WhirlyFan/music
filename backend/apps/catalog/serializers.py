@@ -198,6 +198,14 @@ class YouTubeCandidateSerializer(serializers.Serializer):
     duration_sec = serializers.IntegerField(required=False, allow_null=True, default=None)
 
 
+class SourceDurationSerializer(serializers.Serializer):
+    """The desktop reporting the real audio duration it resolved for a video (full
+    extraction) — authoritative over the approximate flat-search duration."""
+
+    video_id = serializers.CharField(max_length=32)
+    duration_ms = serializers.IntegerField(min_value=1)
+
+
 class MatchSerializer(serializers.Serializer):
     """Body for match-on-play. `candidates` is the desktop's YouTube search result;
     absent → the cloud searches (legacy fallback, retired once every client sends

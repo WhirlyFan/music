@@ -834,8 +834,14 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
             // Persist yt-dlp's player-JS cache across resolves.
             "--cache-dir",
             &cache_arg,
+            // url first, then the ACCURATE duration from this full extraction. The
+            // match/ingest flows use a flat (`--flat-playlist`) search whose duration
+            // is approximate — sometimes off by tens of seconds — so the playing
+            // node reports the real one here to correct the stored metadata.
             "--print",
             "%(url)s",
+            "--print",
+            "%(duration)s",
             &watch,
         ])
         .output()
@@ -848,11 +854,26 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
         );
         return None;
     }
-    let url = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty())?
-        .to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines().map(str::trim).filter(|l| !l.is_empty());
+    let url = lines.next()?.to_string();
+    // Accurate duration (seconds, may be float) → report to the cloud so the stored
+    // active-source duration matches the audio the user actually hears. Fire-and-forget;
+    // only on a fresh resolve (cache miss), so once per video per ~hour.
+    if let Some(ms) = lines.next().and_then(|d| d.parse::<f64>().ok()).map(|s| (s * 1000.0) as u64) {
+        if ms > 0 {
+            let st = state.clone();
+            let vid = video_id.to_string();
+            tauri::async_runtime::spawn(async move {
+                cloud_post(
+                    &st,
+                    "/api/v1/catalog/tracks/source-duration/",
+                    serde_json::json!({ "video_id": vid, "duration_ms": ms }),
+                )
+                .await;
+            });
+        }
+    }
     if let Ok(mut cache) = state.resolved.lock() {
         cache.insert(video_id.to_string(), (url.clone(), std::time::Instant::now()));
     }

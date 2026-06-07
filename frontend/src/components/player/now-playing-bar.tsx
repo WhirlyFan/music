@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import {
   ListMusic,
   Loader2,
@@ -20,8 +21,10 @@ import { SeekBar } from '@/components/player/seek-bar'
 import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
+import { IS_DESKTOP } from '@/lib/api/client'
 import type { QueueItem, Room } from '@/lib/api/models'
 import { isSessionAuthenticated, sessionUserId } from '@/lib/auth/guards'
+import { roomKeys } from '@/lib/hooks/keys'
 import { useMatchTrack, useRefreshArtwork } from '@/lib/hooks/mutations/catalog'
 import {
   useClearQueue,
@@ -50,6 +53,7 @@ import { usePlayerUiStore } from '@/lib/stores/player-ui'
  * through the backend proxy. Track end → next.
  */
 export function NowPlayingBar() {
+  const qc = useQueryClient()
   const { data: session } = useSession()
   const authed = isSessionAuthenticated(session)
   const myUserId = sessionUserId(session)
@@ -328,6 +332,10 @@ export function NowPlayingBar() {
   // tracks. Reset on the next track's onLoadStart.
   const endHandled = useRef(false)
   const lastTick = useRef(0)
+  // Desktop reports the real (full-extraction) audio duration when it resolves a
+  // track, correcting the approximate flat-search value stored at match/ingest. Pick
+  // that up once per track when the audio is ready, so the bar matches the audio.
+  const durationSyncedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!audioSrc || !canDrive) return
     lastTick.current = -1
@@ -768,6 +776,14 @@ export function NowPlayingBar() {
             setLocalPlaying(false)
           }}
           onWaiting={() => setBuffering(true)} // re-buffering mid-track
+          onCanPlayThrough={() => {
+            // The desktop engine resolved this track (and reported its true duration
+            // to the cloud) before streaming it; now that it's buffered, refetch the
+            // room once so the seek bar picks up the corrected active_source duration.
+            if (!IS_DESKTOP || durationSyncedRef.current === itemId) return
+            durationSyncedRef.current = itemId
+            void qc.invalidateQueries({ queryKey: roomKeys.me() })
+          }}
           onPlay={() => {
             setBuffering(true) // requested — spinner until it actually starts
             connectAnalyser() // wire the visualizer on the first play gesture

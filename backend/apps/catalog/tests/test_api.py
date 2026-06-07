@@ -439,6 +439,22 @@ def test_match_endpoint_scores_client_candidates(client, offline):
 
 
 @pytest.mark.django_db
+def test_source_duration_corrects_active_source(client):
+    """The desktop reports the real resolved duration → the active source is updated
+    (over the approximate flat-search value)."""
+    track = TrackFactory()
+    PlaybackSourceFactory(track=track, locator="dur11111111", duration_ms=230_000)  # flat-search
+    r = client.post(
+        "/api/v1/catalog/tracks/source-duration/",
+        {"video_id": "dur11111111", "duration_ms": 198_000},
+        format="json",
+    )
+    assert r.status_code == 204
+    src = track.playback_sources.get(locator="dur11111111")
+    assert src.duration_ms == 198_000  # corrected to the real audio length
+
+
+@pytest.mark.django_db
 def test_match_endpoint_no_candidates_is_404(client, offline):
     client.post(INGEST, {"url": ALBUM_URL}, format="json")
     track = Track.objects.first()

@@ -31,6 +31,7 @@ from .serializers import (
     PlaylistSerializer,
     PlaylistTrackSerializer,
     PlaylistUpdateSerializer,
+    SourceDurationSerializer,
     TrackSerializer,
 )
 from .services import (
@@ -461,6 +462,22 @@ class TrackViewSet(viewsets.ReadOnlyModelViewSet):
         if ps is None:
             return Response({"detail": "No YouTube match found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(PlaybackSourceSerializer(ps).data)
+
+    @extend_schema(request=SourceDurationSerializer, responses=None)
+    @action(detail=False, methods=["post"], url_path="source-duration")
+    def source_duration(self, request):
+        """The desktop reports the real audio duration it resolved for a video (a full
+        extraction / the actual stream) — authoritative over the approximate
+        flat-search duration stored at match/ingest. Correct the active source(s) for
+        that video so the player shows + ends on the true length."""
+        s = SourceDurationSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        PlaybackSource.objects.filter(
+            locator=s.validated_data["video_id"],
+            locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
+            status=PlaybackSource.Status.ACTIVE,
+        ).update(duration_ms=s.validated_data["duration_ms"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(request=None, responses=TrackSerializer)
     @action(detail=True, methods=["post"], url_path="refresh-artwork")
