@@ -1,5 +1,21 @@
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  GripVertical,
   ListMusic,
   Loader2,
   Pause,
@@ -32,6 +48,7 @@ import {
   useNext,
   usePrevious,
   useRemoveItem,
+  useReorderQueue,
   useShuffle,
   useSyncPlayback,
 } from '@/lib/hooks/mutations/rooms'
@@ -72,6 +89,7 @@ export function NowPlayingBar() {
   const previous = usePrevious()
   const jump = useJump()
   const removeItem = useRemoveItem()
+  const reorderQueue = useReorderQueue()
   const shuffle = useShuffle()
   const clear = useClearQueue()
   const syncPlayback = useSyncPlayback()
@@ -589,6 +607,18 @@ export function NowPlayingBar() {
     syncPlayback.mutate({ positionMs: Math.round(seconds * 1000), isPlaying: true })
   }
 
+  // Drag-reorder the user queue: optimistically reorder the cached room.queue so the
+  // rows don't snap back, then persist (the mutation re-seeds the room from the echo).
+  function reorderQueueItem(itemId: string, toIndex: number) {
+    qc.setQueryData<Room>(roomKeys.me(), (r) => {
+      if (!r) return r
+      const from = r.queue.findIndex((i) => i.id === itemId)
+      if (from < 0) return r
+      return { ...r, queue: arrayMove([...r.queue], from, toIndex) }
+    })
+    reorderQueue.mutate({ itemId, position: toIndex })
+  }
+
   return (
     <div
       ref={barRef}
@@ -660,6 +690,9 @@ export function NowPlayingBar() {
                 onRemove={(id) => removeItem.mutate(id)}
                 canPlay={canDrive}
                 canRemove={canEditQueue}
+                // Drag to reorder the up-next queue (host-only edit, like remove).
+                sortable={canEditQueue}
+                onReorder={reorderQueueItem}
               />
             )}
             <QueueSection
@@ -945,6 +978,93 @@ function intendedSeconds(room: Room | undefined): number {
   return base + Math.max(0, (serverNow - since) / 1000)
 }
 
+type QueueRowProps = {
+  item: QueueItem
+  isCurrent: boolean
+  played: boolean
+  canPlay: boolean
+  canRemove: boolean
+  onPlay: (itemId: string) => void
+  onRemove: (itemId: string) => void
+}
+
+/** The play button + remove button — shared by the plain and the draggable row. */
+function QueueRowBody({
+  item,
+  isCurrent,
+  played,
+  canPlay,
+  canRemove,
+  onPlay,
+  onRemove,
+}: QueueRowProps) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => canPlay && onPlay(item.id)}
+        disabled={!canPlay}
+        className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm ${
+          played ? 'opacity-50' : ''
+        } ${isCurrent ? 'font-medium' : ''} ${!canPlay ? 'cursor-default' : ''}`}
+        title={canPlay ? `Play ${item.track.title}` : item.track.title}
+      >
+        {isCurrent ? (
+          <Play className="text-primary size-3 shrink-0" />
+        ) : (
+          <span className="size-3 shrink-0" />
+        )}
+        <TrackArtwork track={item.track} className="size-7 rounded-sm" />
+        {item.track.is_explicit && <ExplicitBadge />}
+        <span className="truncate">{item.track.title}</span>
+        <span className="text-muted-foreground truncate text-xs">{item.track.primary_artist}</span>
+      </button>
+      {canRemove && (
+        <button
+          type="button"
+          onClick={() => onRemove(item.id)}
+          aria-label={`Remove ${item.track.title}`}
+          className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+        >
+          <X className="size-4" />
+        </button>
+      )}
+    </>
+  )
+}
+
+/** A draggable queue row (drag handle on the left), styled to match the plain row. */
+function SortableQueueRow(props: QueueRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: props.item.id,
+    transition: { duration: 220, easing: 'cubic-bezier(0.34, 1.4, 0.64, 1)' },
+  })
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`group flex items-center gap-1 rounded transition-colors duration-150 ${
+        isDragging
+          ? 'bg-muted relative z-10 shadow-lg'
+          : props.isCurrent
+            ? 'bg-muted'
+            : 'hover:bg-muted/60'
+      }`}
+    >
+      <button
+        type="button"
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${props.item.track.title}`}
+        className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab touch-none px-0.5 active:cursor-grabbing"
+      >
+        <GripVertical className="size-3.5" aria-hidden />
+      </button>
+      <QueueRowBody {...props} />
+    </li>
+  )
+}
+
 function QueueSection({
   label,
   items,
@@ -954,6 +1074,8 @@ function QueueSection({
   emptyHint,
   canPlay = true,
   canRemove = false,
+  sortable = false,
+  onReorder,
 }: {
   label: string
   items: QueueItem[]
@@ -965,8 +1087,43 @@ function QueueSection({
   // host-only queue edit — gated separately.
   canPlay?: boolean
   canRemove?: boolean
+  // Drag-to-reorder (the user queue only — the context list is pointer-stable).
+  sortable?: boolean
+  onReorder?: (itemId: string, position: number) => void
 }) {
   const curIdx = currentId ? items.findIndex((i) => i.id === currentId) : -1
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const to = items.findIndex((i) => i.id === over.id)
+    if (to >= 0) onReorder?.(String(active.id), to)
+  }
+
+  const rows = items.map((item, i) => {
+    const props: QueueRowProps = {
+      item,
+      isCurrent: item.id === currentId,
+      played: curIdx >= 0 && i < curIdx, // earlier in the list (already passed)
+      canPlay,
+      canRemove,
+      onPlay,
+      onRemove,
+    }
+    return sortable ? (
+      <SortableQueueRow key={item.id} {...props} />
+    ) : (
+      <li
+        key={item.id}
+        className={`group flex items-center gap-2 rounded transition-colors duration-150 ${
+          props.isCurrent ? 'bg-muted' : 'hover:bg-muted/60'
+        }`}
+      >
+        <QueueRowBody {...props} />
+      </li>
+    )
+  })
+
   return (
     <div className="mb-2">
       <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
@@ -975,52 +1132,15 @@ function QueueSection({
       {items.length === 0 && emptyHint && (
         <p className="text-muted-foreground py-1 text-sm">{emptyHint}</p>
       )}
-      <ol className="space-y-0.5">
-        {items.map((item, i) => {
-          const isCurrent = item.id === currentId
-          const played = curIdx >= 0 && i < curIdx // earlier in the list (already passed)
-          return (
-            <li
-              key={item.id}
-              className={`group flex items-center gap-2 rounded transition-colors duration-150 ${
-                isCurrent ? 'bg-muted' : 'hover:bg-muted/60'
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => canPlay && onPlay(item.id)}
-                disabled={!canPlay}
-                className={`flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left text-sm ${
-                  played ? 'opacity-50' : ''
-                } ${isCurrent ? 'font-medium' : ''} ${!canPlay ? 'cursor-default' : ''}`}
-                title={canPlay ? `Play ${item.track.title}` : item.track.title}
-              >
-                {isCurrent ? (
-                  <Play className="text-primary size-3 shrink-0" />
-                ) : (
-                  <span className="size-3 shrink-0" />
-                )}
-                <TrackArtwork track={item.track} className="size-7 rounded-sm" />
-                {item.track.is_explicit && <ExplicitBadge />}
-                <span className="truncate">{item.track.title}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {item.track.primary_artist}
-                </span>
-              </button>
-              {canRemove && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(item.id)}
-                  aria-label={`Remove ${item.track.title}`}
-                  className="text-muted-foreground hover:text-foreground px-2 py-1 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                >
-                  <X className="size-4" />
-                </button>
-              )}
-            </li>
-          )
-        })}
-      </ol>
+      {sortable && onReorder ? (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+            <ol className="space-y-0.5">{rows}</ol>
+          </SortableContext>
+        </DndContext>
+      ) : (
+        <ol className="space-y-0.5">{rows}</ol>
+      )}
     </div>
   )
 }

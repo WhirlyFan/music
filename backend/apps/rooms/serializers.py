@@ -188,6 +188,13 @@ class QueueItemRefSerializer(serializers.Serializer):
     item_id = serializers.UUIDField()
 
 
+class QueueReorderSerializer(serializers.Serializer):
+    """Drag-reorder: move a user-queue item to an absolute index within the queue."""
+
+    item_id = serializers.UUIDField()
+    position = serializers.IntegerField(min_value=0)
+
+
 class SaveAsPlaylistSerializer(serializers.Serializer):
     title = serializers.CharField(max_length=255)
     # An ordered snapshot of the track ids that were lined up when the user opened
