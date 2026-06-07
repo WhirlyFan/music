@@ -321,8 +321,13 @@ HEADLESS_ONLY = True
 # Set FRONTEND_ORIGIN in Render / k8s / GCP env to your real domain, e.g.
 #     FRONTEND_ORIGIN=https://app.yourdomain.com
 FRONTEND_ORIGIN = env("FRONTEND_ORIGIN", default="http://localhost")
+# The backend's own public origin. Email-verification links point HERE (a backend-
+# rendered page), not the web frontend, so the desktop app doesn't depend on the
+# (dead) web app for that flow. Defaults to FRONTEND_ORIGIN for local dev; set
+# DJANGO_BACKEND_ORIGIN=https://api.whirlyfan.com in prod.
+BACKEND_ORIGIN = env("DJANGO_BACKEND_ORIGIN", default=FRONTEND_ORIGIN)
 HEADLESS_FRONTEND_URLS = {
-    "account_confirm_email": f"{FRONTEND_ORIGIN}/account/verify-email/{{key}}",
+    "account_confirm_email": f"{BACKEND_ORIGIN}/account/verify-email/{{key}}/",
     "account_reset_password_from_key": (f"{FRONTEND_ORIGIN}/account/password/reset/key/{{key}}"),
     "account_signup": f"{FRONTEND_ORIGIN}/signup",
     # Where allauth sends the browser when a social login fails (and the flow's

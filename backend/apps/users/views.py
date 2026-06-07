@@ -24,6 +24,7 @@ Safety:
 from __future__ import annotations
 
 import requests
+from allauth.account.models import EmailConfirmationHMAC
 from allauth.core.exceptions import SignupClosedException
 from allauth.headless.socialaccount.internal import complete_token_login
 from allauth.mfa.models import Authenticator
@@ -32,7 +33,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db.models import Q
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.utils.module_loading import import_string
 from rest_framework import permissions, serializers, status
 from rest_framework.decorators import (
@@ -45,6 +46,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
+
+from apps.notifications.events import nudge
 
 from .invites import InviteError, create_invitation, redeem_invitation
 
@@ -190,6 +193,25 @@ def desktop_google_login(request: Request) -> Response:
         )
 
     return Response({"session_token": _session_token(request)})
+
+
+def verify_email_page(request, key):
+    """Backend-rendered email-verification landing page.
+
+    The verification email links here (HEADLESS_FRONTEND_URLS points at the backend),
+    so the desktop app doesn't depend on the web frontend for this flow. We confirm
+    the key via allauth (marks EmailAddress.verified=True), then push a live nudge over
+    the recipient's notifications socket — the desktop app is already authenticated
+    (just gated on verification), so it refetches and unblocks itself automatically,
+    the same way Google login reflects back. The user just sees a "you're verified,
+    return to the app" page in their browser.
+    """
+    confirmation = EmailConfirmationHMAC.from_key(key)
+    email_address = confirmation.confirm(request) if confirmation else None
+    if email_address is None:
+        return render(request, "account/verify_email_result.html", {"ok": False}, status=400)
+    nudge(email_address.user_id, "email_verified")
+    return render(request, "account/verify_email_result.html", {"ok": True})
 
 
 class _UsernameSerializer(serializers.Serializer):

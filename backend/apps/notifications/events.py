@@ -52,6 +52,13 @@ def emit_many(kind: str, *, recipients, actor=None, **payload) -> list[Notificat
     return [n for n in notes if n is not None]
 
 
+def nudge(recipient_id, kind: str, **payload) -> None:
+    """Live-only nudge (no durable bell row) to a user's sockets — for transient /
+    system events (e.g. email verified) that should make the client refetch but
+    shouldn't sit in the notification list."""
+    _push(recipient_id, kind, payload or {})
+
+
 def _push(recipient_id, kind: str = "", payload: dict | None = None) -> None:
     """Nudge the recipient's live socket(s) to refetch. Best-effort — the durable
     row is already committed, so a missed push just means 'seen on next load'.
