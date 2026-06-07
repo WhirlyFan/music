@@ -15,6 +15,8 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView
 from health_check.views import HealthCheckView
 
+from apps.users.views import verify_email_page
+
 
 def _docs_gate(view):
     """Wrap the OpenAPI schema view in `staff_member_required` for prod, open in dev.
@@ -75,6 +77,15 @@ urlpatterns = [
     # reaches them same-origin via the frontend's /accounts/* rewrite, so the
     # session cookie is set on the public origin.
     path("accounts/", include("allauth.urls")),
+    # Backend-rendered email-verification landing (the verification email links
+    # here, not the web frontend — see HEADLESS_FRONTEND_URLS). Singular /account/
+    # so it's neither host-pinned (CanonicalAuthHostMiddleware) nor proxied by the
+    # frontend; the email link points straight at the backend's own domain.
+    path(
+        "account/verify-email/<str:key>/",
+        verify_email_page,
+        name="verify-email-page",
+    ),
     path("api/schema/", _docs_gate(SpectacularAPIView.as_view()), name="schema"),
     path("health/", AppHealthCheckView.as_view(), name="health-check"),
     path("api/v1/", include((api_v1, "v1"))),

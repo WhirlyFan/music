@@ -1,7 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import { friendKeys, notificationKeys, playlistKeys } from '@/lib/hooks/keys'
+import {
+  emailKeys,
+  friendKeys,
+  notificationKeys,
+  playlistKeys,
+  sessionKeys,
+} from '@/lib/hooks/keys'
 
 // Same WS origin derivation as the room socket (prod connects to the backend's own
 // domain via VITE_WS_BASE; dev derives same-origin ws://).
@@ -64,6 +70,12 @@ export function useNotificationSocket(enabled = true) {
           // detail(id) is a prefix of collaborators/activity/tracks → one call covers
           // the whole playlist view; fall back to the broad key if no id rode along.
           invalidate(pid ? playlistKeys.detail(pid) : playlistKeys.all())
+        }
+        if (kind === 'email_verified') {
+          // The backend verify page pushed this — refetch session + email so the
+          // verified-email gate lifts and the "check your email" page jumps home.
+          invalidate(sessionKeys.all())
+          invalidate(emailKeys.all())
         }
       }
       ws.onclose = () => {

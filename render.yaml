@@ -249,6 +249,12 @@ services:
       - key: FRONTEND_ORIGIN
         value: https://music.whirlyfan.com
 
+      # Email-verification links point at the backend's own domain (a backend-
+      # rendered landing page), so the desktop app doesn't depend on the web
+      # frontend for that flow. See HEADLESS_FRONTEND_URLS / verify_email_page.
+      - key: DJANGO_BACKEND_ORIGIN
+        value: https://api.whirlyfan.com
+
       # Audio disk cache (streaming.py). The image's /app is read-only at
       # runtime for the `app` user, so the code default /app/.cache/audio can't
       # be created and every /stream/ 500s. Point it at writable /tmp. Ephemeral
