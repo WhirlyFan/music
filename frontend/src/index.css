@@ -181,6 +181,19 @@
     -webkit-user-select: text;
     user-select: text;
   }
+
+  /* Belt-and-suspenders: even if a selection slips past `user-select: none` (some
+     WebKit drag / SVG cases), never PAINT a highlight on the chrome. Form fields +
+     `.select-text` restore a visible selection so editing reads normally. */
+  ::selection {
+    background-color: transparent;
+  }
+  input::selection,
+  textarea::selection,
+  .select-text ::selection,
+  .select-text::selection {
+    background-color: color-mix(in oklch, var(--primary) 30%, transparent);
+  }
 }
 
 /* When a Radix dialog opens, react-remove-scroll locks body scroll and adds a

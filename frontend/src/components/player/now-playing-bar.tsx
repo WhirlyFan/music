@@ -272,14 +272,19 @@ export function NowPlayingBar() {
   // stays driven by the element's own onTimeUpdate (below).
   useEffect(() => {
     if (!isShared || !serverPlaying) return
-    // While we're the seek authority, anchor the bar to OUR playhead, not the server
-    // frame (which is still echoing our own seeks back) — so it doesn't stutter.
-    const localAuthority = performance.now() < localSeekUntil.current
-    const base =
-      localAuthority && audioRef.current ? audioRef.current.currentTime : intendedSeconds(room)
+    const base = intendedSeconds(room)
     if (!Number.isFinite(base)) return
     const startWall = performance.now()
-    const tick = () => setCurrentTime(base + (performance.now() - startWall) / 1000)
+    // Only DRIVE the bar from the server clock while our element isn't actually
+    // playing (refresh / autoplay-block / buffering). When it IS playing — including
+    // right after a local seek — the element's own onTimeUpdate owns the bar, so it
+    // reflects the audio we hear and never hands back to the (latency-lagging) server
+    // clock, which was the residual seek rubber-band.
+    const tick = () => {
+      const el = audioRef.current
+      if (el && !el.paused) return
+      setCurrentTime(base + (performance.now() - startWall) / 1000)
+    }
     const first = setTimeout(tick, 0) // jump to live at once on rejoin, before the interval
     const id = setInterval(tick, 250)
     return () => {
@@ -899,9 +904,10 @@ export function NowPlayingBar() {
             setLocalPlaying(false)
           }}
           onTimeUpdate={(e) => {
-            // In a playing jam the bar is interpolated from the server clock (above);
-            // don't let the element's own ticks fight it. Solo/paused: element drives.
-            if (isShared && serverPlaying) return
+            // The element only ticks while it's actually playing, so its time is the
+            // truth for the bar — including in a jam (this is the audio we hear, and
+            // it never lags the server clock after a seek). The server-clock effect
+            // above only drives the bar when the element is paused (blocked/buffering).
             setCurrentTime(e.currentTarget.currentTime)
           }}
           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
