@@ -17,11 +17,16 @@ if [ -f /opt/bgutil/build/main.js ]; then
   node /opt/bgutil/build/main.js >/tmp/bgutil.log 2>&1 &
 fi
 
+# Phase A collapses the admin + runtime roles into one, so the admin URL is just
+# DATABASE_URL. Fall back to it when DATABASE_URL_ADMIN isn't set (e.g. it isn't
+# provided via Doppler) so migrations still run. Phase B (a real separate admin
+# role) would set DATABASE_URL_ADMIN explicitly, which then wins.
+: "${DATABASE_URL_ADMIN:=$DATABASE_URL}"
 if [ -n "$DATABASE_URL_ADMIN" ]; then
-  echo "[entrypoint] running migrations as admin role…"
+  echo "[entrypoint] running migrations…"
   DATABASE_URL="$DATABASE_URL_ADMIN" python manage.py migrate --noinput
 else
-  echo "[entrypoint] WARNING: DATABASE_URL_ADMIN not set, skipping migrations"
+  echo "[entrypoint] WARNING: no DATABASE_URL[_ADMIN] set, skipping migrations"
 fi
 
 # Optional: route YouTube extraction through a Tailscale exit node (e.g. a home
