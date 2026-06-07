@@ -1,6 +1,6 @@
 import { keepPreviousData, skipToken, useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
-import { api } from '@/lib/api/client'
+import { api, engine, IS_DESKTOP } from '@/lib/api/client'
 import type {
   ImportResult,
   PaginatedPlaylistList,
@@ -46,9 +46,16 @@ export const searchQuery = (q: string) => ({
   retry: false, // fail fast so a failed search doesn't hang the home button on retries
 })
 
+// Desktop runs the YouTube extraction on the user's own IP (the local engine's
+// /yt/import, which then hands the metadata to the cloud to persist); a non-YouTube
+// URL is forwarded for the cloud to ingest via its official API. Web posts to the
+// cloud directly. Both return the same ImportResult.
 export const importQuery = (url: string) => ({
   queryKey: importKeys.result(url),
-  queryFn: () => api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
+  queryFn: () =>
+    IS_DESKTOP
+      ? engine<ImportResult>('/yt/import', { url })
+      : api<ImportResult>('/catalog/ingest/', { method: 'POST', body: { url } }),
   staleTime: Infinity,
   gcTime: Infinity,
   retry: false,

@@ -90,3 +90,31 @@ export class ApiError extends Error {
     this.detail = detail
   }
 }
+
+/** True in the Tauri desktop build (its local engine serves /yt/*, /stream/, etc). */
+export const IS_DESKTOP = Boolean(import.meta.env.VITE_DESKTOP)
+
+/**
+ * POST to the local Tauri engine (root path, e.g. `/yt/match/<id>`) — NOT the
+ * `/api/v1` cloud base. The engine runs yt-dlp on the user's own IP and then calls
+ * the cloud to persist, authenticating with its own session, so no cookies/CSRF are
+ * needed on this same-origin hop. Desktop only; guard calls with `IS_DESKTOP`.
+ */
+export async function engine<T = unknown>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    let detail: unknown
+    try {
+      detail = await res.json()
+    } catch {
+      detail = await res.text()
+    }
+    throw new ApiError(res.status, res.statusText, detail)
+  }
+  const text = await res.text()
+  return (text ? JSON.parse(text) : undefined) as T
+}

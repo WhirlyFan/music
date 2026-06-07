@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
-import { api } from '@/lib/api/client'
+import { api, engine, IS_DESKTOP } from '@/lib/api/client'
 import type {
   PlaybackSource,
   Playlist,
@@ -49,12 +49,20 @@ export function useRefreshPlaylist() {
   })
 }
 
-/** Lazily resolve a single track's YouTube source (used right before play). */
+/** Lazily resolve a single track's YouTube source (used right before play).
+ *
+ *  Desktop runs the YouTube search on the user's own IP (the local engine's
+ *  /yt/match), passing the track's title+artist as the query; the engine hands the
+ *  candidates to the cloud to score + persist. Web posts to the cloud directly,
+ *  which searches server-side (legacy fallback). Either way the response is the
+ *  resolved PlaybackSource. */
 export function useMatchTrack() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (trackId: string) =>
-      api<PlaybackSource>(`/catalog/tracks/${trackId}/match/`, { method: 'POST' }),
+    mutationFn: ({ trackId, query }: { trackId: string; query: string }) =>
+      IS_DESKTOP
+        ? engine<PlaybackSource>(`/yt/match/${trackId}`, { query })
+        : api<PlaybackSource>(`/catalog/tracks/${trackId}/match/`, { method: 'POST' }),
     // `match/` returns only the PlaybackSource; the room embeds active_source → refetch it.
     onSuccess: () => qc.invalidateQueries({ queryKey: roomKeys.all() }),
   })
