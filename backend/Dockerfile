@@ -29,11 +29,9 @@ COPY . .
 FROM python:3.14-slim AS runtime
 
 # libpq5: Postgres client lib needed by psycopg.
-# ffmpeg: required by yt-dlp to extract/convert audio.
-# libexpat1: the only system lib the co-located PO-token server's bundled
-#            `canvas` needs that isn't vendored alongside it.
+# ffmpeg: required by yt-dlp for the bits of metadata extraction that touch media.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends libpq5 ffmpeg libexpat1 && \
+    apt-get install -y --no-install-recommends libpq5 ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 # Doppler CLI (static Go binary, pinned). Dev wraps startup in `doppler run` so
@@ -46,23 +44,6 @@ COPY --from=dopplerhq/cli:3.76.0 /bin/doppler /usr/local/bin/doppler
 # audio formats. Pinned for reproducibility.
 COPY --from=denoland/deno:bin-2.8.2 /deno /usr/local/bin/deno
 
-# bgutil PO-token provider — co-located IN this image (its Node binary + the
-# prebuilt server, incl. the native `canvas` it needs). The entrypoint starts it
-# on internal :4416; yt-dlp's bgutil plugin fetches YouTube PO tokens from it to
-# avoid throttling. Running it in-container (vs a separate service) means it's
-# free and shares the backend's lifecycle — wakes/sleeps with it. Keep this image
-# tag in lockstep with the bgutil-ytdlp-pot-provider plugin in pyproject.toml.
-COPY --from=brainicism/bgutil-ytdlp-pot-provider:1.3.1 /usr/local/bin/node /usr/local/bin/node
-COPY --from=brainicism/bgutil-ytdlp-pot-provider:1.3.1 /app /opt/bgutil
-
-# Tailscale (userspace). The entrypoint optionally runs tailscaled in
-# userspace-networking mode + an outbound HTTP proxy, so YouTube extraction can
-# egress through a Tailscale exit node (e.g. a home machine running home-proxy/)
-# — a residential IP that clears the datacenter bot wall. No-op unless TS_AUTHKEY
-# is set. `stable` tracks the current release (binaries are forward-compatible).
-COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscaled /usr/local/bin/tailscaled
-COPY --from=tailscale/tailscale:stable /usr/local/bin/tailscale /usr/local/bin/tailscale
-
 # Non-root user
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 
@@ -74,7 +55,6 @@ COPY --from=builder --chown=app:app /app /app
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    YOUTUBE_POT_BASE_URL=http://127.0.0.1:4416 \
     DJANGO_SETTINGS_MODULE=config.settings.prod
 
 # --- Collect static files into STATIC_ROOT so WhiteNoise can serve them.
@@ -118,10 +98,8 @@ ENTRYPOINT ["/app/docker-entrypoint.sh"]
 #                                 logs "Permission denied" on every boot. We don't
 #                                 use the control interface, so disable it.
 #   --bind 0.0.0.0:${PORT:-8000}  Bind the platform-assigned port. Render injects PORT
-#                                 (we also pin it in render.yaml). Hardcoding 8000 made
-#                                 Render's port detection prefer the co-located PO-token
-#                                 provider on :4416 and time out / restart-loop. Defaults
-#                                 to 8000 for local docker-compose (which maps 8000).
+#                                 (we also pin it in render.yaml). Defaults to 8000 for
+#                                 local docker-compose (which maps 8000).
 ENV WEB_CONCURRENCY=1
 CMD ["sh", "-c", "gunicorn config.asgi:application \
     -k uvicorn.workers.UvicornWorker \

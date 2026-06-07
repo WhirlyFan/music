@@ -127,11 +127,8 @@ services:
     domains:
       - api.whirlyfan.com
     envVars:
-      # Pin the primary HTTP port. The image ALSO runs the co-located PO-token
-      # provider on :4416; without an explicit PORT, Render's auto-detection
-      # preferred 4416 (it opens first and answers HTTP 200) and restart-looped
-      # health-checking the wrong port. Gunicorn binds ${PORT:-8000}, so pinning
-      # PORT here makes Render route to gunicorn and treat 4416 as a side port.
+      # Pin the HTTP port Render routes to. Gunicorn binds ${PORT:-8000}; pinning
+      # it here makes Render's health check hit the right port deterministically.
       - key: PORT
         value: "8000"
 
@@ -171,33 +168,16 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
 
-      # ── YouTube audio extraction ────────────────────────────────────────
+      # ── YouTube metadata extraction (search + playlist/video ingest) ────
       # Netscape cookies.txt from a signed-in YouTube account, pasted as one
       # multi-line value. yt-dlp uses it to clear the "confirm you're not a bot"
-      # wall YouTube throws at Render's datacenter IP (the PO-token sidecar +
-      # ejs solver don't clear it alone). `sync: false` → set/rotate in the
-      # Render dashboard; never commit cookies. When playback starts 502ing with
-      # the bot error again, the cookies expired — paste fresh ones + redeploy.
+      # wall YouTube throws at Render's datacenter IP. Audio is resolved on each
+      # desktop node now (off the user's own IP via web_embedded) — the cloud only
+      # does search + metadata ingest, so this is its one anti-bot-wall lever.
+      # `sync: false` → set/rotate in the Render dashboard; never commit cookies.
+      # If search/ingest start failing with the bot error, the cookies expired —
+      # paste fresh ones + redeploy.
       - key: YOUTUBE_COOKIES
-        sync: false
-
-      # Residential egress for YouTube via a Tailscale exit node (the preferred
-      # path — see home-proxy/). Now used only for SEARCH + playlist/video metadata
-      # ingest extraction — audio is resolved + fetched on each desktop node, off the
-      # user's own IP. Set TS_AUTHKEY to a Tailscale auth key and TS_EXIT_NODE to the
-      # home node's name/IP (e.g. music-home-exit); the entrypoint runs tailscaled in
-      # userspace mode and points YOUTUBE_PROXY at its local HTTP proxy, so only
-      # YouTube traffic egresses through your home IP. Leave unset to disable (search
-      # /ingest then hit the datacenter bot wall; playback is unaffected).
-      - key: TS_AUTHKEY
-        sync: false
-      - key: TS_EXIT_NODE
-        sync: false
-
-      # Manual override only: an explicit proxy URL (http://user:pass@host:port),
-      # e.g. a bore/ngrok tunnel. Normally leave UNSET — the Tailscale entrypoint
-      # above sets YOUTUBE_PROXY automatically. If set, it wins over Tailscale.
-      - key: YOUTUBE_PROXY
         sync: false
 
       # ── Host / origin allow-lists ───────────────────────────────────────
@@ -305,11 +285,6 @@ services:
         sync: false                # value from Doppler prd
       - key: SPOTIFY_CLIENT_SECRET
         sync: false
-
-      # YouTube PO-token provider: runs co-located INSIDE the backend image
-      # (Node server on 127.0.0.1:4416, started by the entrypoint) — no separate
-      # Render service, no extra cost, wakes/sleeps with the backend. The
-      # YOUTUBE_POT_BASE_URL is baked into the image; nothing to set here.
 
       # ── Observability (optional) ────────────────────────────────────────
       # Set SENTRY_DSN in the Render dashboard to enable error tracking.

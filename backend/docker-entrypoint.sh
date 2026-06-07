@@ -9,19 +9,6 @@
 
 set -e
 
-# Co-located PO-token provider (internal :4416). OFF by default: it's a Node +
-# native-canvas server (~100MB+) that OOMs Render's free tier now that tailscaled
-# also runs in this container. With a residential exit node + cookies it isn't
-# needed (the bundled ejs solver still handles signatures). Set START_POT_PROVIDER=1
-# to enable it (e.g. on a larger instance).
-if [ -n "$START_POT_PROVIDER" ] && [ -f /opt/bgutil/build/main.js ]; then
-  echo "[entrypoint] starting PO-token provider on :4416…"
-  node /opt/bgutil/build/main.js >/tmp/bgutil.log 2>&1 &
-else
-  # Don't point yt-dlp at a :4416 that isn't running.
-  export YOUTUBE_POT_BASE_URL=""
-fi
-
 # Phase A collapses the admin + runtime roles into one, so the admin URL is just
 # DATABASE_URL. Fall back to it when DATABASE_URL_ADMIN isn't set (e.g. it isn't
 # provided via Doppler) so migrations still run. Phase B (a real separate admin
@@ -32,57 +19,6 @@ if [ -n "$DATABASE_URL_ADMIN" ]; then
   DATABASE_URL="$DATABASE_URL_ADMIN" python manage.py migrate --noinput
 else
   echo "[entrypoint] WARNING: no DATABASE_URL[_ADMIN] set, skipping migrations"
-fi
-
-# Optional: route YouTube extraction through a Tailscale exit node (e.g. a home
-# machine running home-proxy/) so requests use a residential IP instead of
-# Render's datacenter IP, which YouTube bot-walls. Userspace networking (no TUN
-# needed on Render) + an outbound HTTP proxy on :1055; YOUTUBE_PROXY points at
-# it so ONLY YouTube traffic egresses via the exit node (DB etc. stay direct).
-# Best-effort + gated on TS_AUTHKEY: a bad key or an offline exit node never
-# blocks boot — playback just falls back to direct (the "home machine off" case).
-if [ -n "$TS_AUTHKEY" ]; then
-  echo "[entrypoint] starting tailscaled (userspace) + HTTP proxy on :1055…"
-  tailscaled \
-    --tun=userspace-networking \
-    --socket=/tmp/tailscaled.sock \
-    --statedir=/tmp/ts-state \
-    --outbound-http-proxy-listen=localhost:1055 \
-    >/tmp/tailscaled.log 2>&1 &
-  i=0
-  while [ ! -S /tmp/tailscaled.sock ] && [ "$i" -lt 10 ]; do
-    i=$((i + 1))
-    sleep 0.5
-  done
-  # Join the tailnet WITHOUT --exit-node so boot can't fail when the home node
-  # isn't up yet (`tailscale up` errors on an unknown exit node).
-  if tailscale --socket=/tmp/tailscaled.sock up \
-    --authkey="$TS_AUTHKEY" \
-    --hostname="${TS_HOSTNAME:-music-backend}" \
-    >/tmp/ts-up.log 2>&1; then
-    # Don't override an explicitly-set proxy (e.g. a manual bore/ngrok URL).
-    export YOUTUBE_PROXY="${YOUTUBE_PROXY:-http://localhost:1055}"
-    echo "[entrypoint] tailscale up OK — YOUTUBE_PROXY via :1055"
-    if [ -n "$TS_EXIT_NODE" ]; then
-      # Attach (and keep) the exit node in the background, idempotently — so order
-      # never matters: the backend can boot before the home node, and it re-attaches
-      # whenever the node appears, cycles down/up, or re-registers with a new ID.
-      # `set` is a no-op once attached. ~1 CLI call / 30s — negligible.
-      (
-        attached=0
-        while true; do
-          if tailscale --socket=/tmp/tailscaled.sock set --exit-node="$TS_EXIT_NODE" >/dev/null 2>&1; then
-            [ "$attached" = 1 ] || { echo "[entrypoint] exit node attached: $TS_EXIT_NODE"; attached=1; }
-          else
-            attached=0
-          fi
-          sleep 30
-        done
-      ) &
-    fi
-  else
-    echo "[entrypoint] tailscale up FAILED (see /tmp/ts-up.log) — continuing without proxy"
-  fi
 fi
 
 exec "$@"

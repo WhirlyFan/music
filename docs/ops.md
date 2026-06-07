@@ -72,7 +72,7 @@ live in `frontend/.env` (also gitignored; example tracked).
 | `WEB_CONCURRENCY` | optional | Gunicorn workers; default 3, lower on small instances |
 | `SENTRY_DSN` | optional | Opt-in error tracking |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | optional | Spotify ingest (metadata only); unset → "not configured" |
-| `YOUTUBE_POT_BASE_URL` | optional | URL of the bgutil PO-token sidecar (see [YouTube audio playback](#youtube-audio-playback)); unset → no PO tokens |
+| `YOUTUBE_COOKIES` | optional | Netscape cookies.txt for the cloud's YouTube search/ingest (see [YouTube extraction](#youtube-extraction)); clears the datacenter bot wall |
 | `HATCHET_CLIENT_TOKEN` | for worker | Generated via `make hatchet-token` |
 | `HATCHET_CLIENT_HOST_PORT` | for worker | `hatchet:7077` in compose |
 | `DJANGO_LOG_LEVEL` | optional | Default `INFO` |
@@ -83,45 +83,46 @@ live in `frontend/.env` (also gitignored; example tracked).
 | `VITE_API_BASE` | ✅ | Usually `/api/v1` because we proxy same-origin |
 | `VITE_SENTRY_DSN` | optional | Frontend error tracking |
 
-## YouTube audio playback
+## YouTube extraction
 
-**Audio is resolved + fetched on each desktop node now**, off the user's own
-residential IP (the bundled `yt-dlp`/`deno` in `desktop/src-tauri`, served from
-the local engine's `/stream/`). The cloud no longer touches audio bytes — there's
-no server-side resolve, proxy, or disk cache. The backend still uses `yt-dlp`
-(`apps/catalog/ingest/youtube.py`), but only for **search** and **playlist/video
-metadata ingest**. YouTube actively fights extraction, so the chain has several
-pieces — all required together (and the desktop engine mirrors the same stack):
+Two separate paths, on two different machines:
+
+**Audio — on each desktop node.** The current track's audio is resolved + fetched
+**locally** by the desktop engine (bundled `yt-dlp`/`deno` in `desktop/src-tauri`,
+served from the local `/stream/`), off the user's own residential IP. The cloud
+never touches audio bytes — no server-side resolve, proxy, or disk cache.
+
+- **Format/client matters.** The desktop's `resolve_audio` (`desktop/src-tauri/src/lib.rs`)
+  pins the progressive **itag-140 m4a/AAC** stream via the **`web_embedded`** player
+  client. The default clients now return only an **HLS manifest** for `bestaudio`
+  (YouTube's SABR rollout) — a plain `<audio>` element can't play HLS in Chrome, and
+  on Safari the visualizer's `createMediaElementSource` can't tap a native-HLS stream,
+  so playback goes **silent while the timeline keeps advancing**. `web_embedded` is
+  the one client whose progressive URL we can fetch directly, with **no PO token /
+  visitor-data / residential proxy needed** — which is why neither the bgutil PO-token
+  provider nor the Tailscale residential exit (both since removed) was the fix. If
+  audio ever goes silent again, check that resolution still returns a non-HLS `https`
+  m4a URL first.
+
+**Search + playlist/video metadata ingest — on the cloud.** The backend uses
+`yt-dlp` (`apps/catalog/ingest/youtube.py`) for these flat-extraction calls only
+(no audio download). YouTube bot-walls Render's datacenter IP, so:
 
 | Piece | Where | Why |
 |---|---|---|
-| **yt-dlp** | backend dep (`uv`) | resolves the audio stream URL. **Bump frequently** — stale yt-dlp breaks as YouTube changes. |
-| **deno** | baked into `backend/Dockerfile` | JS runtime that runs the challenge solver |
-| **yt-dlp-ejs** | backend dep (via `yt-dlp[default]`) | the JS **signature/n-challenge** solver scripts. *Without deno + this, YouTube returns zero playable formats.* Keep its version in lockstep with yt-dlp. |
-| **curl_cffi** | backend dep (`yt-dlp[...,curl-cffi]`) | browser-TLS impersonation (auto-used where the arch provides targets) → dodges bot detection |
-| **bgutil PO-token provider** | `bgutil-ytdlp-pot-provider` plugin (backend dep) **+** the provider's Node server **co-located in the backend image** | fetches **PO (proof-of-origin) tokens** to avoid throttling. The plugin version **and** the `brainicism/bgutil-ytdlp-pot-provider` image tag (in `backend/Dockerfile`) must match. |
+| **yt-dlp** | backend dep (`uv`) | the extractor. **Bump frequently** — stale yt-dlp breaks as YouTube changes. |
+| **deno** | baked into `backend/Dockerfile` | JS runtime for the signature/n-challenge solver |
+| **yt-dlp-ejs** | backend dep (via `yt-dlp[default]`) | the JS solver scripts (so we don't fetch at runtime). Keep in lockstep with yt-dlp. |
+| **`YOUTUBE_COOKIES`** | env (Render dashboard / Doppler) | a signed-in Netscape cookies.txt — clears the "confirm you're not a bot" wall on the datacenter IP. The cloud's one anti-bot-wall lever now. |
 
 Notes:
-- After bumping any of these (esp. yt-dlp/yt-dlp-ejs), run **`make reset`** — the
-  backend `.venv` is an anonymous volume that a plain `up` won't refresh.
-- **The PO-token provider runs co-located inside the backend container** — its
-  Node server (copied prebuilt from the bgutil image, incl. native `canvas`) is
-  started by `docker-entrypoint.sh` on `127.0.0.1:4416`, and `YOUTUBE_POT_BASE_URL`
-  is baked into the image. No separate/paid service; it shares the backend's
-  lifecycle (wakes/sleeps with it) in both dev and prod. It's best-effort — if the
-  server isn't up, yt-dlp just resolves without PO tokens (the solver still works).
-- Cookies are **not** used. If the bot wall returns under load, PO tokens are the
-  fix, not cookies.
-- **Audio format/client matters (desktop engine).** The desktop's `resolve_audio`
-  (`desktop/src-tauri/src/lib.rs`) pins the progressive **itag-140 m4a/AAC** stream
-  via the **`web_embedded`** player client. The default clients now return only an
-  **HLS manifest** for `bestaudio` (YouTube's SABR rollout) — a plain `<audio>`
-  element can't play HLS in Chrome, and on Safari the visualizer's
-  `createMediaElementSource` can't tap a native-HLS stream, so playback goes
-  **silent while the timeline keeps advancing**. `web_embedded` is the one client
-  whose progressive URL we can fetch directly (no GVS PO token / visitor-data
-  needed). If audio ever goes silent again, check that resolution still returns a
-  non-HLS `https` m4a URL first.
+- After bumping yt-dlp/yt-dlp-ejs, run **`make reset`** — the backend `.venv` is an
+  anonymous volume that a plain `up` won't refresh.
+- If search/ingest start failing with the bot error, **`YOUTUBE_COOKIES` expired** —
+  paste a fresh export and redeploy (store it base64-encoded; raw paste mangles tabs).
+- **No PO-token provider and no residential proxy.** Both were tried against the old
+  *cloud audio* bot wall and neither worked; `web_embedded` (desktop) did, so the
+  bgutil sidecar, the Tailscale exit node, and `home-proxy/` are all gone.
 
 ## Database migrations
 
