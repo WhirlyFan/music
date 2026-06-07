@@ -114,6 +114,8 @@ pub fn run() {
                 .route("/__login", axum::routing::get(login_handler))
                 .route("/stream/:video_id", axum::routing::get(stream_handler))
                 .route("/prewarm", axum::routing::post(prewarm_handler))
+                .route("/yt/search", axum::routing::get(yt_search_handler))
+                .route("/yt/ingest", axum::routing::get(yt_ingest_handler))
                 .route("/ws/*rest", axum::routing::any(ws_handler))
                 .fallback(handle)
                 .with_state(state);
@@ -469,6 +471,202 @@ fn text(status: StatusCode, msg: &str) -> Response<Body> {
 
 const BROWSER_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
+/// A yt-dlp sidecar command with the bundled `deno` on PATH — the shared setup
+/// behind every yt-dlp call (resolve, search, ingest). The launched app's PATH
+/// lacks the user's deno (needed for n-sig solving), so prepend the dir that holds
+/// our sidecars. Callers add their own args (+ `--cache-dir`).
+fn ytdlp_cmd(state: &AppState) -> Option<tauri_plugin_shell::process::Command> {
+    let mut cmd = state.app.shell().sidecar("yt-dlp").ok()?;
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let mut paths = vec![dir.to_path_buf()];
+            if let Ok(p) = std::env::var("PATH") {
+                paths.extend(std::env::split_paths(&p));
+            }
+            if let Ok(joined) = std::env::join_paths(paths) {
+                cmd = cmd.env("PATH", joined);
+            }
+        }
+    }
+    Some(cmd)
+}
+
+fn json_ok(body: String) -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap()
+}
+
+/// Parse `?key=val` pairs out of a request URI (no query extractor needed).
+fn query_pairs(uri: &axum::http::Uri) -> Vec<(String, String)> {
+    let pq = uri.path_and_query().map(|x| x.as_str()).unwrap_or("/");
+    match reqwest::Url::parse(&format!("http://x{pq}")) {
+        Ok(u) => u.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// GET /yt/search?q=…&n=5 — run a YouTube search via the yt-dlp sidecar on the
+/// user's own (residential) IP and return candidates in the cloud matcher's shape
+/// (`{video_id, title, uploader, duration_sec}`). Flat extraction — ids + titles +
+/// durations, no per-video resolution. The cloud scores + persists; it never calls
+/// YouTube.
+async fn yt_search_handler(
+    State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
+) -> Response<Body> {
+    let (mut q, mut n) = (String::new(), 5u32);
+    for (k, v) in query_pairs(&uri) {
+        match k.as_str() {
+            "q" => q = v,
+            "n" => n = v.parse().unwrap_or(5),
+            _ => {}
+        }
+    }
+    let q = q.trim();
+    if q.is_empty() {
+        return json_ok("[]".into());
+    }
+    let n = n.clamp(1, 20);
+    let Some(cmd) = ytdlp_cmd(&state) else {
+        return text(StatusCode::INTERNAL_SERVER_ERROR, "yt-dlp unavailable");
+    };
+    let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
+    let output = cmd
+        .args([
+            "--flat-playlist",
+            "--dump-json",
+            "--no-warnings",
+            "-q",
+            "--cache-dir",
+            &cache_arg,
+            &format!("ytsearch{n}:{q}"),
+        ])
+        .output()
+        .await;
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        Ok(o) => {
+            log::error!("yt-dlp search failed: {}", String::from_utf8_lossy(&o.stderr));
+            return text(StatusCode::BAD_GATEWAY, "search failed");
+        }
+        Err(e) => return text(StatusCode::BAD_GATEWAY, &format!("search failed: {e}")),
+    };
+    // One JSON object per line (per result). Keep only entries with an id.
+    let candidates: Vec<serde_json::Value> = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .filter_map(|v| {
+            let video_id = v.get("id")?.as_str()?.to_string();
+            Some(serde_json::json!({
+                "video_id": video_id,
+                "title": v.get("title").and_then(|x| x.as_str()).unwrap_or(""),
+                "uploader": v.get("channel").and_then(|x| x.as_str())
+                    .or_else(|| v.get("uploader").and_then(|x| x.as_str())).unwrap_or(""),
+                "duration_sec": v.get("duration").and_then(|x| x.as_i64()),
+            }))
+        })
+        .collect();
+    json_ok(serde_json::to_string(&candidates).unwrap_or_else(|_| "[]".into()))
+}
+
+/// Build a normalized ingest track row (the shape of `youtube._entry()` on the
+/// cloud) from a yt-dlp entry/video JSON. None if it has no video id.
+fn entry_to_row(v: &serde_json::Value) -> Option<serde_json::Value> {
+    let vid = v.get("id")?.as_str()?.to_string();
+    let duration_ms = v.get("duration").and_then(|x| x.as_f64()).map(|s| (s * 1000.0) as i64);
+    Some(serde_json::json!({
+        "video_id": vid,
+        "title": v.get("title").and_then(|x| x.as_str()).unwrap_or(""),
+        "artist": v.get("channel").and_then(|x| x.as_str())
+            .or_else(|| v.get("uploader").and_then(|x| x.as_str())).unwrap_or(""),
+        "duration": duration_ms,
+        "artwork": format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"),
+        "external_id": vid,
+        "source_url": format!("https://www.youtube.com/watch?v={vid}"),
+    }))
+}
+
+/// GET /yt/ingest?url=… — run a yt-dlp playlist/video metadata extract on the
+/// user's own IP and return it in the cloud ingester's shape (`{title, external_id,
+/// kind, tracks, cover}`). A `watch?v=…&list=…` URL imports the whole playlist
+/// (auto-mix `RD…` / Watch-Later `WL` fall back to the single video), matching the
+/// cloud's `ingest_with_meta`. Metadata only; no audio.
+async fn yt_ingest_handler(
+    State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
+) -> Response<Body> {
+    let url = query_pairs(&uri).into_iter().find(|(k, _)| k == "url").map(|(_, v)| v);
+    let Some(url) = url.filter(|u| !u.is_empty()) else {
+        return text(StatusCode::BAD_REQUEST, "missing url");
+    };
+    // Import the playlist only for a real `list=` (not an auto-mix / Watch Later).
+    let list_id = reqwest::Url::parse(&url)
+        .ok()
+        .and_then(|u| u.query_pairs().find(|(k, _)| k == "list").map(|(_, v)| v.into_owned()))
+        .unwrap_or_default();
+    let want_playlist =
+        !list_id.is_empty() && !list_id.starts_with("RD") && !list_id.starts_with("WL");
+
+    let Some(cmd) = ytdlp_cmd(&state) else {
+        return text(StatusCode::INTERNAL_SERVER_ERROR, "yt-dlp unavailable");
+    };
+    let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
+    let mut args = vec![
+        "--dump-single-json",
+        "--no-warnings",
+        "-q",
+        "--cache-dir",
+        &cache_arg,
+    ];
+    // A playlist is flattened (ids + titles, fast); a lone video gets a full
+    // extract so it carries its duration.
+    if want_playlist {
+        args.extend_from_slice(&["--flat-playlist", "--yes-playlist"]);
+    } else {
+        args.push("--no-playlist");
+    }
+    args.push(&url);
+    let output = match cmd.args(args).output().await {
+        Ok(o) if o.status.success() => o,
+        Ok(o) => {
+            log::error!("yt-dlp ingest failed: {}", String::from_utf8_lossy(&o.stderr));
+            return text(StatusCode::BAD_GATEWAY, "ingest failed");
+        }
+        Err(e) => return text(StatusCode::BAD_GATEWAY, &format!("ingest failed: {e}")),
+    };
+    let info: serde_json::Value = match serde_json::from_slice(&output.stdout) {
+        Ok(v) => v,
+        Err(_) => return text(StatusCode::BAD_GATEWAY, "could not parse ingest"),
+    };
+    let result = if let Some(entries) = info.get("entries").and_then(|e| e.as_array()) {
+        let tracks: Vec<serde_json::Value> = entries.iter().filter_map(entry_to_row).collect();
+        let cover = tracks.first().and_then(|t| t.get("artwork")).cloned()
+            .unwrap_or(serde_json::Value::String(String::new()));
+        serde_json::json!({
+            "title": info.get("title").and_then(|x| x.as_str()).unwrap_or("YouTube playlist"),
+            "external_id": info.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+            "kind": "playlist",
+            "tracks": tracks,
+            "cover": cover,
+        })
+    } else {
+        let tracks: Vec<serde_json::Value> = entry_to_row(&info).into_iter().collect();
+        let cover = tracks.first().and_then(|t| t.get("artwork")).cloned()
+            .unwrap_or(serde_json::Value::String(String::new()));
+        serde_json::json!({
+            "title": info.get("title").and_then(|x| x.as_str()).unwrap_or("YouTube video"),
+            "external_id": info.get("id").and_then(|x| x.as_str()).unwrap_or(""),
+            "kind": "video",
+            "tracks": tracks,
+            "cover": cover,
+        })
+    };
+    json_ok(serde_json::to_string(&result).unwrap_or_else(|_| "{}".into()))
+}
+
 /// Resolve the direct (progressive m4a, itag 140) audio URL for a YouTube video by
 /// running the bundled yt-dlp sidecar — from the user's own residential IP, so no
 /// bot wall / cookies / proxy needed (unlike the cloud). Cached in-memory (the URL
@@ -483,20 +681,7 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
     }
     let watch = format!("https://www.youtube.com/watch?v={video_id}");
     let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
-    let mut cmd = state.app.shell().sidecar("yt-dlp").ok()?;
-    // Let yt-dlp find the bundled `deno` (n-sig solving): the launched app's PATH
-    // lacks the user's deno, so prepend the dir that holds our sidecars.
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let mut paths = vec![dir.to_path_buf()];
-            if let Ok(p) = std::env::var("PATH") {
-                paths.extend(std::env::split_paths(&p));
-            }
-            if let Ok(joined) = std::env::join_paths(paths) {
-                cmd = cmd.env("PATH", joined);
-            }
-        }
-    }
+    let cmd = ytdlp_cmd(state)?;
     let output = cmd
         .args([
             // Force a *progressive* https itag-140 stream (exclude HLS). The default
