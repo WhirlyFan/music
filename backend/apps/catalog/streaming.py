@@ -78,7 +78,14 @@ def stream_chunks(upstream):
 
 def _cache_dir() -> Path:
     d = Path(settings.AUDIO_CACHE_DIR)
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Best-effort: if the cache dir isn't writable (e.g. a read-only image
+        # filesystem), don't 500 the stream. The dir simply won't exist, so reads
+        # miss and the (already-guarded) background fill no-ops — the view falls
+        # through to the live proxy. Fix the path via settings.AUDIO_CACHE_DIR.
+        log.warning("audio cache dir not writable: %s", d, exc_info=True)
     return d
 
 
