@@ -1,8 +1,11 @@
 # syntax=docker/dockerfile:1
-# Multi-stage build for the React/Vite frontend.
-
-# CI=true in each stage tells pnpm to skip interactive prompts (e.g. its
-# "purge node_modules to fix drift?" prompt that hangs in Docker w/o a TTY).
+# Image for the React/Vite frontend's LOCAL DEV server (the `frontend` service in
+# docker-compose.yml). There's no production web image — the UI ships embedded in
+# the desktop app (built with `pnpm tauri build`, not Docker), so the old
+# build/nginx stages were removed.
+#
+# CI=true tells pnpm to skip interactive prompts (e.g. its "purge node_modules to
+# fix drift?" prompt that hangs in Docker without a TTY).
 
 FROM node:24.16.0-alpine AS deps
 ENV CI=true
@@ -21,15 +24,3 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 EXPOSE 5173
 CMD ["pnpm", "dev", "--host"]
-
-FROM node:24.16.0-alpine AS build
-ENV CI=true
-RUN corepack enable
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN pnpm build
-
-FROM nginx:1.30.2-alpine AS prod
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80

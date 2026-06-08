@@ -1,13 +1,18 @@
-# Production overrides. Apply with:
+# Production overrides for self-hosting the BACKEND API on a Docker host. Apply with:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# The hosted production backend actually runs on Render (see render.yaml); this
+# override exists for anyone who wants to self-host the API on a plain Docker VM.
+#
+# There is NO web frontend here: the product is the desktop app (see desktop/),
+# which bundles the UI and talks to the backend directly. So this prod profile
+# runs only the backend + its database — the dev `frontend` (Vite) and `nginx`
+# services are parked in a never-activated profile.
 #
 # Differences from dev:
 #   - backend runs gunicorn + DJANGO_SETTINGS_MODULE=config.settings.prod
-#   - frontend builds the React bundle into a single nginx-based image
-#     (Dockerfile target=prod). That image becomes the public entry point on :80.
-#   - The dev `nginx` service is disabled — its job (proxying to Vite + Django)
-#     is taken over by the frontend service in prod.
-#   - No source-code volume mounts (code is baked into the images).
+#   - no source-code volume mount (code is baked into the image)
+#   - frontend + nginx do not start
 
 services:
   backend:
@@ -16,6 +21,8 @@ services:
       DJANGO_DEBUG: "false"
       DJANGO_SETTINGS_MODULE: config.settings.prod
     volumes: []   # no source mount in prod
+    ports:
+      - "8000:8000"
     healthcheck:
       # /health/ is provided by django-health-check (DB, cache, storage)
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/').read()"]
@@ -24,23 +31,10 @@ services:
       retries: 5
       start_period: 20s
 
-  # Single image that serves the built React bundle AND reverse-proxies /api/*.
-  # In prod this REPLACES both the dev `frontend` (Vite) and `nginx` services.
+  # The web frontend is retired (the desktop app is the deliverable). Park the
+  # dev Vite + nginx services in a profile that `up` never activates.
   frontend:
-    build:
-      context: ./frontend
-      target: prod
-    command: nginx -g 'daemon off;'
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      backend:
-        condition: service_healthy
+    profiles: ["dev-only"]
 
-  # The dev nginx service is unnecessary in prod (frontend service is now the
-  # public entry point). Putting it in a never-activated profile keeps it from
-  # starting under `docker compose ... up`.
   nginx:
     profiles: ["dev-only"]
