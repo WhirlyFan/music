@@ -96,9 +96,7 @@ def test_one_jam_at_a_time_leaves_previous():
 
     # Guest is a member of B, no longer of A.
     rooms = set(
-        RoomMember.objects.filter(user=guest, role="guest").values_list(
-            "room__code", flat=True
-        )
+        RoomMember.objects.filter(user=guest, role="guest").values_list("room__code", flat=True)
     )
     assert rooms == {code_b}
 
@@ -154,9 +152,7 @@ def test_guest_control_gating_and_toggle():
     assert guest_api.post("/api/v1/rooms/next/").status_code == 403
 
     # Host enables guest control (broadcasts; guests see allow_guest_control).
-    body = host_api.post(
-        "/api/v1/rooms/guest-control/", {"enabled": True}, format="json"
-    ).json()
+    body = host_api.post("/api/v1/rooms/guest-control/", {"enabled": True}, format="json").json()
     assert body["allow_guest_control"] is True
 
     # Now the guest drives the JAM (host's room), not their own.
@@ -195,7 +191,9 @@ def test_guest_with_control_can_jump_in_the_jam():
     target = guest_api.get("/api/v1/rooms/current/").json()["context_window"][2]["id"]
 
     # No guest control → jumping (a playback action) is gated.
-    assert guest_api.post("/api/v1/rooms/jump/", {"item_id": target}, format="json").status_code == 403
+    assert (
+        guest_api.post("/api/v1/rooms/jump/", {"item_id": target}, format="json").status_code == 403
+    )
 
     # With control → the guest jumps the JAM (host's room), not their own.
     host_api.post("/api/v1/rooms/guest-control/", {"enabled": True}, format="json")
@@ -212,9 +210,7 @@ def test_host_can_kick_guest():
     guest_api, guest = authed()
     guest_api.post("/api/v1/rooms/join/", {"code": code}, format="json")
 
-    body = host_api.post(
-        "/api/v1/rooms/kick/", {"user_id": str(guest.id)}, format="json"
-    ).json()
+    body = host_api.post("/api/v1/rooms/kick/", {"user_id": str(guest.id)}, format="json").json()
     # Guest is gone from the jam; the host remains.
     assert body["members_count"] == 1
     assert [m["user_id"] for m in members_of(host_api)] == [str(host.id)]

@@ -44,9 +44,7 @@ def test_viewer_connects_and_receives_change_nudge():
         connected, _ = await comm.connect()
         assert connected
         # An edit elsewhere fans a content-less nudge to the playlist group.
-        await get_channel_layer().group_send(
-            playlist_group(pl.id), {"type": "playlist.changed"}
-        )
+        await get_channel_layer().group_send(playlist_group(pl.id), {"type": "playlist.changed"})
         msg = await comm.receive_json_from()
         assert msg == {"type": "playlist.changed"}
         await comm.disconnect()

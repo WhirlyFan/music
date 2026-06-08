@@ -191,6 +191,12 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build --mode desktop
 
+      - name: Fetch sidecar binaries (yt-dlp + deno)
+        # externalBin in tauri.conf.json — gitignored (large), so the build script
+        # (tauri_build) fails without them. The script names them for the host triple.
+        working-directory: desktop
+        run: ./scripts/fetch-sidecars.sh
+
       - name: Rust cache
         uses: Swatinem/rust-cache@v2.7.8
         with:
