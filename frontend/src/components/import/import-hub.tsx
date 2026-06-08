@@ -17,6 +17,7 @@ import { useCreatePlaylist } from '@/lib/hooks/mutations/catalog'
 import { usePlay, usePlayNow, useQueueTracks } from '@/lib/hooks/mutations/rooms'
 import { importQuery, searchQuery, useImport, useSongSearch } from '@/lib/hooks/queries/catalog'
 import { promptText } from '@/lib/overlay'
+import { prefersReducedMotion } from '@/lib/reduced-motion'
 
 const urlSchema = z.string().url()
 
@@ -45,12 +46,8 @@ function RollingLabel({ text, waving }: { text: string; waving: boolean }) {
   const [cycle, setCycle] = useState(0)
   const [inFlight, setInFlight] = useState(false)
   // Snapshot reduced-motion once: gate the wave off so the zeroed-duration animation
-  // (global guard) can't spin the re-arm loop. Initializer runs once, no impure render.
-  const [calm] = useState(
-    () =>
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-  )
+  // can't spin the re-arm loop. Initializer runs once, no impure render.
+  const [calm] = useState(prefersReducedMotion)
   const lastIndex = text.length - 1
   // Hovering OR mid-pass keeps the wave applied — so leaving mid-pass lets it finish.
   const active = (waving || inFlight) && !calm
