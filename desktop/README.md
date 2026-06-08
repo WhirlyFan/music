@@ -1,8 +1,8 @@
-# desktop — WhirlyFan Tauri app
+# desktop — music Tauri app
 
-The WhirlyFan desktop shell (Tauri v2). It wraps the existing `frontend` SPA in a
-native window. This is **PR A** of the migration in `docs/tauri-migration.md`: a
-clickable build that behaves like the website, *before* any YouTube I/O moves local.
+The **music** desktop app (Tauri v2). It wraps the `frontend` SPA in a native window
+and runs a local Rust engine that resolves/streams YouTube on the user's own machine
+(bundled `yt-dlp`) and proxies metadata/jam-sync to the cloud backend.
 
 ## Layout
 - `package.json` — just the Tauri CLI + `dev`/`build` scripts.
@@ -24,7 +24,7 @@ pnpm dev      # tauri dev — runs the frontend dev server (local backend proxy)
 pnpm build    # tauri build — produces the release .app (and tries a .dmg, see caveat)
 ```
 Release artifacts land in `src-tauri/target/release/bundle/`:
-- `macos/WhirlyFan.app` — the launchable app (ad-hoc signed; runs on Apple Silicon
+- `macos/music.app` — the launchable app (ad-hoc signed; runs on Apple Silicon
   with no Apple Developer account — friends/family right-click → Open the first time).
 
 ## Prod vs web build (the `--mode desktop` trick)
