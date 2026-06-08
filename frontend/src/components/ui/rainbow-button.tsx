@@ -25,7 +25,10 @@ export function RainbowButton({
           'bg-neutral-900 shadow-md',
           'transition-[transform,box-shadow] duration-200 hover:shadow-lg active:scale-[0.98]',
           'focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:outline-hidden',
-          'disabled:pointer-events-none disabled:opacity-60',
+          // Stay OPAQUE while disabled (e.g. "Importing…"): the dark fill is what hides
+          // the rainbow glow behind it, so fading it would let the rainbow bleed through
+          // on top. Just block interaction + soften the label instead.
+          'disabled:pointer-events-none disabled:text-white/70',
           className,
         )}
         {...props}

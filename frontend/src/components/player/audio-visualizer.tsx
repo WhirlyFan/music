@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 
+import { prefersReducedMotion } from '@/lib/reduced-motion'
+
 // All geometry is in canvas-buffer units; the canvas scales to fill its parent.
 const BUFFER = 600
 const POINTS = 160 // perimeter samples the wave is drawn through
@@ -123,7 +125,7 @@ export function AudioVisualizer({
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !analyser) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (prefersReducedMotion()) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 

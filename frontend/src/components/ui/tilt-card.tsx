@@ -1,9 +1,7 @@
 import { useRef } from 'react'
 
+import { prefersReducedMotion } from '@/lib/reduced-motion'
 import { cn } from '@/lib/utils'
-
-const prefersReducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
  * 3D tilt-on-hover card (annnimate "3d-card-flip" style). The element tilts

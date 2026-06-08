@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Ripples, useRipple } from '@/components/ui/ripple'
 import { Skeleton, useSkeletonZone } from '@/components/ui/skeleton'
 import { TiltCard } from '@/components/ui/tilt-card'
+import { prefersReducedMotion } from '@/lib/reduced-motion'
 
 export type CoverItem = {
   id: string
@@ -35,9 +36,6 @@ const capacityFor = (w: number, h: number, c: number) => {
   const pitch = c * 1.12 // card + a little spacing (≈ the packed min-distance)
   return Math.max(6, Math.floor(w / pitch) * Math.floor(h / pitch))
 }
-
-const reducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 // Integer (col,row) cells of a square spiral out from the centre (run lengths 1,1,2,2,3,3…
 // turning right→down→left→up). Used as the *static* packed layout under reduced motion,
@@ -112,7 +110,7 @@ export function CoverCluster({
   const wakeRef = useRef<() => void>(() => {})
   const sigRef = useRef('') // signature of the currently-rendered body set
   const orderRef = useRef<string[]>([]) // stable shuffled order → the screenful is a varied sample
-  const calm = useRef(reducedMotion())
+  const calm = useRef(prefersReducedMotion())
   const [card, setCard] = useState(144)
   const [capacity, setCapacity] = useState(48)
   const [renderList, setRenderList] = useState<CoverItem[]>(() => items)
@@ -375,7 +373,7 @@ export function CoverCluster({
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
     const onChange = () => {
-      calm.current = mq.matches
+      calm.current = prefersReducedMotion()
       wakeRef.current()
     }
     mq.addEventListener('change', onChange)

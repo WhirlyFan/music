@@ -2,6 +2,18 @@
 @import 'tw-animate-css';
 
 /*
+ * Force motion ON. The desktop ships in a WKWebView (Safari engine) that mis-reports
+ * `prefers-reduced-motion: reduce` even when the OS setting is off — which silently
+ * killed every animation/transition: `motion-safe:` utilities never applied,
+ * `motion-reduce:` ones always did, and the reduced-motion guards (since removed
+ * below) zeroed everything. This is desktop-only now, so redefine the variants to a
+ * constant-true / constant-false media query: motion-safe always applies, motion-reduce
+ * never does. (The JS side is handled by lib/reduced-motion.ts.)
+ */
+@custom-variant motion-safe (@media (width >= 0));
+@custom-variant motion-reduce (@media (width < 0));
+
+/*
  * Theme tokens — full shadcn / tweakcn slot set + extras.
  *
  * Color space: OKLCH. Better perceptual uniformity than HSL (matching
@@ -581,16 +593,8 @@ html body[data-scroll-locked] {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
+/* (No global prefers-reduced-motion guard: the desktop WebView mis-reports it, so it
+ * would wrongly zero every animation. Motion is forced on via the variants up top.) */
 
 /*
  * View Transitions (TanStack Router `defaultViewTransition`). Keep the root swap
@@ -622,13 +626,6 @@ html body[data-scroll-locked] {
   from {
     opacity: 0;
     transform: translateY(10px) scale(0.97);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-old(auth-card),
-  ::view-transition-new(auth-card) {
-    animation: none !important;
   }
 }
 
@@ -676,10 +673,5 @@ html body[data-scroll-locked] {
 @keyframes tron-trace {
   to {
     --tron-angle: 360deg;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tron-trace::after {
-    animation: none;
   }
 }
