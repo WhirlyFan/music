@@ -37,8 +37,9 @@ const REDIRECT_URI: &str = "http://127.0.0.1:8765";
 const KR_SERVICE: &str = "com.whirlyfan.music";
 const KR_USER: &str = "session_token";
 
-type ResolvedCache =
-    std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>>;
+type ResolvedCache = std::sync::Arc<
+    std::sync::Mutex<std::collections::HashMap<String, (String, std::time::Instant)>>,
+>;
 
 #[derive(Clone)]
 struct AppState {
@@ -87,9 +88,13 @@ pub fn run() {
                 client,
                 jar: jar.clone(),
                 app: app.handle().clone(),
-                resolved: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+                resolved: std::sync::Arc::new(std::sync::Mutex::new(
+                    std::collections::HashMap::new(),
+                )),
                 cache_dir,
-                warming: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new())),
+                warming: std::sync::Arc::new(std::sync::Mutex::new(
+                    std::collections::HashSet::new(),
+                )),
             };
 
             // Bind first so we know the port before pointing the window at it.
@@ -199,15 +204,14 @@ fn pkce() -> (String, String) {
 /// GET /__login — run Google's auth-code + PKCE flow in the system browser, exchange
 /// the code server-side for a session token, store it, and return to the app.
 async fn login_handler(State(state): State<AppState>) -> Response<Body> {
-    let client_id = match GOOGLE_CLIENT_ID {
-        Some(c) if !c.is_empty() => c,
-        _ => {
-            return text(
+    let client_id =
+        match GOOGLE_CLIENT_ID {
+            Some(c) if !c.is_empty() => c,
+            _ => return text(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "This build has no Google client id (set GOOGLE_OAUTH_CLIENT_ID at build time).",
-            )
-        }
-    };
+            ),
+        };
     let (verifier, challenge) = pkce();
     let oauth_state = rand_b64(16);
 
@@ -369,7 +373,13 @@ async fn proxy(state: AppState, req: Request<Body>) -> Response<Body> {
         // and content-length. Strip accept-encoding so upstream returns identity.
         if matches!(
             kn.as_str(),
-            "host" | "origin" | "referer" | "content-length" | "connection" | "accept-encoding" | "cookie"
+            "host"
+                | "origin"
+                | "referer"
+                | "content-length"
+                | "connection"
+                | "accept-encoding"
+                | "cookie"
         ) {
             continue;
         }
@@ -505,7 +515,10 @@ fn json_ok(body: String) -> Response<Body> {
 fn query_pairs(uri: &axum::http::Uri) -> Vec<(String, String)> {
     let pq = uri.path_and_query().map(|x| x.as_str()).unwrap_or("/");
     match reqwest::Url::parse(&format!("http://x{pq}")) {
-        Ok(u) => u.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect(),
+        Ok(u) => u
+            .query_pairs()
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect(),
         Err(_) => Vec::new(),
     }
 }
@@ -541,7 +554,11 @@ async fn yt_search_candidates(state: &AppState, q: &str, n: u32) -> Vec<serde_js
     let Some(cmd) = ytdlp_cmd(state) else {
         return Vec::new();
     };
-    let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
+    let cache_arg = state
+        .cache_dir
+        .join(".ytdlp")
+        .to_string_lossy()
+        .into_owned();
     let output = cmd
         .args([
             "--flat-playlist",
@@ -557,7 +574,10 @@ async fn yt_search_candidates(state: &AppState, q: &str, n: u32) -> Vec<serde_js
     let output = match output {
         Ok(o) if o.status.success() => o,
         Ok(o) => {
-            log::error!("yt-dlp search failed: {}", String::from_utf8_lossy(&o.stderr));
+            log::error!(
+                "yt-dlp search failed: {}",
+                String::from_utf8_lossy(&o.stderr)
+            );
             return Vec::new();
         }
         Err(e) => {
@@ -586,7 +606,10 @@ async fn yt_search_candidates(state: &AppState, q: &str, n: u32) -> Vec<serde_js
 /// cloud) from a yt-dlp entry/video JSON. None if it has no video id.
 fn entry_to_row(v: &serde_json::Value) -> Option<serde_json::Value> {
     let vid = v.get("id")?.as_str()?.to_string();
-    let duration_ms = v.get("duration").and_then(|x| x.as_f64()).map(|s| (s * 1000.0) as i64);
+    let duration_ms = v
+        .get("duration")
+        .and_then(|x| x.as_f64())
+        .map(|s| (s * 1000.0) as i64);
     Some(serde_json::json!({
         "video_id": vid,
         "title": v.get("title").and_then(|x| x.as_str()).unwrap_or(""),
@@ -608,7 +631,10 @@ async fn yt_ingest_handler(
     State(state): State<AppState>,
     OriginalUri(uri): OriginalUri,
 ) -> Response<Body> {
-    let url = query_pairs(&uri).into_iter().find(|(k, _)| k == "url").map(|(_, v)| v);
+    let url = query_pairs(&uri)
+        .into_iter()
+        .find(|(k, _)| k == "url")
+        .map(|(_, v)| v);
     let Some(url) = url.filter(|u| !u.is_empty()) else {
         return text(StatusCode::BAD_REQUEST, "missing url");
     };
@@ -627,13 +653,21 @@ async fn yt_ingest_meta(state: &AppState, url: &str) -> Option<serde_json::Value
     // Import the playlist only for a real `list=` (not an auto-mix / Watch Later).
     let list_id = reqwest::Url::parse(url)
         .ok()
-        .and_then(|u| u.query_pairs().find(|(k, _)| k == "list").map(|(_, v)| v.into_owned()))
+        .and_then(|u| {
+            u.query_pairs()
+                .find(|(k, _)| k == "list")
+                .map(|(_, v)| v.into_owned())
+        })
         .unwrap_or_default();
     let want_playlist =
         !list_id.is_empty() && !list_id.starts_with("RD") && !list_id.starts_with("WL");
 
     let cmd = ytdlp_cmd(state)?;
-    let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
+    let cache_arg = state
+        .cache_dir
+        .join(".ytdlp")
+        .to_string_lossy()
+        .into_owned();
     let mut args = vec![
         "--dump-single-json",
         "--no-warnings",
@@ -652,7 +686,10 @@ async fn yt_ingest_meta(state: &AppState, url: &str) -> Option<serde_json::Value
     let output = match cmd.args(args).output().await {
         Ok(o) if o.status.success() => o,
         Ok(o) => {
-            log::error!("yt-dlp ingest failed: {}", String::from_utf8_lossy(&o.stderr));
+            log::error!(
+                "yt-dlp ingest failed: {}",
+                String::from_utf8_lossy(&o.stderr)
+            );
             return None;
         }
         Err(e) => {
@@ -663,7 +700,10 @@ async fn yt_ingest_meta(state: &AppState, url: &str) -> Option<serde_json::Value
     let info: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
     if let Some(entries) = info.get("entries").and_then(|e| e.as_array()) {
         let tracks: Vec<serde_json::Value> = entries.iter().filter_map(entry_to_row).collect();
-        let cover = tracks.first().and_then(|t| t.get("artwork")).cloned()
+        let cover = tracks
+            .first()
+            .and_then(|t| t.get("artwork"))
+            .cloned()
             .unwrap_or(serde_json::Value::String(String::new()));
         Some(serde_json::json!({
             "title": info.get("title").and_then(|x| x.as_str()).unwrap_or("YouTube playlist"),
@@ -674,7 +714,10 @@ async fn yt_ingest_meta(state: &AppState, url: &str) -> Option<serde_json::Value
         }))
     } else {
         let tracks: Vec<serde_json::Value> = entry_to_row(&info).into_iter().collect();
-        let cover = tracks.first().and_then(|t| t.get("artwork")).cloned()
+        let cover = tracks
+            .first()
+            .and_then(|t| t.get("artwork"))
+            .cloned()
             .unwrap_or(serde_json::Value::String(String::new()));
         Some(serde_json::json!({
             "title": info.get("title").and_then(|x| x.as_str()).unwrap_or("YouTube video"),
@@ -693,9 +736,11 @@ fn csrf_token(state: &AppState) -> Option<String> {
     use reqwest::cookie::CookieStore;
     let api: reqwest::Url = "https://api.whirlyfan.com/".parse().ok()?;
     let header = state.jar.cookies(&api)?;
-    header.to_str().ok()?.split(';').find_map(|p| {
-        p.trim().strip_prefix("csrftoken=").map(str::to_owned)
-    })
+    header
+        .to_str()
+        .ok()?
+        .split(';')
+        .find_map(|p| p.trim().strip_prefix("csrftoken=").map(str::to_owned))
 }
 
 /// The csrftoken, priming the jar first if it's absent. An engine-originated cloud
@@ -750,7 +795,10 @@ async fn cloud_post(state: &AppState, path: &str, body: serde_json::Value) -> Re
     }
     match rb.send().await {
         Ok(resp) => relay(resp).await,
-        Err(e) => text(StatusCode::BAD_GATEWAY, &format!("cloud request failed: {e}")),
+        Err(e) => text(
+            StatusCode::BAD_GATEWAY,
+            &format!("cloud request failed: {e}"),
+        ),
     }
 }
 
@@ -763,11 +811,15 @@ async fn yt_match_handler(
     body: Body,
 ) -> Response<Body> {
     if track_id.is_empty()
-        || !track_id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+        || !track_id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
     {
         return text(StatusCode::BAD_REQUEST, "bad track id");
     }
-    let bytes = axum::body::to_bytes(body, 64 * 1024).await.unwrap_or_default();
+    let bytes = axum::body::to_bytes(body, 64 * 1024)
+        .await
+        .unwrap_or_default();
     let query = serde_json::from_slice::<serde_json::Value>(&bytes)
         .ok()
         .and_then(|v| v.get("query").and_then(|q| q.as_str()).map(str::to_owned))
@@ -786,7 +838,9 @@ async fn yt_match_handler(
 /// just forwarded — those use official APIs the cloud can call directly. Relays the
 /// cloud's ImportResult.
 async fn yt_import_handler(State(state): State<AppState>, body: Body) -> Response<Body> {
-    let bytes = axum::body::to_bytes(body, 64 * 1024).await.unwrap_or_default();
+    let bytes = axum::body::to_bytes(body, 64 * 1024)
+        .await
+        .unwrap_or_default();
     let url = serde_json::from_slice::<serde_json::Value>(&bytes)
         .ok()
         .and_then(|v| v.get("url").and_then(|u| u.as_str()).map(str::to_owned))
@@ -816,7 +870,11 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
         }
     }
     let watch = format!("https://www.youtube.com/watch?v={video_id}");
-    let cache_arg = state.cache_dir.join(".ytdlp").to_string_lossy().into_owned();
+    let cache_arg = state
+        .cache_dir
+        .join(".ytdlp")
+        .to_string_lossy()
+        .into_owned();
     let cmd = ytdlp_cmd(state)?;
     let output = cmd
         .args([
@@ -860,7 +918,11 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
     // Accurate duration (seconds, may be float) → report to the cloud so the stored
     // active-source duration matches the audio the user actually hears. Fire-and-forget;
     // only on a fresh resolve (cache miss), so once per video per ~hour.
-    if let Some(ms) = lines.next().and_then(|d| d.parse::<f64>().ok()).map(|s| (s * 1000.0) as u64) {
+    if let Some(ms) = lines
+        .next()
+        .and_then(|d| d.parse::<f64>().ok())
+        .map(|s| (s * 1000.0) as u64)
+    {
         if ms > 0 {
             let st = state.clone();
             let vid = video_id.to_string();
@@ -875,7 +937,10 @@ async fn resolve_audio(state: &AppState, video_id: &str) -> Option<String> {
         }
     }
     if let Ok(mut cache) = state.resolved.lock() {
-        cache.insert(video_id.to_string(), (url.clone(), std::time::Instant::now()));
+        cache.insert(
+            video_id.to_string(),
+            (url.clone(), std::time::Instant::now()),
+        );
     }
     Some(url)
 }
@@ -919,7 +984,12 @@ async fn stream_handler(
         Err(e) => return text(StatusCode::BAD_GATEWAY, &format!("audio fetch failed: {e}")),
     };
     let mut builder = Response::builder().status(upstream.status().as_u16());
-    for h in ["content-type", "content-length", "content-range", "accept-ranges"] {
+    for h in [
+        "content-type",
+        "content-length",
+        "content-range",
+        "accept-ranges",
+    ] {
         if let Some(v) = upstream.headers().get(h) {
             builder = builder.header(h, v.as_bytes());
         }
@@ -962,7 +1032,12 @@ async fn prewarm_handler(State(state): State<AppState>, body: Body) -> Response<
             // A download already in flight (a real play, or a prior prewarm) owns
             // this id — skip so we don't pay a redundant ~9s resolve. spawn_cache_fill
             // single-flights the download itself; this guards the resolve too.
-            if state.warming.lock().map(|w| w.contains(&video_id)).unwrap_or(true) {
+            if state
+                .warming
+                .lock()
+                .map(|w| w.contains(&video_id))
+                .unwrap_or(true)
+            {
                 return;
             }
             if let Some(url) = resolve_audio(&state, &video_id).await {
