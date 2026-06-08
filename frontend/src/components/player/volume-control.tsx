@@ -9,10 +9,15 @@ export function VolumeControl({
   volume,
   onVolumeChange,
   className,
+  compact = false,
 }: {
   volume: number
   onVolumeChange: (v: number) => void
   className?: string
+  // Compact: show just the speaker icon; the slider reveals on hover/focus. For the
+  // dense player bar (the full-screen player leaves it full-width). The caller adds
+  // `group/vol` so the reveal triggers on the whole control.
+  compact?: boolean
 }) {
   const prev = useRef(volume || 1) // last non-zero level, to restore on unmute
   const muted = volume === 0
@@ -40,7 +45,12 @@ export function VolumeControl({
           onVolumeChange(v)
         }}
         aria-label="Volume"
-        className="accent-primary h-1 w-full cursor-pointer"
+        className={cn(
+          'accent-primary h-1 cursor-pointer',
+          compact
+            ? 'w-0 opacity-0 transition-[width,opacity] duration-200 ease-out group-focus-within/vol:w-20 group-focus-within/vol:opacity-100 group-hover/vol:w-20 group-hover/vol:opacity-100'
+            : 'w-full',
+        )}
       />
     </div>
   )

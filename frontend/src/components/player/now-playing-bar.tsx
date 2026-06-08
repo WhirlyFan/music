@@ -35,6 +35,7 @@ import { toast } from 'sonner'
 import { FullScreenPlayer } from '@/components/player/full-screen-player'
 import { SeekBar } from '@/components/player/seek-bar'
 import { useAudioAnalyser } from '@/components/player/use-audio-analyser'
+import { VolumeControl } from '@/components/player/volume-control'
 import { ExplicitBadge, TrackArtwork } from '@/components/track/track-artwork'
 import { Button } from '@/components/ui/button'
 import { IS_DESKTOP } from '@/lib/api/client'
@@ -840,6 +841,16 @@ export function NowPlayingBar() {
           )}
         </div>
 
+        {/* Global volume — like play/pause, available from the bar (not just the
+            full-screen view). Output volume is per-client, so a passive jam guest
+            controls their own too. Compact: just the speaker icon until hover/focus.
+            Hidden on phones, where the full-screen view owns volume. */}
+        <VolumeControl
+          volume={volume}
+          onVolumeChange={setVolume}
+          compact
+          className="group/vol mr-1 hidden sm:flex"
+        />
         <Button
           size="icon"
           variant="ghost"
