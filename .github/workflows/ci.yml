@@ -1,8 +1,10 @@
 # Continuous Integration — runs on every PR and every push to main.
 #
-# Three parallel jobs:
+# Parallel jobs:
 #   - backend:  pytest + ruff + Django prod-settings check
-#   - frontend: typecheck + lint + Vite build
+#   - frontend: typecheck + lint + desktop-mode Vite build (the UI is now bundled
+#               into the desktop app — there is no separate web deploy)
+#   - desktop:  compile the Tauri/Rust engine on macOS (the shipped product)
 #   - security: pnpm audit + pip-audit (CVE scan)
 #
 # Branch protection requires these checks to pass before merging to main.
@@ -108,7 +110,11 @@ jobs:
         run: uv run python manage.py check --deploy
 
   # ──────────────────────────────────────────────────────────────────────
-  # Frontend — typecheck + lint + Vite build
+  # Frontend — typecheck + lint + desktop-mode build
+  #
+  # The SPA is no longer deployed as a web app; it's embedded into the desktop
+  # app, so we build it the way the app does (`--mode desktop`). This validates
+  # the bundle compiles; the desktop job below compiles the Rust around it.
   # ──────────────────────────────────────────────────────────────────────
   frontend:
     name: Frontend (typecheck + lint + build)
@@ -123,9 +129,8 @@ jobs:
 
       - name: Install pnpm
         # Pinned explicitly here. Must match `packageManager` in
-        # frontend/package.json and `pnpm@X.Y.Z` in render.yaml — bump all
-        # three together. Three readers, one source of truth (the version
-        # number itself), zero version drift across environments.
+        # frontend/package.json — bump both together. Two readers, one source of
+        # truth (the version number itself), zero version drift.
         uses: pnpm/action-setup@v6.0.8
         with:
           version: 11.3.0
@@ -149,8 +154,55 @@ jobs:
       - name: Prettier (check)
         run: pnpm format:check
 
-      - name: Vite build
-        run: pnpm build
+      - name: Vite build (desktop mode — how the app bundles the UI)
+        run: pnpm build --mode desktop
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Desktop — compile the Tauri/Rust engine (the shipped product)
+  #
+  # Runs on macOS (the only target) so the WKWebView/macOS deps resolve. We
+  # build the frontend first (the Rust binary embeds ../../frontend/dist at
+  # compile time), then fmt-check + compile the crate. We do NOT bundle the
+  # full .app here — `cargo check` catches breakage at a fraction of the cost.
+  # (macOS runner minutes bill at a higher rate; this is the heaviest job.)
+  # ──────────────────────────────────────────────────────────────────────
+  desktop:
+    name: Desktop (Rust compile)
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v6.0.2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6.0.8
+        with:
+          version: 11.3.0
+
+      - name: Install Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build frontend (desktop mode → dist embedded by the Rust binary)
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build --mode desktop
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2.7.8
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: rustfmt (check)
+        working-directory: desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: cargo check
+        working-directory: desktop/src-tauri
+        run: cargo check --locked
 
   # ──────────────────────────────────────────────────────────────────────
   # Security audit — fail on known high/critical CVEs in production deps
