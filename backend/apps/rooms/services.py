@@ -250,12 +250,14 @@ def _set_current(playback: PlaybackState, item: QueueItem | None, *, label=None)
     playback.current_item = item
     playback.position_ms = 0
 
-    # Synced start: in a SHARED room a freshly-chosen track waits (pending_start)
-    # until every PRESENT node reports its audio ready — or the deadline passes —
-    # so the jam starts together even though each node caches locally now. Solo
-    # rooms start immediately. Server cache state is irrelevant: nodes don't fetch
-    # from the server, so we coordinate on client readiness, not server warming.
-    pending = item is not None and playback.room.is_shared
+    # Synced start: a freshly-chosen track waits (pending_start) until every PRESENT
+    # node reports its audio ready — or the deadline passes — then everyone starts
+    # together from 0. This holds for SOLO rooms too: a cold YouTube resolve can take
+    # ~10s, and if we started the clock now it would run during that load and the song
+    # would begin ~10s in. Parking pins position at 0 until the audio is actually
+    # ready (a single present node for solo). Cached tracks report ready ~instantly,
+    # so the wait is only as long as the load.
+    pending = item is not None
     if pending:
         # Arm the bounded-wait timer AFTER commit, so it sees the committed pending
         # row (no race with this transaction). See apps.rooms.coordination.

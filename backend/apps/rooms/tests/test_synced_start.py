@@ -58,7 +58,9 @@ def test_shared_room_parks_track_with_deadline():
 
 
 @pytest.mark.django_db
-def test_solo_room_starts_immediately():
+def test_solo_room_also_parks_until_ready():
+    # A solo room parks too: the clock must not run during the (cold ~10s) resolve,
+    # or the song would start partway in. It flips once the (single) node is ready.
     user = verified(UserFactory())
     room = services.get_active_room(user)  # not shared
     track = TrackFactory()
@@ -67,9 +69,18 @@ def test_solo_room_starts_immediately():
     services.play_now(room, track, added_by=user)
 
     pb = PlaybackState.objects.get(room=room)
+    assert pb.pending_start is True
+    assert pb.is_playing is False
+    assert pb.playing_since is None  # no clock until the audio is ready
+    assert pb.start_deadline is not None
+
+    coordination.mark_present(room.id, user.id)
+    coordination.client_ready(room.id, user.id, pb.generation)
+
+    pb.refresh_from_db()
     assert pb.is_playing is True
     assert pb.pending_start is False
-    assert pb.start_deadline is None
+    assert pb.playing_since is not None  # clock starts now, from 0
 
 
 @pytest.mark.django_db
