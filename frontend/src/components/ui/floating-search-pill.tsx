@@ -19,11 +19,13 @@ export function FloatingSearchPill({
   onChange,
   placeholder,
   ariaLabel,
+  onPaste,
 }: {
   value: string
   onChange: (next: string) => void
   placeholder: string
   ariaLabel: string
+  onPaste?: React.ClipboardEventHandler<HTMLInputElement>
 }) {
   const { data: room } = useRoom()
   const [queueOpen] = useQueueOpen()
@@ -51,6 +53,7 @@ export function FloatingSearchPill({
           placeholder={placeholder}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onPaste={onPaste}
           className="bg-background/80 h-12 rounded-full pr-4 pl-11 shadow-lg backdrop-blur"
         />
       </div>

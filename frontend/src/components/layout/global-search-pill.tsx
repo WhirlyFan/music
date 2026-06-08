@@ -2,6 +2,7 @@ import { useRouterState } from '@tanstack/react-router'
 
 import { FloatingSearchPill } from '@/components/ui/floating-search-pill'
 import { useRouteSearch } from '@/lib/hooks/queries/ui'
+import { useImportPaste } from '@/lib/hooks/use-import-paste'
 
 const LIST_PATH = '/playlists'
 const DETAIL_RE = /^\/playlists\/[^/]+$/
@@ -25,6 +26,9 @@ export function routeHasFloatingSearch(path: string): boolean {
 export function GlobalSearchPill() {
   const path = useRouterState({ select: (s) => s.location.pathname })
   const { value, setValue } = useRouteSearch(path)
+  // Pasting a Spotify/Apple/YouTube link into the search field whisks you to the
+  // import flow instead of filtering — same detection as the home OmniBox.
+  const onPaste = useImportPaste()
 
   const mode = path === LIST_PATH ? 'list' : DETAIL_RE.test(path) ? 'detail' : null
   if (!mode) return null
@@ -33,6 +37,7 @@ export function GlobalSearchPill() {
     <FloatingSearchPill
       value={value}
       onChange={setValue}
+      onPaste={onPaste}
       placeholder={mode === 'list' ? 'search playlists' : 'search this playlist'}
       ariaLabel={mode === 'list' ? 'Search your playlists' : 'Search this playlist'}
     />
