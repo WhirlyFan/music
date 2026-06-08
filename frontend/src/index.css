@@ -286,6 +286,7 @@ html body[data-scroll-locked] {
   --animate-fade-in: fade-in 0.2s var(--ease-out-quint) both;
   --animate-fade-out: fade-out 0.15s var(--ease-standard) forwards;
   --animate-slide-up: slide-up 0.28s var(--ease-out-quint) both;
+  --animate-slide-down: slide-down 0.2s var(--ease-standard) forwards;
   --animate-pop-in: pop-in 0.18s var(--ease-out-back) both;
   --animate-equalize: equalize 0.9s var(--ease-standard) infinite;
   --animate-ripple: ripple 0.8s ease forwards;
@@ -391,6 +392,16 @@ html body[data-scroll-locked] {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+@keyframes slide-down {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px);
   }
 }
 @keyframes pop-in {

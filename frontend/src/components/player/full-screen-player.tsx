@@ -8,7 +8,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
 import { AudioVisualizer } from '@/components/player/audio-visualizer'
@@ -66,13 +66,26 @@ export function FullScreenPlayer({
   onVolumeChange: (v: number) => void
   onClose: () => void
 }) {
+  // The parent unmounts us the moment `expanded` flips false, so a bare onClose
+  // would vanish with no exit. Instead play the close animation first, then unmount:
+  // `closing` swaps enter→exit keyframes, and the timer (matching their duration)
+  // calls the parent's onClose. Guard against firing twice / after unmount.
+  const [closing, setClosing] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const requestClose = useCallback(() => {
+    if (closeTimer.current) return
+    setClosing(true)
+    closeTimer.current = setTimeout(onClose, 200) // ≈ the 0.2s exit animation
+  }, [onClose])
+  useEffect(() => () => clearTimeout(closeTimer.current ?? undefined), [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') requestClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [requestClose])
 
   const source = track.active_source
   const ytUrl =
@@ -87,8 +100,8 @@ export function FullScreenPlayer({
       role="dialog"
       aria-modal="true"
       aria-label={`Now playing: ${track.title}`}
-      onClick={onClose}
-      className="motion-safe:animate-fade-in fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden"
+      onClick={requestClose}
+      className={`fixed inset-0 z-50 flex flex-col items-center justify-center overflow-hidden ${closing ? 'motion-safe:animate-fade-out' : 'motion-safe:animate-fade-in'}`}
     >
       {/* Immersive backdrop: an always-opaque base, then the cover blurred on top,
           then a darkening scrim. The opaque base matters on track change — the new
@@ -111,7 +124,7 @@ export function FullScreenPlayer({
       <Button
         size="icon"
         variant="ghost"
-        onClick={onClose}
+        onClick={requestClose}
         aria-label="Close now playing"
         className="bg-background/60 hover:bg-background/80 absolute top-3 left-3 z-20 size-11 rounded-full"
       >
@@ -120,7 +133,7 @@ export function FullScreenPlayer({
 
       <div
         onClick={(e) => e.stopPropagation()}
-        className="motion-safe:animate-slide-up relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6"
+        className={`relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6 ${closing ? 'motion-safe:animate-slide-down' : 'motion-safe:animate-slide-up'}`}
       >
         <div className="relative grid size-72 place-items-center sm:size-96">
           <AudioVisualizer analyser={analyser} artworkUrl={track.artwork_url} />
