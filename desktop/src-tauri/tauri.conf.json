@@ -30,7 +30,8 @@
       "debugApplicationIdSuffix": ".debug"
     },
     "macOS": {
-      "signingIdentity": "-"
+      "signingIdentity": "-",
+      "entitlements": "entitlements.plist"
     }
   }
 }

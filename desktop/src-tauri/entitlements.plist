@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS code-signing entitlements for the app AND its sidecars (yt-dlp, deno).
+
+  yt-dlp is a PyInstaller binary: at runtime it unpacks an embedded Python
+  framework to a temp dir and dlopen()s it. Once we code-sign the bundle, macOS
+  library validation rejects that load ("mapping process and mapped file have
+  different Team IDs") and yt-dlp dies — which kills ALL YouTube (search, match,
+  import). disable-library-validation lets the (re-signed) sidecar load its own
+  unpacked libraries again; the allow-* keys cover Python's JIT/dyld needs.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+</dict>
+</plist>
