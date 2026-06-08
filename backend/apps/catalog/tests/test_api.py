@@ -428,7 +428,7 @@ def test_match_endpoint_scores_client_candidates(client, offline):
 
     r = client.post(
         f"/api/v1/catalog/tracks/{track.id}/match/",
-        {"candidates": [{"video_id": "CLIENT1", "title": track.title, "duration_sec": 240}]},
+        {"candidates": [{"video_id": "CLIENT1", "title": track.title, "duration": 240_000}]},
         format="json",
     )
     assert r.status_code == 200
