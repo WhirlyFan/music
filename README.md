@@ -51,10 +51,16 @@ day-to-day commands.
 ## Download
 
 Grab the latest `.app` from [**Releases**](../../releases) (macOS, **Apple Silicon /
-M1+**). The app is **not code-signed**, so the first launch needs one of:
+M1+**). The app is ad-hoc signed but **not notarized**, so a downloaded copy is
+quarantined and macOS says *"music is damaged and can't be opened"* — it isn't; that's
+Gatekeeper blocking an un-notarized app. Clear it once after unzipping:
 
-- **Right-click** `music.app` → **Open** → **Open**, or
-- `xattr -dr com.apple.quarantine /path/to/music.app`
+```bash
+xattr -dr com.apple.quarantine /Applications/music.app   # adjust path if elsewhere
+```
+
+Then double-click to launch. (Right-click → Open usually does **not** clear the
+"damaged" verdict for an un-notarized app — the `xattr` step is the reliable one.)
 
 ---
 
