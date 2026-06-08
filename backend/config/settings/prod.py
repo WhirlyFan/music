@@ -37,6 +37,14 @@ if _render_host and _render_host not in ALLOWED_HOSTS:
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = True
 
+# Render's deploy/runtime health probe hits /health/ on the internal port over
+# PLAIN HTTP (no TLS edge → no X-Forwarded-Proto), so SECURE_SSL_REDIRECT would
+# 301 it to https. The probe doesn't follow that redirect, sees a non-2xx, and
+# marks the instance unhealthy → the deploy times out and fails (while external
+# https://…/health/ via the edge still returns 200). Exempt just the health path
+# from the HTTPS redirect; every other path still upgrades to HTTPS.
+SECURE_REDIRECT_EXEMPT = [r"^health/?$"]
+
 # Prefer the forwarded host for absolute-URL building where the proxy provides
 # it. Render's rewrite doesn't reliably forward the public host, so this alone
 # isn't enough for the OAuth redirect_uri — CanonicalAuthHostMiddleware pins the
