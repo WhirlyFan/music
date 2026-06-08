@@ -93,9 +93,7 @@ def test_sync_reanchors_position_and_broadcasts():
     chan = async_to_sync(layer.new_channel)()
     async_to_sync(layer.group_add)(broadcast.group_name(room.id), chan)
 
-    res = api.post(
-        "/api/v1/rooms/sync/", {"position_ms": 42000, "is_playing": True}, format="json"
-    )
+    res = api.post("/api/v1/rooms/sync/", {"position_ms": 42000, "is_playing": True}, format="json")
     assert res.status_code == 200
     body = res.json()
     assert body["position_ms"] == 42000

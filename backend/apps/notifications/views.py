@@ -15,9 +15,7 @@ class NotificationPagination(PageNumberPagination):
     page_size = 5
 
 
-class NotificationViewSet(
-    mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet
-):
+class NotificationViewSet(mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
     """The caller's own notifications: a paginated list (5/page for the bell's
     infinite scroll), an unread count for the badge, mark-read (specific ids, or all),
     and dismiss (DELETE one). Scoped to the caller — you only ever see and mutate your
@@ -36,7 +34,9 @@ class NotificationViewSet(
             qs = qs.filter(read_at__isnull=True)
         return qs
 
-    @extend_schema(responses={200: {"type": "object", "properties": {"count": {"type": "integer"}}}})
+    @extend_schema(
+        responses={200: {"type": "object", "properties": {"count": {"type": "integer"}}}}
+    )
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
         count = self.get_queryset().filter(read_at__isnull=True).count()

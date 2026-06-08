@@ -162,7 +162,9 @@ class RoomViewSet(viewsets.ViewSet):
         s = GuestControlSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         room = services.get_active_room(request.user)
-        return self._apply(room, lambda: services.set_guest_control(room, s.validated_data["enabled"]))
+        return self._apply(
+            room, lambda: services.set_guest_control(room, s.validated_data["enabled"])
+        )
 
     @extend_schema(request=KickMemberSerializer, responses=RoomSerializer)
     @action(detail=False, methods=["post"])
