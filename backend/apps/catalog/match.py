@@ -20,9 +20,9 @@ _DURATION_TOLERANCE_MS = 30_000
 def _score(track: Track, cand: dict) -> tuple[float, int | None]:
     """(confidence 0..1, duration_delta_ms or None). Duration closeness is the
     primary signal; a title containing the track title is a soft bonus."""
-    cand_dur = cand.get("duration_sec")
-    if track.duration_ms and cand_dur:
-        delta_ms = abs(cand_dur * 1000 - track.duration_ms)
+    cand_dur_ms = cand.get("duration")  # milliseconds, as the desktop search posts
+    if track.duration_ms and cand_dur_ms:
+        delta_ms = abs(cand_dur_ms - track.duration_ms)
         dur_score = max(0.0, 1 - delta_ms / _DURATION_TOLERANCE_MS)
     else:
         delta_ms = None
@@ -116,9 +116,9 @@ def enrich_from_spotify(track: Track) -> bool:
 def match_track_to_youtube(track: Track, *, candidates: list[dict] | None = None):
     """Score YouTube `candidates` for `track`, persist them, promote the best to active.
 
-    `candidates` is a list of {video_id, title, uploader, duration_sec} dicts, run by
-    the desktop's yt-dlp search on the user's own IP. The cloud only scores +
-    persists — it never calls YouTube. No candidates → no match.
+    `candidates` is a list of {video_id, title, artist, duration} dicts (duration in
+    MS), run by the desktop's yt-dlp search on the user's own IP. The cloud only
+    scores + persists — it never calls YouTube. No candidates → no match.
 
     Idempotent: returns None (does nothing) if the track already has an active
     playback source. Returns the active PlaybackSource on success, else None.
@@ -142,8 +142,8 @@ def match_track_to_youtube(track: Track, *, candidates: list[dict] | None = None
                     locator_kind=PlaybackSource.LocatorKind.VIDEO_ID,
                     locator=c["video_id"],
                     title=(c.get("title") or "")[:512],
-                    uploader=(c.get("uploader") or "")[:512],
-                    duration_ms=(c["duration_sec"] * 1000 if c.get("duration_sec") else None),
+                    uploader=(c.get("artist") or "")[:512],
+                    duration_ms=c.get("duration"),  # already milliseconds
                     origin=PlaybackSource.Origin.MATCHED_AUTO,
                     confidence=score,
                     duration_delta_ms=delta_ms,

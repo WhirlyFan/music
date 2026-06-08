@@ -7,19 +7,20 @@ from apps.catalog.models import PlaybackSource, Track
 
 # Candidates as the desktop's /yt/search returns them.
 FAKE_CANDIDATES = [
-    # closest duration AND title match → should win
+    # closest duration AND title match → should win. Fields match what the desktop
+    # search actually posts: `artist` + `duration` in MS.
     {
         "video_id": "BEST",
         "title": "P.O.V. (Official Audio)",
-        "uploader": "ClipseVEVO",
-        "duration_sec": 258,
+        "artist": "ClipseVEVO",
+        "duration": 258_000,
     },
-    {"video_id": "LIVE", "title": "P.O.V. (Live)", "uploader": "fan", "duration_sec": 305},
+    {"video_id": "LIVE", "title": "P.O.V. (Live)", "artist": "fan", "duration": 305_000},
     {
         "video_id": "WRONG",
         "title": "completely different song",
-        "uploader": "x",
-        "duration_sec": 258,
+        "artist": "x",
+        "duration": 258_000,
     },
 ]
 
@@ -41,7 +42,7 @@ def test_promotes_best_candidate(track):
     # all candidates persisted, exactly one active
     assert track.playback_sources.count() == 3
     assert track.playback_sources.filter(status=PlaybackSource.Status.ACTIVE).count() == 1
-    assert ps.duration_delta_ms == abs(258 * 1000 - 258_030)
+    assert ps.duration_delta_ms == abs(258_000 - 258_030)
 
 
 @pytest.mark.django_db

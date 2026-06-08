@@ -192,10 +192,12 @@ class YouTubeCandidateSerializer(serializers.Serializer):
     The desktop runs the search on the user's own IP and posts these; the cloud
     scores + persists them (it no longer calls YouTube)."""
 
+    # Field names match what the desktop's yt-dlp search actually posts (and the
+    # ingest serializer): `artist` (channel/uploader) and `duration` in MS.
     video_id = serializers.CharField(max_length=32)
     title = serializers.CharField(required=False, allow_blank=True, default="")
-    uploader = serializers.CharField(required=False, allow_blank=True, default="")
-    duration_sec = serializers.IntegerField(required=False, allow_null=True, default=None)
+    artist = serializers.CharField(required=False, allow_blank=True, default="")
+    duration = serializers.IntegerField(required=False, allow_null=True, default=None)  # ms
 
 
 class SourceDurationSerializer(serializers.Serializer):
