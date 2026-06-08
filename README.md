@@ -1,4 +1,4 @@
-# WhirlyFan
+# music
 
 A collaborative music player **desktop app** for macOS. All YouTube resolution and
 audio streaming happen **locally on your machine** (a bundled `yt-dlp` + a small Rust
