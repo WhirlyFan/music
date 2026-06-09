@@ -27,7 +27,7 @@ import {
   Trash2,
   TriangleAlert,
 } from 'lucide-react'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageHeader } from '@/components/layout/page-header'
@@ -118,22 +118,29 @@ function PlaylistDetailPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = tracks
-  // Auto-load the next page when the sentinel nears the viewport (callback ref so the
-  // observer always reads fresh hasNextPage/isFetchingNextPage from the closure).
-  const sentinelRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      if (!node || !hasNextPage) return
-      const io = new IntersectionObserver(
-        ([entry]) => {
-          if (entry?.isIntersecting && !isFetchingNextPage) fetchNextPage()
-        },
-        { rootMargin: '600px 0px' },
-      )
-      io.observe(node)
-      return () => io.disconnect()
-    },
-    [hasNextPage, isFetchingNextPage, fetchNextPage],
-  )
+  // Auto-load the next page when the sentinel nears the viewport. The observer is
+  // created ONCE (stable callback ref) and reads fresh paging state through a ref —
+  // previously its deps included isFetchingNextPage, so it tore down + recreated on
+  // every fetch, and each new observer fired immediately while the sentinel was in
+  // view, cascading fetchNextPage calls. That re-render storm made wheel scrolling
+  // stutter/stick. Smaller rootMargin so it doesn't fire a screen early.
+  const loadMore = useRef<() => void>(() => {})
+  useEffect(() => {
+    loadMore.current = () => {
+      if (hasNextPage && !isFetchingNextPage) fetchNextPage()
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage])
+  const sentinelRef = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) loadMore.current()
+      },
+      { rootMargin: '300px 0px' },
+    )
+    io.observe(node)
+    return () => io.disconnect()
+  }, [])
 
   // Leaving edit mode clears any selection (render-phase reset — no effect).
   const [wasEditing, setWasEditing] = useState(editing)
