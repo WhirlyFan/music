@@ -151,6 +151,11 @@ export function JamDialog() {
             className="space-y-3"
           >
             <input
+              // Focus the code field on open so keystrokes land here (otherwise Radix
+              // focuses the close button first, and in the desktop WebView a click
+              // sometimes fails to focus — keys would then fall through to the global
+              // play/pause/seek hotkeys instead of typing).
+              autoFocus
               value={joinCode}
               onChange={(e) => setJoinCode(parseJamCode(e.target.value))}
               placeholder="ABC123"
