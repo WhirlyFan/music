@@ -447,15 +447,23 @@ export function NowPlayingBar() {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return
       if (!audioRef.current) return // nothing loaded → don't hijack keys
-      const t = e.target as HTMLElement | null
+      // Don't hijack keys while typing or while any modal is open. We check BOTH
+      // the event target and document.activeElement (in a dialog the focused input
+      // and the key event's target can differ in WKWebView), plus the Radix
+      // scroll-lock flag that marks an open dialog — so the jam code box, search,
+      // and other dialog inputs always receive their keystrokes.
+      const inField = (el: HTMLElement | null) =>
+        !!el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable)
       if (
-        t &&
-        (t.tagName === 'INPUT' ||
-          t.tagName === 'TEXTAREA' ||
-          t.tagName === 'SELECT' ||
-          t.isContentEditable)
+        inField(e.target as HTMLElement | null) ||
+        inField(document.activeElement as HTMLElement | null) ||
+        document.body.hasAttribute('data-scroll-locked')
       )
-        return // typing — leave the keys alone
+        return // typing or a modal is open — leave the keys alone
       if (e.code === 'Space') {
         e.preventDefault()
         actions.current.toggle()
